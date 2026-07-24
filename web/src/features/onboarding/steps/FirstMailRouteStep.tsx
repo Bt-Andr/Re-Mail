@@ -28,8 +28,12 @@ export function FirstMailRouteStep({ onDone, onSkip }: { onDone: () => void; onS
   return (
     <form onSubmit={submit} className="space-y-4 bg-card border border-border rounded-lg p-6">
       <div>
-        <h2 className="text-sm font-semibold mb-1">4. Créer votre première adresse</h2>
-        <p className="text-xs text-muted-foreground">Une adresse @votredomaine.com (ex. contact@...) qui recevra les emails et pourra servir à répondre.</p>
+        <h2 className="text-sm font-semibold mb-1">4. Créer votre première adresse (optionnel)</h2>
+        <p className="text-xs text-muted-foreground">
+          Toutes les adresses @votredomaine.com reçoivent déjà leurs emails sous forme de conversations dans l'inbox, même sans rien créer ici.
+          Ajouter une adresse ci-dessous sert seulement à (1) transférer une copie des notifications vers une boîte personnelle et (2) permettre d'envoyer des emails depuis cette adresse via le composeur.
+          Vous pourrez ajouter, modifier ou supprimer des adresses à tout moment depuis les réglages.
+        </p>
       </div>
       <Input label="Adresse" placeholder="contact@votredomaine.com" value={alias} onChange={e => setAlias(e.target.value)} required />
       <Input label="Transférer les notifications vers" placeholder="vous@gmail.com" type="email" value={personalEmail} onChange={e => setPersonalEmail(e.target.value)} required />

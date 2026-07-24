@@ -31,8 +31,8 @@ export function WebhookSecretStep({ organization, onDone }: { organization: Orga
       <div>
         <h2 className="text-sm font-semibold mb-1">3. Configurer le webhook entrant</h2>
         <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-          <li>Dans votre dashboard Resend → Domaines → votre domaine → Inbound, collez l'URL ci-dessous.</li>
-          <li>Resend affiche alors un secret de signature ("Signing Secret") — collez-le dans le champ ci-dessous.</li>
+          <li>Dans votre dashboard Resend → Webhooks → Add Webhook, collez l'URL ci-dessous et cochez l'événement "email.received".</li>
+          <li>Une fois le webhook créé, Resend affiche un secret de signature ("Signing Secret") sur sa page de détail — collez-le dans le champ ci-dessous.</li>
         </ol>
       </div>
 

@@ -32,6 +32,10 @@ export function SelectDomainStep({ verifiedDomains, onDone }: { verifiedDomains:
         <p className="text-xs text-muted-foreground">Le domaine déjà vérifié dans votre compte Resend, utilisé pour envoyer/recevoir vos emails.</p>
       </div>
 
+      <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+        Si ce domaine a déjà des emails ailleurs (Gmail, Outlook, un autre hébergeur...), la réception Resend entrera en conflit avec les enregistrements MX existants — un domaine ne peut avoir qu'un seul jeu de MX actif. Utilisez plutôt un sous-domaine dédié (ex. mail.votredomaine.com) pour ne pas perturber vos boîtes actuelles.
+      </p>
+
       {verifiedDomains && verifiedDomains.length > 0 ? (
         <Select label="Domaine vérifié" value={domain} onChange={e => setDomain(e.target.value)} required>
           {verifiedDomains.map(d => (

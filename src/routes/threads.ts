@@ -143,6 +143,8 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
 
   try {
     const db = forOrg(req.user!.organizationId)
+    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
+      return res.status(403).json({ error: 'Accès non autorisé.' })
     const prev = await db.thread.findUnique({ where: { id: req.params.id }, select: { status: true } })
     const thread = await db.thread.update({ where: { id: req.params.id }, data: { status } })
     await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'status_changed', { from: prev?.status, to: status })

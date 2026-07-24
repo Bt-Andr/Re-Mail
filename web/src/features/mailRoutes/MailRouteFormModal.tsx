@@ -23,7 +23,7 @@ export function MailRouteFormModal({ open, editing, onClose, onSaved }: MailRout
   }, [editing, open])
 
   const submit = async () => {
-    if (!form.alias.trim() || !form.personalEmail.trim()) return
+    if (!form.alias.trim()) return
     setError('')
     setLoading(true)
     try {
@@ -48,12 +48,12 @@ export function MailRouteFormModal({ open, editing, onClose, onSaved }: MailRout
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
-          <Button onClick={submit} loading={loading} disabled={!form.alias.trim() || !form.personalEmail.trim()}>Enregistrer</Button>
+          <Button onClick={submit} loading={loading} disabled={!form.alias.trim()}>Enregistrer</Button>
         </>
       }
     >
       <Input label="Adresse" placeholder="contact@votredomaine.com" value={form.alias} onChange={e => setForm(p => ({ ...p, alias: e.target.value }))} />
-      <Input label="Transférer vers" placeholder="vous@gmail.com" type="email" value={form.personalEmail} onChange={e => setForm(p => ({ ...p, personalEmail: e.target.value }))} />
+      <Input label="Transférer vers (optionnel)" placeholder="vous@gmail.com" type="email" value={form.personalEmail} onChange={e => setForm(p => ({ ...p, personalEmail: e.target.value }))} />
       <Input label="Nom affiché (optionnel)" placeholder="Service Commercial" value={form.displayName} onChange={e => setForm(p => ({ ...p, displayName: e.target.value }))} />
       {error && <p className="text-xs text-destructive">{error}</p>}
     </Modal>

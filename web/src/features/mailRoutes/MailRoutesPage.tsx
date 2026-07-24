@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AtSign, Pencil, Trash2, Plus } from 'lucide-react'
+import { AtSign, Pencil, Trash2, Plus, Upload } from 'lucide-react'
 import { apiFetch } from '../../lib/apiClient'
 import { useToast } from '../../context/ToastContext'
 import { Button } from '../../components/ui/Button'
@@ -7,6 +7,7 @@ import { Spinner } from '../../components/ui/Spinner'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { MailRouteFormModal } from './MailRouteFormModal'
+import { BulkImportModal } from './BulkImportModal'
 import type { MailRoute } from '../../types/api'
 
 export function MailRoutesPage() {
@@ -14,6 +15,7 @@ export function MailRoutesPage() {
   const [routes, setRoutes] = useState<MailRoute[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<{ open: boolean; editing: MailRoute | null }>({ open: false, editing: null })
+  const [importOpen, setImportOpen] = useState(false)
   const [toDelete, setToDelete] = useState<MailRoute | null>(null)
 
   const load = useCallback(async () => {
@@ -54,10 +56,16 @@ export function MailRoutesPage() {
           <h1 className="text-lg font-semibold">Adresses mail</h1>
           <p className="text-sm text-muted-foreground">Alias @votredomaine.com et notification personnelle associée.</p>
         </div>
-        <Button onClick={() => setModal({ open: true, editing: null })}>
-          <Plus size={15} />
-          Ajouter
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => setImportOpen(true)}>
+            <Upload size={15} />
+            Importer
+          </Button>
+          <Button onClick={() => setModal({ open: true, editing: null })}>
+            <Plus size={15} />
+            Ajouter
+          </Button>
+        </div>
       </div>
 
       {loading && <Spinner />}
@@ -74,8 +82,14 @@ export function MailRoutesPage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-sm font-semibold text-foreground">{route.alias}</span>
-                <span className="text-muted-foreground">→</span>
-                <span className="font-mono text-sm text-muted-foreground">{route.personalEmail}</span>
+                {route.personalEmail ? (
+                  <>
+                    <span className="text-muted-foreground">→</span>
+                    <span className="font-mono text-sm text-muted-foreground">{route.personalEmail}</span>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground/70 italic">Transfert non configuré</span>
+                )}
                 {route.displayName && <span className="text-xs text-muted-foreground/80">({route.displayName})</span>}
               </div>
               <button
@@ -105,6 +119,11 @@ export function MailRoutesPage() {
           showToast('success', 'Adresse enregistrée.')
           void load()
         }}
+      />
+      <BulkImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => void load()}
       />
       <ConfirmDialog
         open={!!toDelete}

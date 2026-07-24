@@ -16,6 +16,7 @@ import { InboxPage } from './features/inbox/InboxPage'
 import { InboxPlaceholder } from './features/inbox/InboxPlaceholder'
 import { ThreadDetailPane } from './features/inbox/ThreadDetailPane'
 import { InvitesPage } from './features/invites/InvitesPage'
+import { UsersPage } from './features/users/UsersPage'
 import { OrgSettingsPage } from './features/settings/OrgSettingsPage'
 
 export default function App() {
@@ -43,6 +44,7 @@ export default function App() {
                   <Route element={<RoleGuard allow={['OWNER', 'ADMIN']} />}>
                     <Route path="/mail-routes" element={<MailRoutesPage />} />
                     <Route path="/invites" element={<InvitesPage />} />
+                    <Route path="/users" element={<UsersPage />} />
                     <Route path="/settings" element={<OrgSettingsPage />} />
                   </Route>
                 </Route>

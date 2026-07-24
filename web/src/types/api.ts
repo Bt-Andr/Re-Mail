@@ -41,6 +41,11 @@ export interface MailRoute {
   updatedAt: string
 }
 
+export interface MailRouteBulkResult {
+  created: MailRoute[]
+  skipped: { alias: string; reason: string }[]
+}
+
 export interface SenderAddress {
   email: string
   label: string

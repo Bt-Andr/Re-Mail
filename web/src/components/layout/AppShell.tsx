@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router-dom'
-import { Inbox, AtSign, UserPlus, Settings, LogOut, AlertTriangle, Mail } from 'lucide-react'
+import { Inbox, AtSign, UserPlus, Users, Settings, LogOut, AlertTriangle, Mail } from 'lucide-react'
 import { useSession } from '../../context/SessionContext'
 import { useOrganization } from '../../hooks/useOrganization'
 import { displayName } from '../../lib/session'
@@ -9,6 +9,7 @@ const NAV_ITEMS: { to: string; label: string; icon: typeof Inbox; roles: OrgRole
   { to: '/inbox', label: 'Boîte de réception', icon: Inbox, roles: ['OWNER', 'ADMIN', 'MEMBER'] },
   { to: '/mail-routes', label: 'Adresses mail', icon: AtSign, roles: ['OWNER', 'ADMIN'] },
   { to: '/invites', label: 'Invitations', icon: UserPlus, roles: ['OWNER', 'ADMIN'] },
+  { to: '/users', label: 'Utilisateurs', icon: Users, roles: ['OWNER', 'ADMIN'] },
   { to: '/settings', label: 'Organisation', icon: Settings, roles: ['OWNER', 'ADMIN'] },
 ]
 

@@ -21,7 +21,7 @@ import { OrgSettingsPage } from './features/settings/OrgSettingsPage'
 export default function App() {
   return (
     <ThemeProvider>
-      <ThemeToggle className="fixed top-4 right-4 z-40" />
+      <ThemeToggle className="fixed bottom-4 right-4 z-40" />
       <BrowserRouter>
         <ToastProvider>
           <SessionProvider>

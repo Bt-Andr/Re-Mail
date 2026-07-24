@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Download } from 'lucide-react'
 import { apiFetch, parseError } from '../../lib/apiClient'
+import { downloadAuthenticated } from '../../lib/download'
 import { useOrganization } from '../../hooks/useOrganization'
 import { useToast } from '../../context/ToastContext'
 import { Input } from '../../components/ui/Input'
@@ -17,6 +18,7 @@ export function OrgSettingsPage() {
   const [error, setError] = useState('')
   const [confirmRotate, setConfirmRotate] = useState(false)
   const [rotating, setRotating] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     if (organization) {
@@ -58,6 +60,17 @@ export function OrgSettingsPage() {
     }
   }
 
+  const exportConfig = async () => {
+    setExporting(true)
+    try {
+      await downloadAuthenticated('/organizations/me/export', `config-mail-${organization.slug}.csv`)
+    } catch {
+      showToast('error', "Export impossible.")
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="max-w-lg space-y-6">
       <div>
@@ -86,6 +99,18 @@ export function OrgSettingsPage() {
         <Button variant="secondary" onClick={() => setConfirmRotate(true)}>
           <RefreshCw size={14} />
           Régénérer l'URL du webhook
+        </Button>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-6 space-y-3">
+        <h2 className="text-sm font-semibold">Export de la configuration mail</h2>
+        <p className="text-xs text-muted-foreground">
+          Domaine, adresses (Mail Routes), règles de routage et modèles de réponse, au format CSV — pour reprendre la même configuration dans une autre app utilisant Resend.
+          Ne contient aucun secret (clé API, secret de webhook) : à ressaisir manuellement côté app cible.
+        </p>
+        <Button variant="secondary" onClick={exportConfig} loading={exporting}>
+          <Download size={14} />
+          Exporter en CSV
         </Button>
       </div>
 

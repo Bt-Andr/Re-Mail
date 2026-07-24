@@ -2,12 +2,25 @@ import { Router } from 'express'
 import prisma from '../lib/prisma'
 import config from '../config'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
+import { forOrg } from '../middleware/scopedPrisma'
 import {
   listResendDomains,
   encryptResendKey,
   encryptWebhookSecret,
   generateWebhookToken,
 } from '../helpers/resendAccount'
+
+// Échappe une valeur pour une cellule CSV : neutralise les préfixes de formule
+// (=, +, -, @) qu'Excel/Sheets exécuterait à l'ouverture, puis entoure de
+// guillemets si la valeur contient une virgule, un guillemet ou un retour ligne.
+function csvCell(value: unknown): string {
+  const str = value === null || value === undefined ? '' : String(value)
+  const safe = /^[=+\-@]/.test(str) ? `'${str}` : str
+  return /["\r\n,]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
+}
+function csvRow(values: unknown[]): string {
+  return values.map(csvCell).join(',') + '\r\n'
+}
 
 const router = Router()
 
@@ -106,6 +119,47 @@ router.post('/me/resend/regenerate-webhook-token', authenticateToken, requireOrg
     data: { webhookToken: generateWebhookToken() },
   })
   res.json({ webhookUrl: webhookUrlFor(org.webhookToken) })
+})
+
+// Export de la configuration mail (domaine, alias, règles de routage, modèles
+// de réponse) — pour reprendre la même config dans une autre app utilisant
+// Resend. Volontairement sans secrets (clé API Resend, secret webhook) : à
+// ressaisir manuellement côté app cible plutôt que de les faire circuler dans
+// un fichier téléchargeable.
+router.get('/me/export', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
+  const org = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
+  if (!org) return res.status(404).json({ error: 'Organisation introuvable.' })
+
+  const db = forOrg(req.user!.organizationId)
+  const [mailRoutes, routingRules, replyTemplates] = await Promise.all([
+    db.mailRoute.findMany({ orderBy: { alias: 'asc' } }),
+    db.threadRoutingRule.findMany({ include: { assignTo: { select: { email: true } } }, orderBy: { canal: 'asc' } }),
+    db.replyTemplate.findMany({ orderBy: { titre: 'asc' } }),
+  ])
+
+  let csv = '﻿'
+  csv += csvRow(['Section', 'Domaine'])
+  csv += csvRow(['domain'])
+  csv += csvRow([org.resendVerifiedDomain || ''])
+  csv += '\r\n'
+
+  csv += csvRow(['Section', 'Mail Routes'])
+  csv += csvRow(['alias', 'personalEmail', 'displayName', 'active'])
+  for (const r of mailRoutes) csv += csvRow([r.alias, r.personalEmail, r.displayName || '', r.active])
+  csv += '\r\n'
+
+  csv += csvRow(['Section', 'Routing Rules'])
+  csv += csvRow(['canal', 'assignToEmail', 'active'])
+  for (const r of routingRules) csv += csvRow([r.canal, r.assignTo?.email || '', r.active])
+  csv += '\r\n'
+
+  csv += csvRow(['Section', 'Reply Templates'])
+  csv += csvRow(['titre', 'canal', 'corps'])
+  for (const t of replyTemplates) csv += csvRow([t.titre, t.canal || '', t.corps])
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+  res.setHeader('Content-Disposition', `attachment; filename="config-mail-${org.slug}.csv"`)
+  res.send(csv)
 })
 
 export default router

@@ -1,0 +1,120 @@
+import { useCallback, useEffect, useState } from 'react'
+import { AtSign, Pencil, Trash2, Plus } from 'lucide-react'
+import { apiFetch } from '../../lib/apiClient'
+import { useToast } from '../../context/ToastContext'
+import { Button } from '../../components/ui/Button'
+import { Spinner } from '../../components/ui/Spinner'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { MailRouteFormModal } from './MailRouteFormModal'
+import type { MailRoute } from '../../types/api'
+
+export function MailRoutesPage() {
+  const { showToast } = useToast()
+  const [routes, setRoutes] = useState<MailRoute[]>([])
+  const [loading, setLoading] = useState(true)
+  const [modal, setModal] = useState<{ open: boolean; editing: MailRoute | null }>({ open: false, editing: null })
+  const [toDelete, setToDelete] = useState<MailRoute | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await apiFetch('/mail-routes')
+      if (res.ok) setRoutes(await res.json())
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const toggleActive = async (route: MailRoute) => {
+    const res = await apiFetch(`/mail-routes/${route.id}`, { method: 'PUT', body: JSON.stringify({ ...route, active: !route.active }) })
+    if (res.ok) setRoutes(prev => prev.map(r => (r.id === route.id ? { ...r, active: !r.active } : r)))
+  }
+
+  const confirmDelete = async () => {
+    if (!toDelete) return
+    const res = await apiFetch(`/mail-routes/${toDelete.id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setRoutes(prev => prev.filter(r => r.id !== toDelete.id))
+      showToast('success', 'Adresse supprimée.')
+    } else {
+      showToast('error', 'Suppression impossible.')
+    }
+    setToDelete(null)
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-lg font-semibold">Adresses mail</h1>
+          <p className="text-sm text-muted-foreground">Alias @votredomaine.com et notification personnelle associée.</p>
+        </div>
+        <Button onClick={() => setModal({ open: true, editing: null })}>
+          <Plus size={15} />
+          Ajouter
+        </Button>
+      </div>
+
+      {loading && <Spinner />}
+      {!loading && routes.length === 0 && (
+        <EmptyState icon={<AtSign size={32} />} title="Aucune adresse configurée" message="Ajoutez une première adresse pour commencer à recevoir des emails." />
+      )}
+
+      <div className="space-y-3">
+        {routes.map(route => (
+          <div key={route.id} className="bg-card rounded-lg border border-border p-4 flex items-center gap-4">
+            <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center flex-shrink-0">
+              <AtSign className="text-foreground" size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-sm font-semibold text-foreground">{route.alias}</span>
+                <span className="text-muted-foreground">→</span>
+                <span className="font-mono text-sm text-muted-foreground">{route.personalEmail}</span>
+                {route.displayName && <span className="text-xs text-muted-foreground/80">({route.displayName})</span>}
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleActive(route)}
+                className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs ${route.active ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}
+              >
+                {route.active ? 'Active' : 'Inactive'}
+              </button>
+            </div>
+            <button type="button" title="Modifier" onClick={() => setModal({ open: true, editing: route })} className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors">
+              <Pencil size={15} />
+            </button>
+            <button type="button" title="Supprimer" onClick={() => setToDelete(route)} className="text-muted-foreground hover:text-destructive p-1.5 rounded-md hover:bg-destructive/10 transition-colors">
+              <Trash2 size={15} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <MailRouteFormModal
+        open={modal.open}
+        editing={modal.editing}
+        onClose={() => setModal({ open: false, editing: null })}
+        onSaved={() => {
+          setModal({ open: false, editing: null })
+          showToast('success', 'Adresse enregistrée.')
+          void load()
+        }}
+      />
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Supprimer cette adresse ?"
+        message={`${toDelete?.alias} ne recevra plus de nouveaux emails.`}
+        danger
+        confirmLabel="Supprimer"
+        onConfirm={confirmDelete}
+        onCancel={() => setToDelete(null)}
+      />
+    </div>
+  )
+}

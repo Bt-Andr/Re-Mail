@@ -1,0 +1,360 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum InviteStatus {
+  PENDING
+  ACTIVATED
+  REVOKED
+}
+
+// Une organisation = un client du produit, avec son propre compte Resend
+// (sa clé API, son domaine déjà vérifié chez Resend, son propre webhook).
+model Organization {
+  id     String @id @default(cuid())
+  name   String
+  slug   String @unique
+
+  // Identifiants Resend — chiffrés au repos (voir src/lib/crypto.ts).
+  // Jamais stockés en clair, jamais renvoyés par l'API.
+  resendApiKeyEnc      String?
+  resendApiKeyLast4    String? // pour affichage UI sans déchiffrer
+  resendVerifiedDomain String?
+  resendConnectedAt    DateTime?
+
+  // Identité du webhook entrant : un token aléatoire (PAS l'id de l'org, pour
+  // éviter l'énumération) formant l'URL unique à coller dans le dashboard Resend.
+  webhookToken    String  @unique @default(cuid())
+  webhookSecretEnc String?
+
+  companyName  String?
+  emailContact String?
+
+  users              User[]
+  mailRoutes         MailRoute[]
+  threads            Thread[]
+  threadMessages     ThreadMessage[]
+  threadActivities   ThreadActivity[]
+  threadRoutingRules ThreadRoutingRule[]
+  replyTemplates     ReplyTemplate[]
+  mailReplyTokens    MailReplyToken[]
+  mailDrafts         MailDraft[]
+  senderGrants       SenderGrant[]
+  deviceTokens       DeviceToken[]
+  userInvites        UserInvite[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([webhookToken])
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // email/username sont uniques sur toute la plateforme (pas seulement par org) :
+  // en v1 chaque utilisateur appartient à une seule organisation, donc la connexion
+  // se fait par username seul (comme dans jeprogroup-website/server/src/routes/auth.ts) —
+  // ça ne marche que si le lookup n'est pas ambigu entre organisations.
+  email    String  @unique
+  username String  @unique
+  password String
+  nom      String
+  proEmail String?
+  orgRole  OrgRole @default(MEMBER)
+  isDeptHead Boolean @default(false)
+
+  senderGrants    SenderGrant[]
+  mailDrafts      MailDraft[]
+  assignedThreads Thread[]            @relation("ThreadAssignee")
+  threadMessages  ThreadMessage[]     @relation("ThreadMessageSender")
+  routingRules    ThreadRoutingRule[] @relation("RoutingRuleAssignee")
+  activities      ThreadActivity[]    @relation("ActivityUser")
+  deviceTokens    DeviceToken[]
+  invitesCreated  UserInvite[]        @relation("InviteCreatedBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+// Invitation d'activation par fichier : deux secrets indépendants — le fichier
+// téléchargeable (voir src/lib/inviteFileCrypto.ts) et le code d'activation ont
+// des cycles de vie et des canaux de diffusion distincts, volontairement découplés.
+// Le User réel n'est créé qu'à l'activation finale (voir routes/publicUserInvites.ts) —
+// tant que status est PENDING, ceci est la seule trace de l'utilisateur à venir.
+model UserInvite {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Seule donnée transportée par le fichier téléchargeable (chiffré) — unique
+  // globalement, comme Organization.webhookToken / MailReplyToken.token.
+  fileToken String @unique @default(cuid())
+
+  // Identité pré-remplie par l'admin. Pas d'@unique DB sur username/email : ça
+  // bloquerait définitivement un pseudo déjà révoqué/expiré (pas d'index unique
+  // partiel en Prisma) — unicité vérifiée en code à la création (voir routes/userInvites.ts).
+  username   String
+  email      String
+  nom        String
+  proEmail   String?
+  orgRole    OrgRole @default(MEMBER)
+  isDeptHead Boolean @default(false)
+
+  // Code court (dicté au téléphone) — hashé (bcrypt, comme User.password).
+  // Régénérer écrase = révoque le précédent.
+  activationCodeHash      String?
+  activationCodeExpiresAt DateTime?
+  codeAttempts            Int       @default(0)
+
+  // Émis seulement après vérification de code réussie ; seul token accepté par
+  // l'étape finale "activate". Entropie déjà maximale (32 octets aléatoires) :
+  // hashé en SHA-256 (pas bcrypt, inutile pour un secret déjà à haute entropie).
+  activationTokenHash      String?
+  activationTokenExpiresAt DateTime?
+
+  expiresAt DateTime // filet de sécurité, indépendant de la TTL du code
+
+  status        InviteStatus @default(PENDING)
+  activatedAt   DateTime?
+  createdUserId String?      @unique
+
+  createdById String?
+  createdBy   User?   @relation("InviteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([username])
+  @@index([email])
+  @@index([expiresAt])
+}
+
+// Token d'appareil mobile/web pour le push (Expo Push, cf. src/lib/push.ts).
+model DeviceToken {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  expoPushToken String
+  platform      String // ios | android | web
+
+  createdAt DateTime @default(now())
+
+  @@unique([expoPushToken])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+// Alias @domaine → adresse personnelle, pour le transfert automatique (optionnel,
+// en parallèle des threads consultables dans le dashboard/l'app).
+model MailRoute {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  alias         String
+  personalEmail String
+  displayName   String?
+  active        Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, alias])
+  @@index([organizationId])
+}
+
+model MailDraft {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  toEmail  String @default("")
+  ccEmail  String @default("")
+  bccEmail String @default("")
+  subject  String @default("")
+  body     String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+// Autorisation d'envoyer depuis une adresse de service partagée (accordée par un admin).
+model SenderGrant {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  email     String
+  grantedBy String?
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, userId, email])
+}
+
+// Token de réponse bidirectionnelle : `reply+{token}@{domaine}` — chaque
+// participant externe d'un thread (destinataire initial, transfert, etc.)
+// obtient le sien, lié au même threadId.
+model MailReplyToken {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  token      String  @unique @default(cuid())
+  aliasFrom  String
+  externalTo String
+  externalCc  String?
+  externalBcc String?
+  subject    String?
+  threadId   String?
+  thread     Thread? @relation(fields: [threadId], references: [id])
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([organizationId])
+}
+
+model Thread {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  sujet         String
+  externalFrom  String
+  externalEmail String
+  toEmail       String? // adresse @domaine destinataire
+  canal         String // contact | rh | commercial | ... | email
+  status        String  @default("nouveau") // nouveau | en_cours | resolu
+  origin        String  @default("inbound") // inbound | outbound
+  deletedAt     DateTime? // corbeille (null = actif)
+
+  assignedToId String?
+  assignedTo   User?   @relation("ThreadAssignee", fields: [assignedToId], references: [id])
+
+  sourceId   String?
+  sourceType String?
+
+  messages    ThreadMessage[]
+  replyTokens MailReplyToken[]
+  activities  ThreadActivity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([organizationId, externalEmail, canal])
+}
+
+model ThreadMessage {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  threadId       String
+  thread         Thread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  direction String // inbound | outbound
+  fromName  String
+  fromEmail String
+  toEmails  String? // comma-separated
+  ccEmails  String? // comma-separated
+  bccEmails String? // comma-separated
+  body      String
+
+  sentById String?
+  sentBy   User?   @relation("ThreadMessageSender", fields: [sentById], references: [id])
+
+  attachments ThreadAttachment[]
+  readAt      DateTime?
+  sentAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([threadId])
+}
+
+model ThreadAttachment {
+  id          String        @id @default(cuid())
+  messageId   String
+  message     ThreadMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  filename    String
+  contentType String?
+  size        Int?
+  url         String // URL Cloudinary (stockage permanent)
+  publicId    String?
+
+  createdAt DateTime @default(now())
+}
+
+model ThreadRoutingRule {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  canal      String
+  assignToId String
+  assignTo   User    @relation("RoutingRuleAssignee", fields: [assignToId], references: [id])
+  active     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, canal])
+}
+
+model ReplyTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  titre String
+  corps String
+  canal String? // null = tous les canaux
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model ThreadActivity {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  threadId       String
+  thread         Thread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  userId  String?
+  user    User?   @relation("ActivityUser", fields: [userId], references: [id])
+  type    String // created | assigned | unassigned | status_changed | replied | forwarded
+  payload String? // JSON: { label, from, to, ... }
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, threadId])
+}

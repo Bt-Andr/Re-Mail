@@ -104,3 +104,37 @@
     @apply font-mono;
   }
 }
+
+/* Scrollbar flottante : invisible au repos, ne réserve aucun espace de layout,
+   n'apparaît (en fondu) que pendant un scroll actif (classe .is-scrolling posée
+   par useGlobalScrollFade sur <html>). Dégrade proprement sur Firefox (pas de
+   fondu animé, mais même comportement visible/masqué via scrollbar-color). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+html.is-scrolling * {
+  scrollbar-color: hsl(var(--foreground) / 0.35) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.4s ease;
+}
+html.is-scrolling ::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--foreground) / 0.35);
+  transition: background-color 0.15s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--foreground) / 0.5);
+}

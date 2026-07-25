@@ -3,6 +3,7 @@ import { SessionProvider } from './context/SessionContext'
 import { ToastProvider } from './context/ToastContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { ThemeToggle } from './components/ui/ThemeToggle'
+import { useGlobalScrollFade } from './hooks/useGlobalScrollFade'
 import { AuthGuard } from './components/layout/AuthGuard'
 import { GuestGuard } from './components/layout/GuestGuard'
 import { RoleGuard } from './components/layout/RoleGuard'
@@ -20,6 +21,8 @@ import { UsersPage } from './features/users/UsersPage'
 import { OrgSettingsPage } from './features/settings/OrgSettingsPage'
 
 export default function App() {
+  useGlobalScrollFade()
+
   return (
     <ThemeProvider>
       <ThemeToggle className="fixed bottom-4 right-4 z-40" />

@@ -19,6 +19,12 @@ export function MessageBubble({ message }: { message: ThreadMessage }) {
         <div
           className={`inline-block text-left text-sm rounded-lg px-4 py-3 max-w-full prose-sm ${isOut ? 'bg-accent text-foreground' : 'bg-muted text-foreground'}`}
           dangerouslySetInnerHTML={{ __html: message.body }}
+          onErrorCapture={e => {
+            // Image distante indisponible (réseau, hotlink-protection, URL expirée...) :
+            // masquer plutôt que d'afficher l'icône "image cassée" du navigateur.
+            const target = e.target as HTMLElement
+            if (target.tagName === 'IMG') target.style.display = 'none'
+          }}
         />
         {message.attachments.length > 0 && (
           <div className={`flex flex-wrap gap-2 mt-2 ${isOut ? 'justify-end' : ''}`}>

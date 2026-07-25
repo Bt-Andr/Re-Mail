@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Certains CDN d'emails bloquent le chargement d'image si le Referer pointe vers
+         un domaine tiers (protection anti-hotlink) — no-referrer évite ce blocage pour
+         les images distantes intégrées dans le corps des mails affichés. -->
+    <meta name="referrer" content="no-referrer" />
     <title>Re-Mail</title>
     <script>
       (function () {

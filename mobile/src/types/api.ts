@@ -1,0 +1,150 @@
+export type OrgRole = 'OWNER' | 'ADMIN' | 'MEMBER';
+
+export type ThreadStatus = 'nouveau' | 'en_cours' | 'resolu';
+export type ThreadFolder = 'inbox' | 'sent' | 'trash';
+export type MessageDirection = 'inbound' | 'outbound';
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  nom: string;
+  email: string;
+  proEmail?: string | null;
+  orgRole: OrgRole;
+  isDeptHead?: boolean;
+  organization?: Organization;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: User;
+}
+
+export interface AssignedTo {
+  id: string;
+  nom: string;
+  username: string;
+}
+
+export interface ThreadMessagePreview {
+  id: string;
+  direction: MessageDirection;
+  fromName: string;
+  body: string;
+  sentAt: string;
+  readAt: string | null;
+}
+
+export interface Thread {
+  id: string;
+  sujet: string;
+  externalFrom: string;
+  externalEmail: string;
+  toEmail: string;
+  canal: string;
+  status: ThreadStatus;
+  origin: MessageDirection;
+  deletedAt: string | null;
+  assignedToId: string | null;
+  assignedTo: AssignedTo | null;
+  createdAt: string;
+  updatedAt: string;
+  lastMessage: ThreadMessagePreview | null;
+  unreadCount: number;
+}
+
+export interface ThreadAttachment {
+  id: string;
+  filename: string;
+  contentType: string | null;
+  size: number;
+  url: string;
+}
+
+export interface ThreadMessage {
+  id: string;
+  direction: MessageDirection;
+  fromName: string;
+  fromEmail: string;
+  toEmails: string | null;
+  ccEmails: string | null;
+  bccEmails: string | null;
+  body: string;
+  sentAt: string;
+  readAt: string | null;
+  sentBy: AssignedTo | null;
+  attachments: ThreadAttachment[];
+}
+
+export interface ThreadDetail extends Omit<Thread, 'lastMessage' | 'unreadCount'> {
+  messages: ThreadMessage[];
+}
+
+export interface ThreadActivity {
+  id: string;
+  action:
+    | 'created'
+    | 'assigned'
+    | 'unassigned'
+    | 'status_changed'
+    | 'replied'
+    | 'sent'
+    | 'forwarded'
+    | 'trashed'
+    | 'restored';
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  user: AssignedTo | null;
+}
+
+export interface SenderAddress {
+  email: string;
+  label: string;
+  isDefault: boolean;
+}
+
+export interface ReplyPayload {
+  to: string;
+  subject: string;
+  message: string;
+  cc?: string;
+  bcc?: string;
+  threadId?: string;
+  draftId?: string;
+  mode?: 'forward';
+  sourceMessageId?: string;
+  fromEmail?: string;
+}
+
+export interface ReplyResult {
+  success: boolean;
+  message: string;
+  threadId: string | null;
+}
+
+export interface PickedAttachment {
+  uri: string;
+  name: string;
+  mimeType: string | null;
+  size: number | null;
+}
+
+export interface InviteResolveResponse {
+  fileToken: string;
+  organizationName: string;
+}
+
+export interface InviteVerifyCodeResponse {
+  activationToken: string;
+  expiresAt: string;
+}
+
+export interface ApiErrorBody {
+  error: string;
+}

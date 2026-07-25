@@ -22,6 +22,10 @@ export default function AppGroupLayout() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="thread/[id]" options={{ headerShown: true, title: '' }} />
       <Stack.Screen name="compose" options={{ presentation: 'modal', headerShown: true, title: '' }} />
+      <Stack.Screen name="admin/mail-routes" options={{ headerShown: true, title: 'Adresses mail' }} />
+      <Stack.Screen name="admin/invites" options={{ headerShown: true, title: 'Invitations' }} />
+      <Stack.Screen name="admin/users" options={{ headerShown: true, title: 'Utilisateurs' }} />
+      <Stack.Screen name="admin/org-settings" options={{ headerShown: true, title: "Organisation" }} />
     </Stack>
   );
 }

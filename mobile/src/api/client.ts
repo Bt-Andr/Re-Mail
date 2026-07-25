@@ -18,7 +18,7 @@ export class ApiError extends Error {
 }
 
 interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
-  body?: BodyInit | Record<string, unknown> | null;
+  body?: BodyInit | object | null;
 }
 
 // Miroir de web/src/lib/apiClient.ts : fetch brut, bearer token, jamais de

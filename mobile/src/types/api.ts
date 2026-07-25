@@ -148,3 +148,59 @@ export interface InviteVerifyCodeResponse {
 export interface ApiErrorBody {
   error: string;
 }
+
+export interface MailRoute {
+  id: string;
+  alias: string;
+  personalEmail: string;
+  displayName: string | null;
+  active: boolean;
+}
+
+export type InviteStatus = 'PENDING' | 'ACTIVATED' | 'REVOKED';
+
+export interface UserInvite {
+  id: string;
+  username: string;
+  email: string;
+  nom: string;
+  proEmail: string | null;
+  orgRole: OrgRole;
+  isDeptHead: boolean;
+  status: InviteStatus;
+  expiresAt: string;
+  activationCodeExpiresAt: string | null;
+  createdUserId: string | null;
+  createdAt: string;
+}
+
+export interface SenderGrant {
+  id: string;
+  email: string;
+}
+
+export interface OrgUser {
+  id: string;
+  username: string;
+  nom: string;
+  email: string;
+  orgRole: OrgRole;
+  proEmail: string | null;
+  isDeptHead: boolean;
+  createdAt: string;
+  senderGrants: SenderGrant[];
+}
+
+export interface OrgSummary {
+  id: string;
+  name: string;
+  slug: string;
+  companyName: string | null;
+  emailContact: string | null;
+  resendConnected: boolean;
+  resendApiKeyLast4: string | null;
+  resendVerifiedDomain: string | null;
+  webhookConfigured: boolean;
+  webhookUrl: string;
+  mailRoutesCount: number;
+}

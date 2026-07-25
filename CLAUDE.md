@@ -9,7 +9,8 @@ SaaS multi-tenant : chaque organisation connecte son propre compte Resend (sa cl
 1. **Backend "module Resend" multi-tenant** — ✅ fait, testé (40 tests)
 2. **Activation par fichier + code** (onboarding utilisateur non-technique) — ✅ fait, testé
 3. **Dashboard web minimal** (`web/`) — ✅ fait, vérifié manuellement de bout en bout
-4. **App mobile React Native/Expo** — ❌ pas commencée. C'est la prochaine étape naturelle.
+4. **App mobile React Native/Expo** (`mobile/`) — 🚧 en cours.
+5. **Dashboard admin plateforme** (`Dashboard/`) — 🚧 scaffold (TanStack Start + shadcn/ui) nettoyé de ses dépendances Lovable, pas encore branché aux vraies données. Contenu actuel = placeholder de démo bancaire (voir `Dashboard/README.md`) à remplacer par de la gestion cross-tenant (organisations, utilisateurs, mail routes...) — aucun outil de ce type n'existait avant.
 
 ## Ce qu'il faut savoir avant de toucher au code
 
@@ -21,15 +22,19 @@ SaaS multi-tenant : chaque organisation connecte son propre compte Resend (sa cl
 
 ## Lancer le projet en local
 
-Deux processus séparés, deux terminaux :
+Processus séparés, un terminal chacun :
 
 ```bash
 # Backend (port 3001)
 cd resend-mail-module
 npm run dev
 
-# Frontend (port 5173)
+# Dashboard web par organisation (port 5173)
 cd resend-mail-module/web
+npm run dev
+
+# Dashboard admin plateforme (port 8080) — scaffold, pas encore branché
+cd resend-mail-module/Dashboard
 npm run dev
 ```
 

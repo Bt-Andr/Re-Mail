@@ -1,16 +1,21 @@
-import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { FileText, Trash2 } from 'lucide-react-native';
 import { useSenders } from '../../src/hooks/useSenders';
 import { sendReply } from '../../src/api/mail';
+import { createDraft, deleteDraft, updateDraft } from '../../src/api/drafts';
 import { ApiError } from '../../src/api/client';
 import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
 import { SenderSelect } from '../../src/components/composer/SenderSelect';
 import { NoSendersNotice } from '../../src/components/composer/NoSendersNotice';
 import { AttachmentPicker } from '../../src/components/composer/AttachmentPicker';
-import type { PickedAttachment } from '../../src/types/api';
+import { TemplatePickerModal } from '../../src/components/composer/TemplatePickerModal';
+import type { PickedAttachment, ReplyTemplate } from '../../src/types/api';
+
+const DRAFT_AUTOSAVE_DELAY_MS = 1200;
 
 export default function ComposeScreen() {
   const params = useLocalSearchParams<{
@@ -19,6 +24,11 @@ export default function ComposeScreen() {
     sourceMessageId?: string;
     to?: string;
     subject?: string;
+    canal?: string;
+    draftId?: string;
+    ccEmail?: string;
+    bccEmail?: string;
+    body?: string;
   }>();
   const mode = params.mode ?? 'new';
   const { senders, loading: sendersLoading } = useSenders();
@@ -26,19 +36,62 @@ export default function ComposeScreen() {
 
   const [fromEmail, setFromEmail] = useState('');
   const [to, setTo] = useState(params.to ?? '');
-  const [cc, setCc] = useState('');
-  const [bcc, setBcc] = useState('');
-  const [showCcBcc, setShowCcBcc] = useState(false);
+  const [cc, setCc] = useState(params.ccEmail ?? '');
+  const [bcc, setBcc] = useState(params.bccEmail ?? '');
+  const [showCcBcc, setShowCcBcc] = useState(!!(params.ccEmail || params.bccEmail));
   const [subject, setSubject] = useState(() => {
     let subj = params.subject ?? '';
     if (mode === 'reply' && subj && !/^re:/i.test(subj)) subj = `Re: ${subj}`;
     if (mode === 'forward' && subj && !/^fwd:/i.test(subj)) subj = `Fwd: ${subj}`;
     return subj;
   });
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(params.body ?? '');
   const [files, setFiles] = useState<PickedAttachment[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const draftIdRef = useRef<string | undefined>(params.draftId);
+  const [hasSavedDraft, setHasSavedDraft] = useState(!!params.draftId);
+  const skipNextAutosaveRef = useRef(!!params.draftId);
+
+  const invalidateDrafts = () => queryClient.invalidateQueries({ queryKey: ['drafts'] });
+
+  // Enregistre un brouillon en base après une pause de saisie — permet de reprendre
+  // la rédaction plus tard (app fermée, changement d'écran) sans perdre le texte.
+  useEffect(() => {
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
+    const hasContent = to.trim() || cc.trim() || bcc.trim() || subject.trim() || message.trim();
+    if (!hasContent) return;
+    const timer = setTimeout(() => {
+      const values = { toEmail: to, ccEmail: cc, bccEmail: bcc, subject, body: message };
+      const save = draftIdRef.current ? updateDraft(draftIdRef.current, values) : createDraft(values);
+      save
+        .then(draft => {
+          draftIdRef.current = draft.id;
+          setHasSavedDraft(true);
+          invalidateDrafts();
+        })
+        .catch(() => {});
+    }, DRAFT_AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [to, cc, bcc, subject, message]);
+
+  const discardDraft = () => {
+    if (draftIdRef.current) {
+      deleteDraft(draftIdRef.current).catch(() => {});
+      invalidateDrafts();
+    }
+    if (router.canGoBack()) router.back();
+  };
+
+  const applyTemplate = (template: ReplyTemplate) => {
+    setMessage(prev => (prev.trim() ? `${prev}\n\n${template.corps}` : template.corps));
+    setTemplatePickerOpen(false);
+  };
 
   useEffect(() => {
     const def = senders.find(s => s.isDefault) ?? senders[0];
@@ -64,10 +117,12 @@ export default function ComposeScreen() {
           threadId: params.threadId,
           sourceMessageId: params.sourceMessageId,
           fromEmail: fromEmail || undefined,
+          draftId: draftIdRef.current,
         },
         mode === 'forward' ? [] : files
       );
       queryClient.invalidateQueries({ queryKey: ['threads'] });
+      if (draftIdRef.current) invalidateDrafts();
       if (result.threadId) queryClient.invalidateQueries({ queryKey: ['thread', result.threadId] });
       if (router.canGoBack()) router.back();
       if (result.threadId) router.push(`/(app)/thread/${result.threadId}`);
@@ -81,7 +136,15 @@ export default function ComposeScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 bg-white dark:bg-neutral-950">
       <ScrollView contentContainerClassName="gap-4 p-4">
-        <Text className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</Text>
+        <View className="flex-row items-center justify-between gap-2">
+          <Text className="flex-1 text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</Text>
+          {hasSavedDraft && (
+            <Pressable onPress={discardDraft} hitSlop={8} className="flex-row items-center gap-1">
+              <Trash2 size={13} color="#9ca3af" />
+              <Text className="text-xs text-neutral-400 dark:text-neutral-500">Supprimer le brouillon</Text>
+            </Pressable>
+          )}
+        </View>
 
         {sendersLoading ? null : !canWrite ? (
           <NoSendersNotice />
@@ -100,6 +163,10 @@ export default function ComposeScreen() {
               </>
             )}
             <Input label="Sujet" value={subject} onChangeText={setSubject} />
+            <Pressable onPress={() => setTemplatePickerOpen(true)} className="flex-row items-center gap-1 self-end">
+              <FileText size={13} color="#6b7280" />
+              <Text className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Insérer un modèle</Text>
+            </Pressable>
             <Input
               label="Message"
               value={message}
@@ -129,6 +196,12 @@ export default function ComposeScreen() {
           </>
         )}
       </ScrollView>
+      <TemplatePickerModal
+        open={templatePickerOpen}
+        canal={params.canal}
+        onClose={() => setTemplatePickerOpen(false)}
+        onPick={applyTemplate}
+      />
     </KeyboardAvoidingView>
   );
 }

@@ -1,14 +1,16 @@
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Forward, Reply } from 'lucide-react-native';
+import { Forward, History, Reply } from 'lucide-react-native';
 import { useThread } from '../../../src/hooks/useThread';
 import { assignThread, setThreadStatus } from '../../../src/api/threads';
 import { useSession } from '../../../src/context/SessionContext';
 import { MessageBubble } from '../../../src/components/thread/MessageBubble';
 import { StatusPicker } from '../../../src/components/thread/StatusPicker';
 import { AssignPicker } from '../../../src/components/thread/AssignPicker';
+import { ActivityLogModal } from '../../../src/components/thread/ActivityLogModal';
 import { Button } from '../../../src/components/ui/Button';
 import type { ThreadStatus } from '../../../src/types/api';
 
@@ -22,6 +24,7 @@ export default function ThreadDetailScreen() {
   const { user } = useSession();
   const { data: thread, isLoading } = useThread(id);
   const queryClient = useQueryClient();
+  const [activityOpen, setActivityOpen] = useState(false);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['thread', id] });
@@ -51,7 +54,12 @@ export default function ThreadDetailScreen() {
   return (
     <View style={{ paddingTop: insets.top }} className="flex-1 bg-white dark:bg-neutral-950">
       <View className="gap-2 border-b border-neutral-200 px-4 pb-3 pt-2 dark:border-neutral-800">
-        <Text className="text-base font-semibold text-neutral-900 dark:text-neutral-100">{thread.sujet}</Text>
+        <View className="flex-row items-start justify-between gap-2">
+          <Text className="flex-1 text-base font-semibold text-neutral-900 dark:text-neutral-100">{thread.sujet}</Text>
+          <Pressable onPress={() => setActivityOpen(true)} hitSlop={8} className="p-1">
+            <History size={16} color="#9ca3af" />
+          </Pressable>
+        </View>
         <Text className="text-xs text-neutral-500 dark:text-neutral-400">
           De : {thread.externalFrom} &lt;{thread.externalEmail}&gt;
         </Text>
@@ -81,7 +89,7 @@ export default function ThreadDetailScreen() {
           onPress={() =>
             router.push({
               pathname: '/(app)/compose',
-              params: { mode: 'reply', threadId: thread.id, to: thread.externalEmail, subject: thread.sujet },
+              params: { mode: 'reply', threadId: thread.id, to: thread.externalEmail, subject: thread.sujet, canal: thread.canal },
             })
           }
         >
@@ -97,7 +105,7 @@ export default function ThreadDetailScreen() {
             onPress={() =>
               router.push({
                 pathname: '/(app)/compose',
-                params: { mode: 'forward', threadId: thread.id, sourceMessageId: lastInbound.id, subject: thread.sujet },
+                params: { mode: 'forward', threadId: thread.id, sourceMessageId: lastInbound.id, subject: thread.sujet, canal: thread.canal },
               })
             }
           >
@@ -108,6 +116,8 @@ export default function ThreadDetailScreen() {
           </Button>
         )}
       </View>
+
+      <ActivityLogModal open={activityOpen} threadId={thread.id} onClose={() => setActivityOpen(false)} />
     </View>
   );
 }

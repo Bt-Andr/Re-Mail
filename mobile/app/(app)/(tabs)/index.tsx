@@ -7,6 +7,7 @@ import { useColorScheme } from 'nativewind';
 import { useThreads } from '../../../src/hooks/useThreads';
 import { FolderTabs } from '../../../src/components/inbox/FolderTabs';
 import { ThreadListItem } from '../../../src/components/inbox/ThreadListItem';
+import { ErrorState } from '../../../src/components/ui/EmptyState';
 import { stripHtml } from '../../../src/lib/format';
 import type { ThreadFolder, ThreadStatus } from '../../../src/types/api';
 
@@ -25,7 +26,7 @@ export default function InboxScreen() {
   const [status, setStatus] = useState<ThreadStatus | 'all'>('all');
   const [search, setSearch] = useState('');
 
-  const { data: threads = [], isLoading, isRefetching, refetch } = useThreads({
+  const { data: threads = [], isLoading, isError, isRefetching, refetch } = useThreads({
     folder,
     status: status === 'all' ? undefined : status,
   });
@@ -94,6 +95,8 @@ export default function InboxScreen() {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>
+      ) : isError ? (
+        <ErrorState onRetry={refetch} />
       ) : (
         <FlatList
           data={filtered}

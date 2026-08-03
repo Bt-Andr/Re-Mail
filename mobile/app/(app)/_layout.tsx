@@ -26,6 +26,8 @@ export default function AppGroupLayout() {
       <Stack.Screen name="admin/invites" options={{ headerShown: true, title: 'Invitations' }} />
       <Stack.Screen name="admin/users" options={{ headerShown: true, title: 'Utilisateurs' }} />
       <Stack.Screen name="admin/org-settings" options={{ headerShown: true, title: "Organisation" }} />
+      <Stack.Screen name="admin/reply-templates" options={{ headerShown: true, title: 'Modèles de réponse' }} />
+      <Stack.Screen name="drafts" options={{ headerShown: true, title: 'Brouillons' }} />
     </Stack>
   );
 }

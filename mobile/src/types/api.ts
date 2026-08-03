@@ -86,19 +86,22 @@ export interface ThreadDetail extends Omit<Thread, 'lastMessage' | 'unreadCount'
   messages: ThreadMessage[];
 }
 
+export type ThreadActivityType =
+  | 'created'
+  | 'assigned'
+  | 'unassigned'
+  | 'status_changed'
+  | 'replied'
+  | 'sent'
+  | 'forwarded'
+  | 'trashed'
+  | 'restored';
+
 export interface ThreadActivity {
   id: string;
-  action:
-    | 'created'
-    | 'assigned'
-    | 'unassigned'
-    | 'status_changed'
-    | 'replied'
-    | 'sent'
-    | 'forwarded'
-    | 'trashed'
-    | 'restored';
-  metadata: Record<string, unknown>;
+  type: ThreadActivityType;
+  // JSON string encodé côté serveur (jamais pré-parsé) — voir helpers/thread.ts::createActivity.
+  payload: string | null;
   createdAt: string;
   user: AssignedTo | null;
 }
@@ -189,6 +192,26 @@ export interface OrgUser {
   isDeptHead: boolean;
   createdAt: string;
   senderGrants: SenderGrant[];
+}
+
+export interface MailDraft {
+  id: string;
+  toEmail: string;
+  ccEmail: string;
+  bccEmail: string;
+  subject: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReplyTemplate {
+  id: string;
+  titre: string;
+  corps: string;
+  canal: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface OrgSummary {

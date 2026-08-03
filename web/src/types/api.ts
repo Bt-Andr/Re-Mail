@@ -46,6 +46,19 @@ export interface MailRouteBulkResult {
   skipped: { alias: string; reason: string }[]
 }
 
+interface ImportSectionResult {
+  created: number
+  updated: number
+  skipped: { key: string; reason: string }[]
+}
+
+export interface ConfigImportResult {
+  domain: string | null
+  mailRoutes: ImportSectionResult
+  routingRules: ImportSectionResult
+  replyTemplates: { created: number; updated: number }
+}
+
 export interface SenderAddress {
   email: string
   label: string

@@ -3,6 +3,9 @@ import prisma from '../lib/prisma'
 import config from '../config'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
+import { csvRow } from '../lib/csv'
+import { parseConfigImport, ImportedMailRoute, ImportedRoutingRule, ImportedReplyTemplate } from '../lib/configImport'
+import { configImportUpload } from '../lib/upload'
 import {
   listResendDomains,
   encryptResendKey,
@@ -10,17 +13,7 @@ import {
   generateWebhookToken,
 } from '../helpers/resendAccount'
 
-// Échappe une valeur pour une cellule CSV : neutralise les préfixes de formule
-// (=, +, -, @) qu'Excel/Sheets exécuterait à l'ouverture, puis entoure de
-// guillemets si la valeur contient une virgule, un guillemet ou un retour ligne.
-function csvCell(value: unknown): string {
-  const str = value === null || value === undefined ? '' : String(value)
-  const safe = /^[=+\-@]/.test(str) ? `'${str}` : str
-  return /["\r\n,]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
-}
-function csvRow(values: unknown[]): string {
-  return values.map(csvCell).join(',') + '\r\n'
-}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const router = Router()
 
@@ -160,6 +153,103 @@ router.get('/me/export', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8')
   res.setHeader('Content-Disposition', `attachment; filename="config-mail-${org.slug}.csv"`)
   res.send(csv)
+})
+
+// Réimport du CSV produit par /me/export (même architecture — voir
+// docs/export-import-config-mail.md §3, "Cas A"). Upsert par clé métier (alias /
+// canal / titre+canal) plutôt que remplacement complet : rejouer un import ne doit
+// ni dupliquer ni supprimer ce qui existe déjà côté cible. Le domaine n'est jamais
+// appliqué automatiquement (§3 : "à titre indicatif") — seulement renvoyé pour
+// affichage, l'admin le reconfigure via Réglages → Connexion Resend si besoin.
+router.post('/me/import', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), configImportUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Fichier CSV requis.' })
+
+  let parsed: ReturnType<typeof parseConfigImport>
+  try {
+    parsed = parseConfigImport(req.file.buffer.toString('utf-8'))
+  } catch {
+    return res.status(400).json({ error: 'Fichier CSV illisible.' })
+  }
+
+  if (parsed.mailRoutes.length > 500 || parsed.routingRules.length > 500 || parsed.replyTemplates.length > 500) {
+    return res.status(400).json({ error: '500 lignes maximum par section.' })
+  }
+
+  const db = forOrg(req.user!.organizationId)
+  const organizationId = req.user!.organizationId
+
+  const mailRoutesResult = { created: 0, updated: 0, skipped: [] as { key: string; reason: string }[] }
+  const seenAliases = new Set<string>()
+  for (const r of parsed.mailRoutes as ImportedMailRoute[]) {
+    if (seenAliases.has(r.alias)) {
+      mailRoutesResult.skipped.push({ key: r.alias, reason: 'doublon dans le fichier' })
+      continue
+    }
+    seenAliases.add(r.alias)
+    if (r.personalEmail && !EMAIL_RE.test(r.personalEmail)) {
+      mailRoutesResult.skipped.push({ key: r.alias, reason: 'personalEmail invalide' })
+      continue
+    }
+    const existing = await db.mailRoute.findFirst({ where: { alias: r.alias } })
+    if (existing) {
+      await db.mailRoute.update({
+        where: { id: existing.id },
+        data: { personalEmail: r.personalEmail, displayName: r.displayName || null, active: r.active },
+      })
+      mailRoutesResult.updated++
+    } else {
+      await db.mailRoute.create({
+        data: { organizationId, alias: r.alias, personalEmail: r.personalEmail, displayName: r.displayName || null, active: r.active },
+      })
+      mailRoutesResult.created++
+    }
+  }
+
+  const routingRulesResult = { created: 0, updated: 0, skipped: [] as { key: string; reason: string }[] }
+  const seenCanaux = new Set<string>()
+  for (const r of parsed.routingRules as ImportedRoutingRule[]) {
+    if (seenCanaux.has(r.canal)) {
+      routingRulesResult.skipped.push({ key: r.canal, reason: 'doublon dans le fichier' })
+      continue
+    }
+    seenCanaux.add(r.canal)
+    if (!r.assignToEmail) {
+      routingRulesResult.skipped.push({ key: r.canal, reason: 'assignToEmail manquant' })
+      continue
+    }
+    const user = await db.user.findFirst({ where: { email: r.assignToEmail } })
+    if (!user) {
+      routingRulesResult.skipped.push({ key: r.canal, reason: `utilisateur ${r.assignToEmail} introuvable dans cette organisation` })
+      continue
+    }
+    const existing = await db.threadRoutingRule.findFirst({ where: { canal: r.canal } })
+    if (existing) {
+      await db.threadRoutingRule.update({ where: { id: existing.id }, data: { assignToId: user.id, active: r.active } })
+      routingRulesResult.updated++
+    } else {
+      await db.threadRoutingRule.create({ data: { organizationId, canal: r.canal, assignToId: user.id, active: r.active } })
+      routingRulesResult.created++
+    }
+  }
+
+  const replyTemplatesResult = { created: 0, updated: 0 }
+  for (const t of parsed.replyTemplates as ImportedReplyTemplate[]) {
+    const existing = await db.replyTemplate.findFirst({ where: { titre: t.titre, canal: t.canal || null } })
+    if (existing) {
+      await db.replyTemplate.update({ where: { id: existing.id }, data: { corps: t.corps } })
+      replyTemplatesResult.updated++
+    } else {
+      await db.replyTemplate.create({ data: { organizationId, titre: t.titre, canal: t.canal || null, corps: t.corps } })
+      replyTemplatesResult.created++
+    }
+  }
+
+  res.json({
+    domain: parsed.domain,
+    mailRoutes: mailRoutesResult,
+    routingRules: routingRulesResult,
+    replyTemplates: replyTemplatesResult,
+  })
 })
 
 export default router

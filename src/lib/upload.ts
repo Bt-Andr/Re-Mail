@@ -15,3 +15,10 @@ export const inviteFileUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024, files: 1 },
 })
+
+// Réimport de l'export CSV de configuration mail (voir routes/organizations.ts
+// POST /me/import) : quelques centaines de lignes texte au plus, 2 Mo est large.
+export const configImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+})

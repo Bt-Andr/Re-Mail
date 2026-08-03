@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw, Download } from 'lucide-react'
+import { RefreshCw, Download, Upload } from 'lucide-react'
 import { apiFetch, parseError } from '../../lib/apiClient'
 import { downloadAuthenticated } from '../../lib/download'
 import { useOrganization } from '../../hooks/useOrganization'
@@ -9,6 +9,7 @@ import { Button } from '../../components/ui/Button'
 import { CopyField } from '../../components/ui/CopyField'
 import { Spinner } from '../../components/ui/Spinner'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { ImportConfigModal } from './ImportConfigModal'
 
 export function OrgSettingsPage() {
   const { organization, loading, refetch } = useOrganization()
@@ -19,6 +20,7 @@ export function OrgSettingsPage() {
   const [confirmRotate, setConfirmRotate] = useState(false)
   const [rotating, setRotating] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   useEffect(() => {
     if (organization) {
@@ -108,11 +110,19 @@ export function OrgSettingsPage() {
           Domaine, adresses (Mail Routes), règles de routage et modèles de réponse, au format CSV — pour reprendre la même configuration dans une autre app utilisant Resend.
           Ne contient aucun secret (clé API, secret de webhook) : à ressaisir manuellement côté app cible.
         </p>
-        <Button variant="secondary" onClick={exportConfig} loading={exporting}>
-          <Download size={14} />
-          Exporter en CSV
-        </Button>
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={exportConfig} loading={exporting}>
+            <Download size={14} />
+            Exporter en CSV
+          </Button>
+          <Button variant="secondary" onClick={() => setImportOpen(true)}>
+            <Upload size={14} />
+            Importer un CSV
+          </Button>
+        </div>
       </div>
+
+      <ImportConfigModal open={importOpen} onClose={() => setImportOpen(false)} />
 
       <ConfirmDialog
         open={confirmRotate}

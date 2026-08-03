@@ -1,5 +1,14 @@
 import { parseCsvSections, rowsToObjects } from './csv'
 
+export interface ImportedUser {
+  username: string
+  email: string
+  nom: string
+  proEmail: string
+  orgRole: 'OWNER' | 'ADMIN' | 'MEMBER'
+  isDeptHead: boolean
+}
+
 export interface ImportedMailRoute {
   alias: string
   personalEmail: string
@@ -24,6 +33,7 @@ export interface ParsedConfigImport {
   // §3) : un domaine différent entre source et cible casserait le routage. Renvoyé
   // uniquement à titre informatif pour l'écran de résultat.
   domain: string | null
+  users: ImportedUser[]
   mailRoutes: ImportedMailRoute[]
   routingRules: ImportedRoutingRule[]
   replyTemplates: ImportedReplyTemplate[]
@@ -33,6 +43,11 @@ function toBool(value: string | undefined): boolean {
   return value?.trim().toLowerCase() !== 'false'
 }
 
+function toOrgRole(value: string | undefined): 'OWNER' | 'ADMIN' | 'MEMBER' {
+  const v = value?.trim().toUpperCase()
+  return v === 'OWNER' || v === 'ADMIN' ? v : 'MEMBER'
+}
+
 // Symétrique de la génération dans routes/organizations.ts (mêmes 4 sections,
 // mêmes noms de colonnes) — voir docs/export-import-config-mail.md §2.
 export function parseConfigImport(text: string): ParsedConfigImport {
@@ -40,6 +55,17 @@ export function parseConfigImport(text: string): ParsedConfigImport {
 
   const domainRows = rowsToObjects(sections.get('Domaine'))
   const domain = domainRows[0]?.domain?.trim() || null
+
+  const users = rowsToObjects(sections.get('Users'))
+    .map(r => ({
+      username: (r.username || '').toLowerCase().trim(),
+      email: (r.email || '').toLowerCase().trim(),
+      nom: (r.nom || '').trim(),
+      proEmail: (r.proEmail || '').trim(),
+      orgRole: toOrgRole(r.orgRole),
+      isDeptHead: r.isDeptHead?.trim().toLowerCase() === 'true',
+    }))
+    .filter(u => u.username && u.email && u.nom)
 
   const mailRoutes = rowsToObjects(sections.get('Mail Routes'))
     .map(r => ({
@@ -66,5 +92,5 @@ export function parseConfigImport(text: string): ParsedConfigImport {
     }))
     .filter(r => r.titre && r.corps)
 
-  return { domain, mailRoutes, routingRules, replyTemplates }
+  return { domain, users, mailRoutes, routingRules, replyTemplates }
 }

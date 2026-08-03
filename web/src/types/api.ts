@@ -54,8 +54,9 @@ interface ImportSectionResult {
 
 export interface ConfigImportResult {
   domain: string | null
+  users: { created: number; reused: number; skipped: { key: string; reason: string }[] }
   mailRoutes: ImportSectionResult
-  routingRules: ImportSectionResult
+  routingRules: ImportSectionResult & { staged: number }
   replyTemplates: { created: number; updated: number }
 }
 

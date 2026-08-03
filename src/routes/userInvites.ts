@@ -8,7 +8,10 @@ import { encryptInviteFile, INVITE_FILE_MAGIC } from '../lib/inviteFileCrypto'
 
 const router = Router()
 
-const INVITE_HYGIENE_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 jours
+// Exporté : réutilisé par POST /organizations/me/import (routes/organizations.ts)
+// pour la création en masse d'invitations depuis la section CSV "Users", avec les
+// mêmes règles d'expiration que la création manuelle.
+export const INVITE_HYGIENE_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 jours
 const ACTIVATION_CODE_TTL_MS = 30 * 60 * 1000 // 30 minutes
 // Alphabet sans caractères ambigus au téléphone (pas de 0/O, 1/I/L)
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'

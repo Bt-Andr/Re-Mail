@@ -4,8 +4,9 @@ import config from '../config'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
 import { csvRow } from '../lib/csv'
-import { parseConfigImport, ImportedMailRoute, ImportedRoutingRule, ImportedReplyTemplate } from '../lib/configImport'
+import { parseConfigImport, ImportedUser, ImportedMailRoute, ImportedRoutingRule, ImportedReplyTemplate } from '../lib/configImport'
 import { configImportUpload } from '../lib/upload'
+import { INVITE_HYGIENE_TTL_MS } from './userInvites'
 import {
   listResendDomains,
   encryptResendKey,
@@ -124,7 +125,8 @@ router.get('/me/export', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), 
   if (!org) return res.status(404).json({ error: 'Organisation introuvable.' })
 
   const db = forOrg(req.user!.organizationId)
-  const [mailRoutes, routingRules, replyTemplates] = await Promise.all([
+  const [users, mailRoutes, routingRules, replyTemplates] = await Promise.all([
+    db.user.findMany({ orderBy: { username: 'asc' } }),
     db.mailRoute.findMany({ orderBy: { alias: 'asc' } }),
     db.threadRoutingRule.findMany({ include: { assignTo: { select: { email: true } } }, orderBy: { canal: 'asc' } }),
     db.replyTemplate.findMany({ orderBy: { titre: 'asc' } }),
@@ -134,6 +136,13 @@ router.get('/me/export', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), 
   csv += csvRow(['Section', 'Domaine'])
   csv += csvRow(['domain'])
   csv += csvRow([org.resendVerifiedDomain || ''])
+  csv += '\r\n'
+
+  // Jamais le mot de passe — un utilisateur réimporté ailleurs redevient une
+  // invitation PENDING, jamais un compte directement utilisable (voir /me/import).
+  csv += csvRow(['Section', 'Users'])
+  csv += csvRow(['username', 'email', 'nom', 'proEmail', 'orgRole', 'isDeptHead'])
+  for (const u of users) csv += csvRow([u.username, u.email, u.nom, u.proEmail || '', u.orgRole, u.isDeptHead])
   csv += '\r\n'
 
   csv += csvRow(['Section', 'Mail Routes'])
@@ -161,6 +170,13 @@ router.get('/me/export', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), 
 // ni dupliquer ni supprimer ce qui existe déjà côté cible. Le domaine n'est jamais
 // appliqué automatiquement (§3 : "à titre indicatif") — seulement renvoyé pour
 // affichage, l'admin le reconfigure via Réglages → Connexion Resend si besoin.
+//
+// Migration d'un environnement existant : un assignToEmail sans User correspondant
+// est "staged" plutôt qu'ignoré si une invitation PENDING existe (créée par la
+// section Users de ce même import, ou déjà créée à la main) — la règle de routage
+// et le sender grant sont posés sur l'invitation et appliqués automatiquement à
+// l'activation (voir routes/publicUserInvites.ts). Une invitation ne donne par
+// elle-même aucun accès : le fichier et le code restent deux actions séparées.
 router.post('/me/import', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), configImportUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Fichier CSV requis.' })
 
@@ -171,12 +187,66 @@ router.post('/me/import', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']),
     return res.status(400).json({ error: 'Fichier CSV illisible.' })
   }
 
-  if (parsed.mailRoutes.length > 500 || parsed.routingRules.length > 500 || parsed.replyTemplates.length > 500) {
+  if (
+    parsed.users.length > 500 ||
+    parsed.mailRoutes.length > 500 ||
+    parsed.routingRules.length > 500 ||
+    parsed.replyTemplates.length > 500
+  ) {
     return res.status(400).json({ error: '500 lignes maximum par section.' })
   }
 
   const db = forOrg(req.user!.organizationId)
   const organizationId = req.user!.organizationId
+  const grantedBy = req.user!.nom || req.user!.username
+
+  const usersResult = { created: 0, reused: 0, skipped: [] as { key: string; reason: string }[] }
+  const seenUserKeys = new Set<string>()
+  for (const u of parsed.users as ImportedUser[]) {
+    if (seenUserKeys.has(u.email) || seenUserKeys.has(u.username)) {
+      usersResult.skipped.push({ key: u.email, reason: 'doublon dans le fichier' })
+      continue
+    }
+    seenUserKeys.add(u.email)
+    seenUserKeys.add(u.username)
+
+    // Vérif globale (comme POST /user-invites) : username/email sont uniques sur
+    // toute la plateforme, pas seulement dans cette organisation.
+    const existingUser = await prisma.user.findFirst({ where: { OR: [{ username: u.username }, { email: u.email }] } })
+    if (existingUser) {
+      usersResult.skipped.push({ key: u.email, reason: 'utilisateur déjà existant' })
+      continue
+    }
+
+    const existingInviteHere = await db.userInvite.findFirst({ where: { email: u.email, status: 'PENDING' } })
+    if (existingInviteHere) {
+      usersResult.reused++
+      continue
+    }
+
+    const conflictingInvite = await prisma.userInvite.findFirst({
+      where: { status: 'PENDING', OR: [{ username: u.username }, { email: u.email }] },
+    })
+    if (conflictingInvite) {
+      usersResult.skipped.push({ key: u.email, reason: "nom d'utilisateur ou email déjà utilisé par une invitation en attente" })
+      continue
+    }
+
+    await db.userInvite.create({
+      data: {
+        organizationId,
+        username: u.username,
+        email: u.email,
+        nom: u.nom,
+        proEmail: u.proEmail || null,
+        orgRole: u.orgRole,
+        isDeptHead: u.isDeptHead,
+        expiresAt: new Date(Date.now() + INVITE_HYGIENE_TTL_MS),
+        createdById: req.user!.id,
+      },
+    })
+    usersResult.created++
+  }
 
   const mailRoutesResult = { created: 0, updated: 0, skipped: [] as { key: string; reason: string }[] }
   const seenAliases = new Set<string>()
@@ -205,7 +275,14 @@ router.post('/me/import', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']),
     }
   }
 
-  const routingRulesResult = { created: 0, updated: 0, skipped: [] as { key: string; reason: string }[] }
+  // canal ↔ alias : le canal d'un thread est dérivé du local-part de l'alias qui l'a
+  // reçu (`toAddr.split('@')[0]`, voir routes/mail.ts) — donc à partir du canal d'une
+  // Routing Rule on peut retrouver l'alias Mail Route correspondant, déjà importé
+  // ci-dessus, pour savoir quelle adresse accorder en SenderGrant.
+  const allRoutes = await db.mailRoute.findMany()
+  const aliasByCanal = new Map(allRoutes.map(r => [r.alias.split('@')[0].toLowerCase(), r.alias]))
+
+  const routingRulesResult = { created: 0, updated: 0, staged: 0, skipped: [] as { key: string; reason: string }[] }
   const seenCanaux = new Set<string>()
   for (const r of parsed.routingRules as ImportedRoutingRule[]) {
     if (seenCanaux.has(r.canal)) {
@@ -217,19 +294,40 @@ router.post('/me/import', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']),
       routingRulesResult.skipped.push({ key: r.canal, reason: 'assignToEmail manquant' })
       continue
     }
+    const alias = aliasByCanal.get(r.canal)
+
     const user = await db.user.findFirst({ where: { email: r.assignToEmail } })
-    if (!user) {
-      routingRulesResult.skipped.push({ key: r.canal, reason: `utilisateur ${r.assignToEmail} introuvable dans cette organisation` })
+    if (user) {
+      const existing = await db.threadRoutingRule.findFirst({ where: { canal: r.canal } })
+      if (existing) {
+        await db.threadRoutingRule.update({ where: { id: existing.id }, data: { assignToId: user.id, active: r.active } })
+        routingRulesResult.updated++
+      } else {
+        await db.threadRoutingRule.create({ data: { organizationId, canal: r.canal, assignToId: user.id, active: r.active } })
+        routingRulesResult.created++
+      }
+      if (alias) {
+        const existingGrant = await db.senderGrant.findFirst({ where: { userId: user.id, email: alias } })
+        if (!existingGrant) await db.senderGrant.create({ data: { organizationId, userId: user.id, email: alias, grantedBy } })
+      }
       continue
     }
-    const existing = await db.threadRoutingRule.findFirst({ where: { canal: r.canal } })
-    if (existing) {
-      await db.threadRoutingRule.update({ where: { id: existing.id }, data: { assignToId: user.id, active: r.active } })
-      routingRulesResult.updated++
-    } else {
-      await db.threadRoutingRule.create({ data: { organizationId, canal: r.canal, assignToId: user.id, active: r.active } })
-      routingRulesResult.created++
+
+    const invite = await db.userInvite.findFirst({ where: { email: r.assignToEmail, status: 'PENDING' } })
+    if (invite) {
+      const canaux = new Set<string>(invite.pendingRoutingCanaux ? JSON.parse(invite.pendingRoutingCanaux) : [])
+      canaux.add(r.canal)
+      const senders = new Set<string>(invite.pendingSenderEmails ? JSON.parse(invite.pendingSenderEmails) : [])
+      if (alias) senders.add(alias)
+      await db.userInvite.update({
+        where: { id: invite.id },
+        data: { pendingRoutingCanaux: JSON.stringify([...canaux]), pendingSenderEmails: JSON.stringify([...senders]) },
+      })
+      routingRulesResult.staged++
+      continue
     }
+
+    routingRulesResult.skipped.push({ key: r.canal, reason: `utilisateur ${r.assignToEmail} introuvable dans cette organisation` })
   }
 
   const replyTemplatesResult = { created: 0, updated: 0 }
@@ -246,6 +344,7 @@ router.post('/me/import', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']),
 
   res.json({
     domain: parsed.domain,
+    users: usersResult,
     mailRoutes: mailRoutesResult,
     routingRules: routingRulesResult,
     replyTemplates: replyTemplatesResult,

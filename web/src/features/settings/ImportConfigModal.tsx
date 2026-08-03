@@ -64,6 +64,11 @@ export function ImportConfigModal({ open, onClose }: { open: boolean; onClose: (
             routage et modèles existants portant la même clé (alias / canal / titre) sont mis à jour ; les nouveaux sont créés.
             Rien n'est jamais supprimé. Le domaine du fichier est indicatif et n'est pas appliqué automatiquement.
           </p>
+          <p className="text-xs text-muted-foreground">
+            Un utilisateur du fichier sans compte existant devient une invitation en attente (jamais un compte actif) — l'admin lui
+            transmet ensuite fichier + code comme pour toute invitation. Ses adresses et règles de routage s'appliquent automatiquement
+            dès qu'il active son compte.
+          </p>
           <input
             ref={inputRef}
             type="file"
@@ -90,8 +95,42 @@ export function ImportConfigModal({ open, onClose }: { open: boolean; onClose: (
             </p>
           )}
 
+          <div>
+            <p className="text-foreground">
+              Users : {result.users.created} invitation{result.users.created > 1 ? 's' : ''} créée{result.users.created > 1 ? 's' : ''}
+              {result.users.reused > 0 && `, ${result.users.reused} déjà en attente réutilisée${result.users.reused > 1 ? 's' : ''}`}
+              {result.users.skipped.length > 0 && `, ${result.users.skipped.length} ignoré${result.users.skipped.length > 1 ? 's' : ''}`}.
+            </p>
+            {result.users.skipped.length > 0 && (
+              <ul className="text-xs text-muted-foreground space-y-0.5 max-h-32 overflow-y-auto mt-1">
+                {result.users.skipped.map((s, i) => (
+                  <li key={i} className="font-mono">{s.key} — {s.reason}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <ImportSectionSummary label="Mail Routes" section={result.mailRoutes} itemLabel="alias" />
-          <ImportSectionSummary label="Routing Rules" section={result.routingRules} itemLabel="canal" />
+
+          <div>
+            <p className="text-foreground">
+              Routing Rules : {result.routingRules.created} créée{result.routingRules.created > 1 ? 's' : ''}, {result.routingRules.updated} mise{result.routingRules.updated > 1 ? 's' : ''} à jour
+              {result.routingRules.staged > 0 && `, ${result.routingRules.staged} en attente d'activation`}
+              {result.routingRules.skipped.length > 0 && `, ${result.routingRules.skipped.length} ignorée${result.routingRules.skipped.length > 1 ? 's' : ''}`}.
+            </p>
+            {result.routingRules.staged > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Une partie sera appliquée automatiquement dès que l'utilisateur concerné activera son compte.
+              </p>
+            )}
+            {result.routingRules.skipped.length > 0 && (
+              <ul className="text-xs text-muted-foreground space-y-0.5 max-h-32 overflow-y-auto mt-1">
+                {result.routingRules.skipped.map((s, i) => (
+                  <li key={i} className="font-mono">canal {s.key} — {s.reason}</li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <div>
             <p className="text-foreground">

@@ -5,11 +5,26 @@ import prisma from '../src/lib/prisma'
 import { csvRow } from '../src/lib/csv'
 import { seedOrg, cleanupOrg, SeededOrg } from './helpers/seed'
 
-function buildCsv(opts: { domain?: string; assignToEmail?: string }) {
+interface CsvUser {
+  username: string
+  email: string
+  nom: string
+  proEmail?: string
+  orgRole?: string
+  isDeptHead?: string
+}
+
+function buildCsv(opts: { domain?: string; assignToEmail?: string; users?: CsvUser[] }) {
   let csv = '﻿'
   csv += csvRow(['Section', 'Domaine'])
   csv += csvRow(['domain'])
   csv += csvRow([opts.domain ?? 'imported.example'])
+  csv += '\r\n'
+  csv += csvRow(['Section', 'Users'])
+  csv += csvRow(['username', 'email', 'nom', 'proEmail', 'orgRole', 'isDeptHead'])
+  for (const u of opts.users ?? []) {
+    csv += csvRow([u.username, u.email, u.nom, u.proEmail ?? '', u.orgRole ?? 'MEMBER', u.isDeptHead ?? 'false'])
+  }
   csv += '\r\n'
   csv += csvRow(['Section', 'Mail Routes'])
   csv += csvRow(['alias', 'personalEmail', 'displayName', 'active'])
@@ -50,8 +65,9 @@ describe('POST /api/organizations/me/import', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.domain).toBe('imported.example')
+    expect(res.body.users).toEqual({ created: 0, reused: 0, skipped: [] })
     expect(res.body.mailRoutes).toEqual({ created: 1, updated: 0, skipped: [] })
-    expect(res.body.routingRules).toEqual({ created: 1, updated: 0, skipped: [] })
+    expect(res.body.routingRules).toEqual({ created: 1, updated: 0, staged: 0, skipped: [] })
     expect(res.body.replyTemplates).toEqual({ created: 1, updated: 0 })
 
     const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgA.organizationId } })
@@ -62,6 +78,9 @@ describe('POST /api/organizations/me/import', () => {
 
     const rule = await prisma.threadRoutingRule.findFirstOrThrow({ where: { organizationId: orgA.organizationId, canal: 'contact' } })
     expect(rule.assignToId).toBe(orgA.userId)
+
+    const grant = await prisma.senderGrant.findFirstOrThrow({ where: { organizationId: orgA.organizationId, userId: orgA.userId, email: 'contact@imported.example' } })
+    expect(grant.email).toBe('contact@imported.example')
   })
 
   it('is idempotent: re-importing the same file updates instead of duplicating', async () => {
@@ -72,11 +91,15 @@ describe('POST /api/organizations/me/import', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.mailRoutes).toEqual({ created: 0, updated: 1, skipped: [] })
-    expect(res.body.routingRules).toEqual({ created: 0, updated: 1, skipped: [] })
+    expect(res.body.routingRules).toEqual({ created: 0, updated: 1, staged: 0, skipped: [] })
     expect(res.body.replyTemplates).toEqual({ created: 0, updated: 1 })
 
     const routes = await prisma.mailRoute.findMany({ where: { organizationId: orgA.organizationId, alias: 'contact@imported.example' } })
     expect(routes).toHaveLength(1)
+
+    // Le sender grant posé au premier import n'est pas dupliqué au second.
+    const grants = await prisma.senderGrant.findMany({ where: { organizationId: orgA.organizationId, userId: orgA.userId, email: 'contact@imported.example' } })
+    expect(grants).toHaveLength(1)
   })
 
   it('skips a routing rule whose assignToEmail belongs to another organization', async () => {
@@ -87,7 +110,7 @@ describe('POST /api/organizations/me/import', () => {
       .attach('file', buildCsv({ assignToEmail: ownerB.email }), 'config.csv')
 
     expect(res.status).toBe(200)
-    expect(res.body.routingRules.created + res.body.routingRules.updated).toBe(0)
+    expect(res.body.routingRules.created + res.body.routingRules.updated + res.body.routingRules.staged).toBe(0)
     expect(res.body.routingRules.skipped).toEqual([
       { key: 'contact', reason: `utilisateur ${ownerB.email} introuvable dans cette organisation` },
     ])
@@ -123,5 +146,61 @@ describe('POST /api/organizations/me/import', () => {
       .attach('file', buildCsv({}), 'config.csv')
 
     expect(res.status).toBe(403)
+  })
+
+  describe('Users section — pending invitations for migration', () => {
+    it('creates a PENDING invite for an unknown user, and stages the routing rule + sender grant on it instead of skipping', async () => {
+      const email = `migrated-${Date.now()}@legacy.example`
+      const res = await request(app)
+        .post('/api/organizations/me/import')
+        .set('Authorization', `Bearer ${orgA.token}`)
+        .attach(
+          'file',
+          buildCsv({ assignToEmail: email, users: [{ username: `migrated-${Date.now()}`, email, nom: 'Personne Migrée' }] }),
+          'config.csv'
+        )
+
+      expect(res.status).toBe(200)
+      expect(res.body.users).toEqual({ created: 1, reused: 0, skipped: [] })
+      expect(res.body.routingRules.staged).toBe(1)
+      expect(res.body.routingRules.skipped).toEqual([])
+
+      const invite = await prisma.userInvite.findFirstOrThrow({ where: { organizationId: orgA.organizationId, email, status: 'PENDING' } })
+      expect(JSON.parse(invite.pendingRoutingCanaux ?? '[]')).toEqual(['contact'])
+      expect(JSON.parse(invite.pendingSenderEmails ?? '[]')).toEqual(['contact@imported.example'])
+
+      // Aucun accès n'a été créé — pas de User, pas de secrets d'activation posés.
+      const user = await prisma.user.findFirst({ where: { email } })
+      expect(user).toBeNull()
+      expect(invite.activationCodeHash).toBeNull()
+    })
+
+    it('reuses the existing PENDING invite on re-import instead of duplicating it', async () => {
+      const email = `reimport-${Date.now()}@legacy.example`
+      const username = `reimport-${Date.now()}`
+      const csv = buildCsv({ users: [{ username, email, nom: 'Réimporté' }] })
+
+      const first = await request(app).post('/api/organizations/me/import').set('Authorization', `Bearer ${orgA.token}`).attach('file', csv, 'config.csv')
+      expect(first.body.users).toEqual({ created: 1, reused: 0, skipped: [] })
+
+      const second = await request(app).post('/api/organizations/me/import').set('Authorization', `Bearer ${orgA.token}`).attach('file', csv, 'config.csv')
+      expect(second.body.users).toEqual({ created: 0, reused: 1, skipped: [] })
+
+      const invites = await prisma.userInvite.findMany({ where: { organizationId: orgA.organizationId, email } })
+      expect(invites).toHaveLength(1)
+    })
+
+    it('skips a Users row whose email already belongs to an existing account', async () => {
+      const res = await request(app)
+        .post('/api/organizations/me/import')
+        .set('Authorization', `Bearer ${orgA.token}`)
+        .attach('file', buildCsv({ users: [{ username: `dup-${Date.now()}`, email: orgAOwnerEmail, nom: 'Doublon' }] }), 'config.csv')
+
+      expect(res.status).toBe(200)
+      expect(res.body.users).toEqual({ created: 0, reused: 0, skipped: [{ key: orgAOwnerEmail, reason: 'utilisateur déjà existant' }] })
+
+      const invite = await prisma.userInvite.findFirst({ where: { organizationId: orgA.organizationId, email: orgAOwnerEmail } })
+      expect(invite).toBeNull()
+    })
   })
 })

@@ -116,6 +116,13 @@ model UserInvite {
   orgRole    OrgRole @default(MEMBER)
   isDeptHead Boolean @default(false)
 
+  // File d'attente appliquée à l'activation (voir routes/publicUserInvites.ts
+  // /activate) — JSON string[] de canaux / adresses en attente, alimentée par
+  // l'import CSV de configuration mail quand assignToEmail ne correspond encore
+  // à aucun User existant. Ne donne aucun accès tant que le User n'est pas créé.
+  pendingRoutingCanaux String? // canaux ThreadRoutingRule à créer pour ce user une fois activé
+  pendingSenderEmails  String? // alias MailRoute à accorder en SenderGrant une fois activé
+
   // Code court (dicté au téléphone) — hashé (bcrypt, comme User.password).
   // Régénérer écrase = révoque le précédent.
   activationCodeHash      String?

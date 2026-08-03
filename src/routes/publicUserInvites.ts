@@ -144,6 +144,27 @@ router.post('/activate', async (req, res) => {
           activationTokenExpiresAt: null,
         },
       })
+
+      // Config pré-staged par un import CSV de migration (voir routes/organizations.ts
+      // POST /me/import) : appliquée seulement maintenant que le User existe réellement.
+      // Create-only pour les règles de routage — ne jamais écraser une règle qu'un
+      // admin aurait configurée manuellement pour ce canal entre-temps.
+      const pendingCanaux: string[] = invite.pendingRoutingCanaux ? JSON.parse(invite.pendingRoutingCanaux) : []
+      for (const canal of pendingCanaux) {
+        const existingRule = await tx.threadRoutingRule.findFirst({ where: { canal } })
+        if (!existingRule) {
+          await tx.threadRoutingRule.create({ data: { organizationId: invite.organizationId, canal, assignToId: created.id, active: true } })
+        }
+      }
+
+      const pendingSenders: string[] = invite.pendingSenderEmails ? JSON.parse(invite.pendingSenderEmails) : []
+      for (const email of pendingSenders) {
+        const existingGrant = await tx.senderGrant.findFirst({ where: { userId: created.id, email } })
+        if (!existingGrant) {
+          await tx.senderGrant.create({ data: { organizationId: invite.organizationId, userId: created.id, email, grantedBy: 'Migration (import CSV)' } })
+        }
+      }
+
       return created
     })
 

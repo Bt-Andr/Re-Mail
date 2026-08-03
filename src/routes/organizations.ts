@@ -306,7 +306,9 @@ router.post('/me/import', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']),
         await db.threadRoutingRule.create({ data: { organizationId, canal: r.canal, assignToId: user.id, active: r.active } })
         routingRulesResult.created++
       }
-      if (alias) {
+      // Un OWNER/ADMIN a déjà accès à tous les alias sans SenderGrant explicite
+      // (voir helpers/senders.ts) — inutile d'en créer un, jamais lu pour ces rôles.
+      if (alias && user.orgRole === 'MEMBER') {
         const existingGrant = await db.senderGrant.findFirst({ where: { userId: user.id, email: alias } })
         if (!existingGrant) await db.senderGrant.create({ data: { organizationId, userId: user.id, email: alias, grantedBy } })
       }

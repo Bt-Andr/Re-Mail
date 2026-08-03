@@ -44,12 +44,27 @@ describe('POST /api/organizations/me/import', () => {
   let orgA: SeededOrg
   let orgB: SeededOrg
   let orgAOwnerEmail: string
+  let orgAMemberId: string
+  let orgAMemberEmail: string
 
   beforeAll(async () => {
     orgA = await seedOrg('import-a')
     orgB = await seedOrg('import-b')
     const owner = await prisma.user.findUniqueOrThrow({ where: { id: orgA.userId } })
     orgAOwnerEmail = owner.email
+
+    const member = await prisma.user.create({
+      data: {
+        organizationId: orgA.organizationId,
+        username: `import-member-${Date.now()}`,
+        email: `import-member-${Date.now()}@test-co.example`,
+        password: 'irrelevant',
+        nom: 'Membre Import',
+        orgRole: 'MEMBER',
+      },
+    })
+    orgAMemberId = member.id
+    orgAMemberEmail = member.email
   })
 
   afterAll(async () => {
@@ -61,7 +76,7 @@ describe('POST /api/organizations/me/import', () => {
     const res = await request(app)
       .post('/api/organizations/me/import')
       .set('Authorization', `Bearer ${orgA.token}`)
-      .attach('file', buildCsv({ assignToEmail: orgAOwnerEmail }), 'config.csv')
+      .attach('file', buildCsv({ assignToEmail: orgAMemberEmail }), 'config.csv')
 
     expect(res.status).toBe(200)
     expect(res.body.domain).toBe('imported.example')
@@ -77,9 +92,9 @@ describe('POST /api/organizations/me/import', () => {
     expect(route.personalEmail).toBe('perso@example.com')
 
     const rule = await prisma.threadRoutingRule.findFirstOrThrow({ where: { organizationId: orgA.organizationId, canal: 'contact' } })
-    expect(rule.assignToId).toBe(orgA.userId)
+    expect(rule.assignToId).toBe(orgAMemberId)
 
-    const grant = await prisma.senderGrant.findFirstOrThrow({ where: { organizationId: orgA.organizationId, userId: orgA.userId, email: 'contact@imported.example' } })
+    const grant = await prisma.senderGrant.findFirstOrThrow({ where: { organizationId: orgA.organizationId, userId: orgAMemberId, email: 'contact@imported.example' } })
     expect(grant.email).toBe('contact@imported.example')
   })
 
@@ -87,7 +102,7 @@ describe('POST /api/organizations/me/import', () => {
     const res = await request(app)
       .post('/api/organizations/me/import')
       .set('Authorization', `Bearer ${orgA.token}`)
-      .attach('file', buildCsv({ assignToEmail: orgAOwnerEmail }), 'config.csv')
+      .attach('file', buildCsv({ assignToEmail: orgAMemberEmail }), 'config.csv')
 
     expect(res.status).toBe(200)
     expect(res.body.mailRoutes).toEqual({ created: 0, updated: 1, skipped: [] })
@@ -98,8 +113,47 @@ describe('POST /api/organizations/me/import', () => {
     expect(routes).toHaveLength(1)
 
     // Le sender grant posé au premier import n'est pas dupliqué au second.
-    const grants = await prisma.senderGrant.findMany({ where: { organizationId: orgA.organizationId, userId: orgA.userId, email: 'contact@imported.example' } })
+    const grants = await prisma.senderGrant.findMany({ where: { organizationId: orgA.organizationId, userId: orgAMemberId, email: 'contact@imported.example' } })
     expect(grants).toHaveLength(1)
+  })
+
+  it('never creates a SenderGrant for an OWNER/ADMIN assignee — they already have implicit access to every alias', async () => {
+    const res = await request(app)
+      .post('/api/organizations/me/import')
+      .set('Authorization', `Bearer ${orgA.token}`)
+      .attach('file', buildCsv({ assignToEmail: orgAOwnerEmail, domain: 'owner-case.example' }), 'config.csv')
+
+    expect(res.status).toBe(200)
+    const rule = await prisma.threadRoutingRule.findFirstOrThrow({ where: { organizationId: orgA.organizationId, canal: 'contact' } })
+    expect(rule.assignToId).toBe(orgA.userId)
+
+    const grant = await prisma.senderGrant.findFirst({ where: { organizationId: orgA.organizationId, userId: orgA.userId, email: 'contact@imported.example' } })
+    expect(grant).toBeNull()
+  })
+
+  it('normalizes the canal to lowercase so a hand-authored CSV with mixed case still matches the mail route and real inbound threads', async () => {
+    let csv = '﻿'
+    csv += csvRow(['Section', 'Domaine']) + csvRow(['domain']) + csvRow(['']) + '\r\n'
+    csv += csvRow(['Section', 'Users']) + csvRow(['username', 'email', 'nom', 'proEmail', 'orgRole', 'isDeptHead']) + '\r\n'
+    csv += csvRow(['Section', 'Mail Routes']) + csvRow(['alias', 'personalEmail', 'displayName', 'active'])
+    csv += csvRow(['support@mixedcase.example', '', '', 'true']) + '\r\n'
+    csv += csvRow(['Section', 'Routing Rules']) + csvRow(['canal', 'assignToEmail', 'active'])
+    csv += csvRow(['Support', orgAMemberEmail, 'true']) + '\r\n'
+    csv += csvRow(['Section', 'Reply Templates']) + csvRow(['titre', 'canal', 'corps'])
+
+    const res = await request(app)
+      .post('/api/organizations/me/import')
+      .set('Authorization', `Bearer ${orgA.token}`)
+      .attach('file', Buffer.from(csv, 'utf-8'), 'config.csv')
+
+    expect(res.status).toBe(200)
+    expect(res.body.routingRules).toEqual({ created: 1, updated: 0, staged: 0, skipped: [] })
+
+    const rule = await prisma.threadRoutingRule.findFirstOrThrow({ where: { organizationId: orgA.organizationId, canal: 'support' } })
+    expect(rule.canal).toBe('support')
+
+    const grant = await prisma.senderGrant.findFirstOrThrow({ where: { organizationId: orgA.organizationId, userId: orgAMemberId, email: 'support@mixedcase.example' } })
+    expect(grant.email).toBe('support@mixedcase.example')
   })
 
   it('skips a routing rule whose assignToEmail belongs to another organization', async () => {

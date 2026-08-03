@@ -80,6 +80,13 @@ function isBlankRow(row: string[]): boolean {
   return row.every(c => c.trim() === '')
 }
 
+// row.length === 2 en plus de row[0] === 'Section' : une ligne de données à une
+// seule colonne non vide ('Section' littéralement, ex. un alias ou un canal mal
+// renseigné) ne doit jamais être prise pour un nouvel en-tête de section.
+function isSectionHeader(row: string[]): boolean {
+  return row[0] === 'Section' && row.length === 2
+}
+
 // Découpe le CSV multi-sections en { "Mail Routes": { headers, rows }, ... }.
 // Tolérant à l'ordre des sections et aux lignes vides en trop — nécessaire pour
 // accepter un fichier réimporté après édition manuelle (Excel/Sheets).
@@ -94,7 +101,7 @@ export function parseCsvSections(text: string): Map<string, { headers: string[];
       i++
       continue
     }
-    if (row[0] !== 'Section') {
+    if (!isSectionHeader(row)) {
       i++
       continue
     }
@@ -103,7 +110,7 @@ export function parseCsvSections(text: string): Map<string, { headers: string[];
     const headers = i < rows.length ? rows[i] : []
     i++
     const dataRows: string[][] = []
-    while (i < rows.length && !isBlankRow(rows[i]) && rows[i][0] !== 'Section') {
+    while (i < rows.length && !isBlankRow(rows[i]) && !isSectionHeader(rows[i])) {
       dataRows.push(rows[i])
       i++
     }

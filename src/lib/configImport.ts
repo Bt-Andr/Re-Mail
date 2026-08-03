@@ -48,7 +48,7 @@ function toOrgRole(value: string | undefined): 'OWNER' | 'ADMIN' | 'MEMBER' {
   return v === 'OWNER' || v === 'ADMIN' ? v : 'MEMBER'
 }
 
-// Symétrique de la génération dans routes/organizations.ts (mêmes 4 sections,
+// Symétrique de la génération dans routes/organizations.ts (mêmes 5 sections,
 // mêmes noms de colonnes) — voir docs/export-import-config-mail.md §2.
 export function parseConfigImport(text: string): ParsedConfigImport {
   const sections = parseCsvSections(text)
@@ -78,7 +78,10 @@ export function parseConfigImport(text: string): ParsedConfigImport {
 
   const routingRules = rowsToObjects(sections.get('Routing Rules'))
     .map(r => ({
-      canal: (r.canal || '').trim(),
+      // Toujours en minuscule : le canal réel d'un thread est dérivé du local-part
+      // de l'alias qui l'a reçu (toujours lowercase, voir routes/mail.ts) — une
+      // règle créée avec une casse différente ne correspondrait jamais à un thread entrant.
+      canal: (r.canal || '').trim().toLowerCase(),
       assignToEmail: (r.assignToEmail || '').trim().toLowerCase(),
       active: toBool(r.active),
     }))

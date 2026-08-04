@@ -1,5 +1,11 @@
 import express from 'express'
 import cors from 'cors'
+// Doit être importé avant l'enregistrement des routes : patche Router pour que le
+// rejet d'une promesse dans un handler async soit transmis à `next(err)` au lieu de
+// remonter en unhandled rejection (Express 4 ne le fait pas nativement — Node crashe
+// tout le process, pour toutes les organisations, sur une seule erreur non rattrapée
+// dans un handler, ex. un déchiffrement de clé Resend corrompue pour un seul tenant).
+import 'express-async-errors'
 import config from './config'
 
 import authRoutes from './routes/auth'
@@ -16,6 +22,11 @@ import userInviteRoutes from './routes/userInvites'
 import publicUserInviteRoutes from './routes/publicUserInvites'
 
 const app = express()
+
+// Nécessaire pour que req.ip (utilisé par le rate limiting sur /auth) reflète le
+// vrai client et non le reverse proxy de la plateforme d'hébergement (Render) —
+// sans ça toutes les requêtes partageraient la même IP côté serveur.
+app.set('trust proxy', 1)
 
 app.use(cors({ origin: config.allowedOrigins, credentials: true }))
 
@@ -44,5 +55,16 @@ app.use('/api/devices', deviceRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/user-invites', userInviteRoutes)
 app.use('/api/public/user-invites', publicUserInviteRoutes)
+
+// Filet de sécurité final : toute erreur qui atteint ici (async, throw synchrone,
+// etc.) reçoit une réponse propre au lieu de laisser Express fermer la connexion en
+// silence ou — sans express-async-errors — de faire planter le process entier.
+// Jamais de stack trace / détail interne renvoyé au client, seulement loggé côté serveur.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[unhandled]', err)
+  if (res.headersSent) return
+  res.status(500).json({ error: 'Erreur serveur.' })
+})
 
 export default app

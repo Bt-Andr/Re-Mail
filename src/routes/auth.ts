@@ -1,10 +1,29 @@
 import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
 import bcrypt from 'bcryptjs'
 import prisma from '../lib/prisma'
 import { authenticateToken } from '../middleware/auth'
 import { signToken } from '../lib/jwt'
 
 const router = Router()
+
+// Ni /login ni /signup n'avaient de protection brute-force (juste bcrypt.compare) —
+// limite par IP en attendant un éventuel lockout par compte plus fin.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives de connexion. Réessayez dans quelques minutes.' },
+})
+
+const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives. Réessayez plus tard.' },
+})
 
 // Supprime les diacritiques (accents) après normalisation NFD, ex. "é" -> "e"
 const COMBINING_DIACRITICS = new RegExp("[\\u0300-\\u036f]", 'g')
@@ -35,7 +54,7 @@ async function uniqueSlug(base: string): Promise<string> {
 // Crée une organisation + son premier utilisateur (OWNER) en une seule étape —
 // pattern "créez votre espace" volontairement simple pour la v1 (un utilisateur
 // appartient à une seule organisation, pas d'invitation multi-org).
-router.post('/signup', async (req, res) => {
+router.post('/signup', signupLimiter, async (req, res) => {
   const { orgName, username, email, password, nom } = req.body
   if (!orgName || !username || !email || !password || !nom) {
     return res.status(400).json({ error: 'Champs requis manquants.' })
@@ -83,7 +102,7 @@ router.post('/signup', async (req, res) => {
   }
 })
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body
   if (!username || !password) return res.status(400).json({ error: 'Identifiants requis.' })
 

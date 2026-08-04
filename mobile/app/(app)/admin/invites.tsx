@@ -8,6 +8,7 @@ import { downloadInviteFile, listInvites, revokeInvite } from '../../../src/api/
 import { formatDateTime } from '../../../src/lib/format';
 import { Button } from '../../../src/components/ui/Button';
 import { Badge, statusBadgeColor } from '../../../src/components/ui/Badge';
+import { ErrorState } from '../../../src/components/ui/EmptyState';
 import { CreateInviteModal } from '../../../src/components/admin/CreateInviteModal';
 import { ActivationCodeModal } from '../../../src/components/admin/ActivationCodeModal';
 import type { UserInvite } from '../../../src/types/api';
@@ -17,7 +18,7 @@ const STATUS_LABEL: Record<string, string> = { PENDING: 'En attente', ACTIVATED:
 export default function InvitesScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { data: invites = [], isLoading } = useQuery({ queryKey: ['invites'], queryFn: listInvites });
+  const { data: invites = [], isLoading, isError, refetch } = useQuery({ queryKey: ['invites'], queryFn: listInvites });
   const [createOpen, setCreateOpen] = useState(false);
   const [codeFor, setCodeFor] = useState<UserInvite | null>(null);
 
@@ -59,6 +60,8 @@ export default function InvitesScreen() {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>
+      ) : isError ? (
+        <ErrorState onRetry={refetch} />
       ) : (
         <FlatList
           data={invites}

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck, Users as UsersIcon } from 'lucide-react-native';
 import { listOrgUsers } from '../../../src/api/users';
 import { Badge, type BadgeColor } from '../../../src/components/ui/Badge';
+import { ErrorState } from '../../../src/components/ui/EmptyState';
 import { SenderGrantsModal } from '../../../src/components/admin/SenderGrantsModal';
 import type { OrgRole, OrgUser } from '../../../src/types/api';
 
@@ -14,7 +15,7 @@ const ROLE_COLOR: Record<OrgRole, BadgeColor> = { OWNER: 'amber', ADMIN: 'blue',
 export default function UsersScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { data: users = [], isLoading } = useQuery({ queryKey: ['org-users'], queryFn: listOrgUsers });
+  const { data: users = [], isLoading, isError, refetch } = useQuery({ queryKey: ['org-users'], queryFn: listOrgUsers });
   const [grantsFor, setGrantsFor] = useState<OrgUser | null>(null);
 
   return (
@@ -29,6 +30,8 @@ export default function UsersScreen() {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>
+      ) : isError ? (
+        <ErrorState onRetry={refetch} />
       ) : (
         <FlatList
           data={users}

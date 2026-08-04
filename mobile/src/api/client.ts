@@ -58,6 +58,17 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+// À utiliser dans les écrans d'auth (login/activation) : un échec qui n'est PAS
+// une ApiError vient du fetch lui-même (backend injoignable, mauvaise IP,
+// téléphone hors du réseau local…) — l'afficher tel quel plutôt que de laisser
+// un message générique ("identifiants incorrects", "code invalide"…) mentir sur
+// la cause réelle.
+export function describeError(e: unknown): string {
+  if (e instanceof ApiError) return e.message;
+  console.error('[api] échec réseau', e);
+  return `Connexion au serveur impossible (${API_URL}). Vérifiez que le backend tourne et que cette adresse est bien accessible depuis cet appareil.`;
+}
+
 async function parseError(res: Response, fallback = 'Une erreur est survenue.'): Promise<string> {
   try {
     const body = (await res.json()) as ApiErrorBody;

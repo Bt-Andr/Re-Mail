@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 import { createReplyTemplate, updateReplyTemplate } from '../../api/replyTemplates';
-import { ApiError } from '../../api/client';
+import { describeError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
@@ -36,7 +36,7 @@ export function ReplyTemplateFormModal({ open, editing, onClose, onSaved }: Repl
       else await createReplyTemplate(values);
       onSaved();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Impossible d'enregistrer.");
+      setError(describeError(e));
     } finally {
       setLoading(false);
     }

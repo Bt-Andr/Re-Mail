@@ -6,15 +6,17 @@ export function stripHtml(html: string): string {
     .trim();
 }
 
-const RTF = new Intl.RelativeTimeFormat('fr', { numeric: 'auto' });
-const DIVISIONS: { amount: number; unit: Intl.RelativeTimeFormatUnit }[] = [
-  { amount: 60, unit: 'seconds' },
-  { amount: 60, unit: 'minutes' },
-  { amount: 24, unit: 'hours' },
-  { amount: 7, unit: 'days' },
-  { amount: 4.34524, unit: 'weeks' },
-  { amount: 12, unit: 'months' },
-  { amount: Number.POSITIVE_INFINITY, unit: 'years' },
+// Formatage manuel plutôt que Intl.RelativeTimeFormat : ce constructeur n'est pas
+// disponible sur tous les moteurs Hermes/Android (plante au chargement du module
+// sur certains appareils via Expo Go — voir historique de build mobile).
+const RELATIVE_UNITS: { seconds: number; singular: string; plural: string }[] = [
+  { seconds: 1, singular: 'seconde', plural: 'secondes' },
+  { seconds: 60, singular: 'minute', plural: 'minutes' },
+  { seconds: 3600, singular: 'heure', plural: 'heures' },
+  { seconds: 86400, singular: 'jour', plural: 'jours' },
+  { seconds: 604800, singular: 'semaine', plural: 'semaines' },
+  { seconds: 2629800, singular: 'mois', plural: 'mois' },
+  { seconds: 31557600, singular: 'an', plural: 'ans' },
 ];
 
 export function initials(name: string): string {
@@ -37,10 +39,18 @@ export function formatDateTime(iso: string): string {
 }
 
 export function formatRelativeTime(iso: string): string {
-  let duration = (new Date(iso).getTime() - Date.now()) / 1000;
-  for (const division of DIVISIONS) {
-    if (Math.abs(duration) < division.amount) return RTF.format(Math.round(duration), division.unit);
-    duration /= division.amount;
+  const diffSeconds = (Date.now() - new Date(iso).getTime()) / 1000;
+  const future = diffSeconds < 0;
+  const abs = Math.abs(diffSeconds);
+
+  if (abs < 10) return "à l'instant";
+
+  let unit = RELATIVE_UNITS[0];
+  for (const candidate of RELATIVE_UNITS) {
+    if (abs < candidate.seconds) break;
+    unit = candidate;
   }
-  return new Date(iso).toLocaleDateString('fr-FR');
+  const value = Math.max(1, Math.round(abs / unit.seconds));
+  const label = value === 1 ? unit.singular : unit.plural;
+  return future ? `dans ${value} ${label}` : `il y a ${value} ${label}`;
 }

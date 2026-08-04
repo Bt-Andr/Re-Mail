@@ -6,7 +6,7 @@ import { FileText, Trash2 } from 'lucide-react-native';
 import { useSenders } from '../../src/hooks/useSenders';
 import { sendReply } from '../../src/api/mail';
 import { createDraft, deleteDraft, updateDraft } from '../../src/api/drafts';
-import { ApiError } from '../../src/api/client';
+import { describeError } from '../../src/api/client';
 import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
 import { SenderSelect } from '../../src/components/composer/SenderSelect';
@@ -127,7 +127,7 @@ export default function ComposeScreen() {
       if (router.canGoBack()) router.back();
       if (result.threadId) router.push(`/(app)/thread/${result.threadId}`);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Échec de l'envoi.");
+      setError(describeError(e));
     } finally {
       setLoading(false);
     }

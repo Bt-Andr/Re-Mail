@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { Upload } from 'lucide-react-native';
 import { resolveInviteFile } from '../../api/invites';
-import { ApiError } from '../../api/client';
+import { describeError } from '../../api/client';
 import { Button } from '../ui/Button';
 
 interface UploadFileStepProps {
@@ -35,7 +35,7 @@ export function UploadFileStep({ onResolved }: UploadFileStepProps) {
       const data = await resolveInviteFile({ uri: fileUri, name: fileName, mimeType });
       onResolved(data.fileToken, data.organizationName);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Ce fichier d'activation n'est plus valide.");
+      setError(describeError(e));
     } finally {
       setLoading(false);
     }

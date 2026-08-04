@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { verifyInviteCode } from '../../api/invites';
-import { ApiError } from '../../api/client';
+import { describeError } from '../../api/client';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 
@@ -23,11 +23,7 @@ export function VerifyCodeStep({ fileToken, organizationName, onVerified }: Veri
       const data = await verifyInviteCode(fileToken, code);
       onVerified(data.activationToken);
     } catch (e) {
-      setError(
-        e instanceof ApiError
-          ? e.message
-          : 'Code incorrect. Après plusieurs essais, demandez un nouveau code à votre administrateur.'
-      );
+      setError(describeError(e));
     } finally {
       setLoading(false);
     }

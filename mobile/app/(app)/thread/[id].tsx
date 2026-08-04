@@ -12,6 +12,7 @@ import { StatusPicker } from '../../../src/components/thread/StatusPicker';
 import { AssignPicker } from '../../../src/components/thread/AssignPicker';
 import { ActivityLogModal } from '../../../src/components/thread/ActivityLogModal';
 import { Button } from '../../../src/components/ui/Button';
+import { ErrorState } from '../../../src/components/ui/EmptyState';
 import type { ThreadStatus } from '../../../src/types/api';
 
 function isManager(role?: string) {
@@ -22,7 +23,7 @@ export default function ThreadDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { user } = useSession();
-  const { data: thread, isLoading } = useThread(id);
+  const { data: thread, isLoading, isError, refetch } = useThread(id);
   const queryClient = useQueryClient();
   const [activityOpen, setActivityOpen] = useState(false);
 
@@ -40,6 +41,14 @@ export default function ThreadDetailScreen() {
     mutationFn: (status: ThreadStatus) => setThreadStatus(id, status),
     onSuccess: invalidate,
   });
+
+  if (isError) {
+    return (
+      <View style={{ paddingTop: insets.top }} className="flex-1 bg-white dark:bg-neutral-950">
+        <ErrorState onRetry={refetch} />
+      </View>
+    );
+  }
 
   if (isLoading || !thread) {
     return (

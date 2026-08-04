@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { CheckCircle2, Copy, XCircle } from 'lucide-react-native';
 import { getOrgSummary } from '../../../src/api/organizations';
+import { ErrorState } from '../../../src/components/ui/EmptyState';
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -17,8 +18,16 @@ function Row({ label, value }: { label: string; value: string }) {
 
 export default function OrgSettingsScreen() {
   const insets = useSafeAreaInsets();
-  const { data: org, isLoading } = useQuery({ queryKey: ['org-summary'], queryFn: getOrgSummary });
+  const { data: org, isLoading, isError, refetch } = useQuery({ queryKey: ['org-summary'], queryFn: getOrgSummary });
   const [copied, setCopied] = useState(false);
+
+  if (isError) {
+    return (
+      <View className="flex-1 bg-neutral-50 dark:bg-neutral-950">
+        <ErrorState onRetry={refetch} />
+      </View>
+    );
+  }
 
   if (isLoading || !org) {
     return (

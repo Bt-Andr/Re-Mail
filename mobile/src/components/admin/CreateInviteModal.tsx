@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { createInvite } from '../../api/invites.admin';
-import { ApiError } from '../../api/client';
+import { describeError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
@@ -23,7 +23,7 @@ export function CreateInviteModal({ open, onClose, onCreated }: { open: boolean;
       setForm(EMPTY);
       onCreated();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Impossible de créer cette invitation.');
+      setError(describeError(e));
     } finally {
       setLoading(false);
     }

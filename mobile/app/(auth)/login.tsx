@@ -3,7 +3,7 @@ import { Text, View, KeyboardAvoidingView, Platform } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Mail } from 'lucide-react-native';
 import { login as loginRequest } from '../../src/api/auth';
-import { ApiError } from '../../src/api/client';
+import { describeError } from '../../src/api/client';
 import { useSession } from '../../src/context/SessionContext';
 import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
@@ -23,7 +23,7 @@ export default function LoginScreen() {
       await login(data.token, data.user);
       router.replace('/(app)/(tabs)');
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Identifiants incorrects.');
+      setError(describeError(e));
     } finally {
       setLoading(false);
     }

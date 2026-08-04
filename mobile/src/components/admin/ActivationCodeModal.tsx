@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { AlertTriangle, Copy } from 'lucide-react-native';
 import { generateActivationCode } from '../../api/invites.admin';
-import { ApiError } from '../../api/client';
+import { describeError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import type { UserInvite } from '../../types/api';
@@ -27,7 +27,7 @@ export function ActivationCodeModal({ invite, onClose }: { invite: UserInvite | 
         setCode(data.code);
         setExpiresAt(data.expiresAt);
       })
-      .catch(e => setError(e instanceof ApiError ? e.message : 'Impossible de générer un code.'))
+      .catch(e => setError(describeError(e)))
       .finally(() => setLoading(false));
   }, [invite]);
 

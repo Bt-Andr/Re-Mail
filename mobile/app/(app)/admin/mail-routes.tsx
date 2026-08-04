@@ -6,12 +6,13 @@ import { AtSign, Pencil, Plus, Trash2 } from 'lucide-react-native';
 import { deleteMailRoute, listMailRoutes, updateMailRoute } from '../../../src/api/mailRoutes';
 import { MailRouteFormModal } from '../../../src/components/admin/MailRouteFormModal';
 import { Button } from '../../../src/components/ui/Button';
+import { ErrorState } from '../../../src/components/ui/EmptyState';
 import type { MailRoute } from '../../../src/types/api';
 
 export default function MailRoutesScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { data: routes = [], isLoading } = useQuery({ queryKey: ['mail-routes'], queryFn: listMailRoutes });
+  const { data: routes = [], isLoading, isError, refetch } = useQuery({ queryKey: ['mail-routes'], queryFn: listMailRoutes });
   const [modal, setModal] = useState<{ open: boolean; editing: MailRoute | null }>({ open: false, editing: null });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['mail-routes'] });
@@ -51,6 +52,8 @@ export default function MailRoutesScreen() {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>
+      ) : isError ? (
+        <ErrorState onRetry={refetch} />
       ) : (
         <FlatList
           data={routes}

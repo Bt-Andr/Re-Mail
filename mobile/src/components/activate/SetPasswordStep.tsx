@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { activateInvite } from '../../api/invites';
-import { ApiError } from '../../api/client';
+import { describeError } from '../../api/client';
 import { useSession } from '../../context/SessionContext';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
@@ -30,7 +30,7 @@ export function SetPasswordStep({ fileToken, activationToken }: SetPasswordStepP
       await login(data.token, data.user);
       router.replace('/(app)/(tabs)');
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Impossible d'activer le compte. Recommencez depuis l'étape du code.");
+      setError(describeError(e));
     } finally {
       setLoading(false);
     }

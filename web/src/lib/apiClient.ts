@@ -52,3 +52,13 @@ export async function parseError(res: Response, fallback = 'Une erreur est surve
     return fallback
   }
 }
+
+// apiFetch() ne throw jamais pour une réponse HTTP d'erreur (gérée via res.ok +
+// parseError) — un `catch` autour d'un appel apiFetch() n'attrape donc QUE un
+// échec réseau réel (offline, backend injoignable, DNS...). Sans ça, plusieurs
+// écrans restaient bloqués en silence (spinner infini ou formulaire vide) sur
+// une simple coupure réseau.
+export function networkErrorMessage(e: unknown): string {
+  console.error('[api] échec réseau', e)
+  return 'Connexion au serveur impossible. Vérifiez votre connexion et réessayez.'
+}

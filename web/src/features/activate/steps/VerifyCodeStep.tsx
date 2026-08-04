@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react'
-import { apiFetch, parseError } from '../../../lib/apiClient'
+import { apiFetch, parseError, networkErrorMessage } from '../../../lib/apiClient'
 import { Input } from '../../../components/ui/Input'
 import { Button } from '../../../components/ui/Button'
 
@@ -26,6 +26,8 @@ export function VerifyCodeStep({ fileToken, organizationName, onVerified }: Veri
       }
       const data = await res.json()
       onVerified(data.activationToken)
+    } catch (err) {
+      setError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }

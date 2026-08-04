@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Mail } from 'lucide-react'
-import { apiFetch, parseError } from '../../lib/apiClient'
+import { apiFetch, parseError, networkErrorMessage } from '../../lib/apiClient'
 import { useSession } from '../../context/SessionContext'
 import { Input } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
@@ -27,6 +27,8 @@ export function LoginPage() {
       const data = await res.json()
       login(data.token, data.user)
       navigate('/inbox')
+    } catch (err) {
+      setError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }

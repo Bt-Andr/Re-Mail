@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Users as UsersIcon, ShieldCheck } from 'lucide-react'
-import { apiFetch } from '../../lib/apiClient'
+import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { Spinner } from '../../components/ui/Spinner'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { ErrorState } from '../../components/ui/ErrorState'
 import { Badge } from '../../components/ui/Badge'
 import { SenderGrantsModal } from './SenderGrantsModal'
 import type { OrgRole, OrgUser } from '../../types/api'
@@ -13,13 +14,21 @@ const ROLE_COLOR: Record<OrgRole, 'gray' | 'blue' | 'amber'> = { OWNER: 'amber',
 export function UsersPage() {
   const [users, setUsers] = useState<OrgUser[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [grantsFor, setGrantsFor] = useState<OrgUser | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const res = await apiFetch('/users')
-      if (res.ok) setUsers(await res.json())
+      if (res.ok) {
+        setUsers(await res.json())
+      } else {
+        setLoadError(await parseError(res))
+      }
+    } catch (err) {
+      setLoadError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -37,7 +46,8 @@ export function UsersPage() {
       </div>
 
       {loading && <Spinner />}
-      {!loading && users.length === 0 && <EmptyState icon={<UsersIcon size={32} />} title="Aucun utilisateur" />}
+      {!loading && loadError && <ErrorState message={loadError} onRetry={load} />}
+      {!loading && !loadError && users.length === 0 && <EmptyState icon={<UsersIcon size={32} />} title="Aucun utilisateur" />}
 
       <div className="space-y-3">
         {users.map(u => (

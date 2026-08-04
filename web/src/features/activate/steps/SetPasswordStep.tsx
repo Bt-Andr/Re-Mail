@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { apiFetch, parseError } from '../../../lib/apiClient'
+import { apiFetch, parseError, networkErrorMessage } from '../../../lib/apiClient'
 import { useSession } from '../../../context/SessionContext'
 import { Input } from '../../../components/ui/Input'
 import { Button } from '../../../components/ui/Button'
@@ -38,6 +38,8 @@ export function SetPasswordStep({ fileToken, activationToken }: SetPasswordStepP
       // Réponse identique à un login classique — connecte directement l'utilisateur.
       login(data.token, data.user)
       navigate('/inbox')
+    } catch (err) {
+      setError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }

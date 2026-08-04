@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { Send } from 'lucide-react'
-import { apiFetch } from '../../lib/apiClient'
+import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useOrganization } from '../../hooks/useOrganization'
 import { usePolling } from '../../hooks/usePolling'
 import { stripHtml } from '../../lib/format'
@@ -25,15 +25,26 @@ export function InboxPage() {
   const [search, setSearch] = useState('')
   const [threads, setThreads] = useState<ThreadListItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [mailRoutes, setMailRoutes] = useState<MailRoute[]>([])
   const [composerRequest, setComposerRequest] = useState<ComposerRequest | null>(null)
 
   const loadThreads = useCallback(async () => {
     const params = new URLSearchParams({ folder })
     if (status !== 'all') params.set('status', status)
-    const res = await apiFetch(`/threads?${params}`)
-    if (res.ok) setThreads(await res.json())
-    setLoading(false)
+    try {
+      const res = await apiFetch(`/threads?${params}`)
+      if (res.ok) {
+        setThreads(await res.json())
+        setLoadError('')
+      } else {
+        setLoadError(await parseError(res))
+      }
+    } catch (err) {
+      setLoadError(networkErrorMessage(err))
+    } finally {
+      setLoading(false)
+    }
   }, [folder, status])
 
   useEffect(() => {
@@ -81,7 +92,15 @@ export function InboxPage() {
           Nouveau mail
         </Button>
         <FiltersBar search={search} onSearch={setSearch} status={status} onStatus={setStatus} />
-        <ThreadListPane threads={filtered} loading={loading} folder={folder} mailRoutes={mailRoutes} resendConnected={!!organization?.resendConnected} />
+        <ThreadListPane
+          threads={filtered}
+          loading={loading}
+          error={loadError}
+          onRetry={loadThreads}
+          folder={folder}
+          mailRoutes={mailRoutes}
+          resendConnected={!!organization?.resendConnected}
+        />
       </div>
 
       <Outlet context={outletContext} />

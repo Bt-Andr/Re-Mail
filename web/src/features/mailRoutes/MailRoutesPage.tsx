@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AtSign, Pencil, Trash2, Plus, Upload } from 'lucide-react'
-import { apiFetch } from '../../lib/apiClient'
+import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useToast } from '../../context/ToastContext'
 import { Button } from '../../components/ui/Button'
 import { Spinner } from '../../components/ui/Spinner'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { ErrorState } from '../../components/ui/ErrorState'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { MailRouteFormModal } from './MailRouteFormModal'
 import { BulkImportModal } from './BulkImportModal'
@@ -14,15 +15,23 @@ export function MailRoutesPage() {
   const { showToast } = useToast()
   const [routes, setRoutes] = useState<MailRoute[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [modal, setModal] = useState<{ open: boolean; editing: MailRoute | null }>({ open: false, editing: null })
   const [importOpen, setImportOpen] = useState(false)
   const [toDelete, setToDelete] = useState<MailRoute | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const res = await apiFetch('/mail-routes')
-      if (res.ok) setRoutes(await res.json())
+      if (res.ok) {
+        setRoutes(await res.json())
+      } else {
+        setLoadError(await parseError(res))
+      }
+    } catch (err) {
+      setLoadError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -33,18 +42,30 @@ export function MailRoutesPage() {
   }, [load])
 
   const toggleActive = async (route: MailRoute) => {
-    const res = await apiFetch(`/mail-routes/${route.id}`, { method: 'PUT', body: JSON.stringify({ ...route, active: !route.active }) })
-    if (res.ok) setRoutes(prev => prev.map(r => (r.id === route.id ? { ...r, active: !r.active } : r)))
+    try {
+      const res = await apiFetch(`/mail-routes/${route.id}`, { method: 'PUT', body: JSON.stringify({ ...route, active: !route.active }) })
+      if (res.ok) {
+        setRoutes(prev => prev.map(r => (r.id === route.id ? { ...r, active: !r.active } : r)))
+      } else {
+        showToast('error', await parseError(res))
+      }
+    } catch (err) {
+      showToast('error', networkErrorMessage(err))
+    }
   }
 
   const confirmDelete = async () => {
     if (!toDelete) return
-    const res = await apiFetch(`/mail-routes/${toDelete.id}`, { method: 'DELETE' })
-    if (res.ok) {
-      setRoutes(prev => prev.filter(r => r.id !== toDelete.id))
-      showToast('success', 'Adresse supprimée.')
-    } else {
-      showToast('error', 'Suppression impossible.')
+    try {
+      const res = await apiFetch(`/mail-routes/${toDelete.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setRoutes(prev => prev.filter(r => r.id !== toDelete.id))
+        showToast('success', 'Adresse supprimée.')
+      } else {
+        showToast('error', await parseError(res, 'Suppression impossible.'))
+      }
+    } catch (err) {
+      showToast('error', networkErrorMessage(err))
     }
     setToDelete(null)
   }
@@ -69,7 +90,8 @@ export function MailRoutesPage() {
       </div>
 
       {loading && <Spinner />}
-      {!loading && routes.length === 0 && (
+      {!loading && loadError && <ErrorState message={loadError} onRetry={load} />}
+      {!loading && !loadError && routes.length === 0 && (
         <EmptyState icon={<AtSign size={32} />} title="Aucune adresse configurée" message="Ajoutez une première adresse pour commencer à recevoir des emails." />
       )}
 

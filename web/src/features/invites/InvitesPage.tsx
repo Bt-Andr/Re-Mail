@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { UserPlus, Plus, Download, KeyRound, Ban } from 'lucide-react'
-import { apiFetch } from '../../lib/apiClient'
+import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { downloadAuthenticated } from '../../lib/download'
 import { useToast } from '../../context/ToastContext'
 import { formatDateTime } from '../../lib/format'
 import { Button } from '../../components/ui/Button'
 import { Spinner } from '../../components/ui/Spinner'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { ErrorState } from '../../components/ui/ErrorState'
 import { Badge, statusBadgeColor } from '../../components/ui/Badge'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { CreateInviteModal } from './CreateInviteModal'
@@ -19,15 +20,23 @@ export function InvitesPage() {
   const { showToast } = useToast()
   const [invites, setInvites] = useState<UserInvite[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [codeFor, setCodeFor] = useState<UserInvite | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<UserInvite | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const res = await apiFetch('/user-invites')
-      if (res.ok) setInvites(await res.json())
+      if (res.ok) {
+        setInvites(await res.json())
+      } else {
+        setLoadError(await parseError(res))
+      }
+    } catch (err) {
+      setLoadError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -47,12 +56,16 @@ export function InvitesPage() {
 
   const revoke = async () => {
     if (!revokeTarget) return
-    const res = await apiFetch(`/user-invites/${revokeTarget.id}/revoke`, { method: 'POST' })
-    if (res.ok) {
-      showToast('success', 'Invitation révoquée.')
-      void load()
-    } else {
-      showToast('error', 'Révocation impossible.')
+    try {
+      const res = await apiFetch(`/user-invites/${revokeTarget.id}/revoke`, { method: 'POST' })
+      if (res.ok) {
+        showToast('success', 'Invitation révoquée.')
+        void load()
+      } else {
+        showToast('error', await parseError(res, 'Révocation impossible.'))
+      }
+    } catch (err) {
+      showToast('error', networkErrorMessage(err))
     }
     setRevokeTarget(null)
   }
@@ -71,7 +84,8 @@ export function InvitesPage() {
       </div>
 
       {loading && <Spinner />}
-      {!loading && invites.length === 0 && (
+      {!loading && loadError && <ErrorState message={loadError} onRetry={load} />}
+      {!loading && !loadError && invites.length === 0 && (
         <EmptyState icon={<UserPlus size={32} />} title="Aucune invitation" message="Invitez un utilisateur non-technique par fichier + code d'activation." />
       )}
 

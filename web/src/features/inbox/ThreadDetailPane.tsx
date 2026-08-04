@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
 import { Forward, Reply } from 'lucide-react'
-import { apiFetch } from '../../lib/apiClient'
+import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useSession } from '../../context/SessionContext'
+import { useToast } from '../../context/ToastContext'
 import { Spinner } from '../../components/ui/Spinner'
+import { ErrorState } from '../../components/ui/ErrorState'
 import { Button } from '../../components/ui/Button'
 import { MessageList } from './MessageList'
 import { AssignDropdown } from './AssignDropdown'
@@ -18,19 +20,26 @@ function isManager(role?: string) {
 export function ThreadDetailPane() {
   const { threadId } = useParams<{ threadId: string }>()
   const { user } = useSession()
+  const { showToast } = useToast()
   const { openComposer, onThreadChanged } = useOutletContext<InboxOutletContext>()
   const [thread, setThread] = useState<ThreadDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   const load = useCallback(async () => {
     if (!threadId) return
     setLoading(true)
+    setLoadError('')
     try {
       const res = await apiFetch(`/threads/${threadId}`)
       if (res.ok) {
         setThread(await res.json())
         onThreadChanged()
+      } else {
+        setLoadError(await parseError(res))
       }
+    } catch (err) {
+      setLoadError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -43,20 +52,36 @@ export function ThreadDetailPane() {
 
   const assign = async (assignedToId: string | null) => {
     if (!thread) return
-    const res = await apiFetch(`/threads/${thread.id}/assign`, { method: 'PATCH', body: JSON.stringify({ assignedToId }) })
-    if (res.ok) {
-      const updated = await res.json()
-      setThread(prev => (prev ? { ...prev, ...updated } : prev))
+    try {
+      const res = await apiFetch(`/threads/${thread.id}/assign`, { method: 'PATCH', body: JSON.stringify({ assignedToId }) })
+      if (res.ok) {
+        const updated = await res.json()
+        setThread(prev => (prev ? { ...prev, ...updated } : prev))
+        onThreadChanged()
+      } else {
+        showToast('error', await parseError(res))
+      }
+    } catch (err) {
+      showToast('error', networkErrorMessage(err))
     }
-    onThreadChanged()
   }
 
   const changeStatus = async (status: string) => {
     if (!thread) return
-    const res = await apiFetch(`/threads/${thread.id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) })
-    if (res.ok) setThread(prev => (prev ? { ...prev, status: status as ThreadDetail['status'] } : prev))
-    onThreadChanged()
+    try {
+      const res = await apiFetch(`/threads/${thread.id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) })
+      if (res.ok) {
+        setThread(prev => (prev ? { ...prev, status: status as ThreadDetail['status'] } : prev))
+        onThreadChanged()
+      } else {
+        showToast('error', await parseError(res))
+      }
+    } catch (err) {
+      showToast('error', networkErrorMessage(err))
+    }
   }
+
+  if (loadError) return <ErrorState message={loadError} onRetry={load} />
 
   if (loading || !thread) return <Spinner />
 

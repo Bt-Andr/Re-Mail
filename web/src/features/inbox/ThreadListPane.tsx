@@ -1,6 +1,7 @@
 import { Inbox as InboxIcon } from 'lucide-react'
 import { Spinner } from '../../components/ui/Spinner'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { ErrorState } from '../../components/ui/ErrorState'
 import { ThreadListItem } from './ThreadListItem'
 import type { ThreadListItem as ThreadListItemType, MailRoute } from '../../types/api'
 import type { Folder } from './FolderTabs'
@@ -8,13 +9,17 @@ import type { Folder } from './FolderTabs'
 interface ThreadListPaneProps {
   threads: ThreadListItemType[]
   loading: boolean
+  error?: string
+  onRetry?: () => void
   folder: Folder
   mailRoutes: MailRoute[]
   resendConnected: boolean
 }
 
-export function ThreadListPane({ threads, loading, folder, mailRoutes, resendConnected }: ThreadListPaneProps) {
+export function ThreadListPane({ threads, loading, error, onRetry, folder, mailRoutes, resendConnected }: ThreadListPaneProps) {
   if (loading) return <Spinner />
+
+  if (error) return <ErrorState message={error} onRetry={onRetry ?? (() => {})} />
 
   if (threads.length === 0) {
     if (!resendConnected) {

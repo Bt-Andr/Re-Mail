@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { RefreshCw, Download, Upload } from 'lucide-react'
-import { apiFetch, parseError } from '../../lib/apiClient'
+import { apiFetch, parseError, networkErrorMessage } from '../../lib/apiClient'
 import { downloadAuthenticated } from '../../lib/download'
 import { useOrganization } from '../../hooks/useOrganization'
 import { useToast } from '../../context/ToastContext'
@@ -8,11 +8,12 @@ import { Input } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
 import { CopyField } from '../../components/ui/CopyField'
 import { Spinner } from '../../components/ui/Spinner'
+import { ErrorState } from '../../components/ui/ErrorState'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ImportConfigModal } from './ImportConfigModal'
 
 export function OrgSettingsPage() {
-  const { organization, loading, refetch } = useOrganization()
+  const { organization, loading, error: loadError, refetch } = useOrganization()
   const { showToast } = useToast()
   const [form, setForm] = useState({ name: '', companyName: '', emailContact: '' })
   const [saving, setSaving] = useState(false)
@@ -28,7 +29,8 @@ export function OrgSettingsPage() {
     }
   }, [organization])
 
-  if (loading || !organization) return <Spinner />
+  if (loading) return <Spinner />
+  if (loadError || !organization) return <ErrorState message={loadError} onRetry={refetch} />
 
   const save = async () => {
     setError('')
@@ -41,6 +43,8 @@ export function OrgSettingsPage() {
       }
       showToast('success', 'Organisation mise à jour.')
       void refetch()
+    } catch (err) {
+      setError(networkErrorMessage(err))
     } finally {
       setSaving(false)
     }
@@ -54,8 +58,10 @@ export function OrgSettingsPage() {
         showToast('success', "Nouvelle URL de webhook générée — mettez-la à jour dans Resend.")
         void refetch()
       } else {
-        showToast('error', 'Rotation impossible.')
+        showToast('error', await parseError(res, 'Rotation impossible.'))
       }
+    } catch (err) {
+      showToast('error', networkErrorMessage(err))
     } finally {
       setRotating(false)
       setConfirmRotate(false)

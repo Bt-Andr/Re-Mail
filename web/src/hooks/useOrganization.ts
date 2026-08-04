@@ -1,16 +1,24 @@
 import { useCallback, useEffect, useState } from 'react'
-import { apiFetch } from '../lib/apiClient'
+import { apiFetch, networkErrorMessage, parseError } from '../lib/apiClient'
 import type { OrganizationStatus } from '../types/api'
 
 export function useOrganization() {
   const [organization, setOrganization] = useState<OrganizationStatus | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   const refetch = useCallback(async () => {
     setLoading(true)
+    setError('')
     try {
       const res = await apiFetch('/organizations/me')
-      if (res.ok) setOrganization(await res.json())
+      if (res.ok) {
+        setOrganization(await res.json())
+      } else {
+        setError(await parseError(res))
+      }
+    } catch (err) {
+      setError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -20,5 +28,5 @@ export function useOrganization() {
     void refetch()
   }, [refetch])
 
-  return { organization, loading, refetch }
+  return { organization, loading, error, refetch }
 }

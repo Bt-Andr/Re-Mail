@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
-import { apiFetch, parseError } from '../../../lib/apiClient'
+import { apiFetch, parseError, networkErrorMessage } from '../../../lib/apiClient'
 import { Button } from '../../../components/ui/Button'
 
 export function UploadFileStep({ onResolved }: { onResolved: (fileToken: string, organizationName: string) => void }) {
@@ -24,6 +24,8 @@ export function UploadFileStep({ onResolved }: { onResolved: (fileToken: string,
       }
       const data = await res.json()
       onResolved(data.fileToken, data.organizationName)
+    } catch (err) {
+      setError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }

@@ -15,7 +15,7 @@ const NAV_ITEMS: { to: string; label: string; icon: typeof Inbox; roles: OrgRole
 
 export function AppShell() {
   const { user, organization, logout } = useSession()
-  const { organization: orgStatus } = useOrganization()
+  const { organization: orgStatus, error: orgError, refetch: refetchOrgStatus } = useOrganization()
 
   const setupIncomplete = orgStatus && (!orgStatus.resendConnected || !orgStatus.webhookConfigured)
 
@@ -61,6 +61,16 @@ export function AppShell() {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
+        {orgError && (
+          <button
+            type="button"
+            onClick={() => void refetchOrgStatus()}
+            className="flex items-center gap-2 px-5 py-2 bg-destructive/10 border-b border-destructive/20 text-xs text-destructive hover:bg-destructive/15 transition-colors text-left"
+          >
+            <AlertTriangle size={14} className="flex-shrink-0" />
+            {orgError} — cliquez pour réessayer.
+          </button>
+        )}
         {setupIncomplete && (
           <Link
             to="/onboarding"

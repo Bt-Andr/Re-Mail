@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { apiFetch, parseError } from '../../lib/apiClient'
+import { apiFetch, parseError, networkErrorMessage } from '../../lib/apiClient'
 import { Modal } from '../../components/ui/Modal'
 import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
@@ -7,7 +7,15 @@ import { Button } from '../../components/ui/Button'
 
 const EMPTY = { username: '', email: '', nom: '', orgRole: 'MEMBER' }
 
-export function CreateInviteModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
+export function CreateInviteModal({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean
+  onClose: () => void
+  onCreated: (emailSent: boolean) => void
+}) {
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -22,8 +30,11 @@ export function CreateInviteModal({ open, onClose, onCreated }: { open: boolean;
         setError(await parseError(res, 'Impossible de créer cette invitation.'))
         return
       }
+      const data = await res.json()
       setForm(EMPTY)
-      onCreated()
+      onCreated(!!data.emailSent)
+    } catch (err) {
+      setError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }

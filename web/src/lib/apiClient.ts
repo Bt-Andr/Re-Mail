@@ -32,11 +32,26 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
+  const method = options.method || 'GET'
   const res = await fetch(`${API_URL}${path}`, { ...options, headers })
 
+  // Un 401 sans token (login/signup/activation — endpoints publics, jamais de
+  // session en cours) est un échec d'identifiants normal, pas une session
+  // invalidée : forcer clearToken+redirect ici renavigait vers /login au
+  // mauvais moment et effaçait le message d'erreur avant qu'il s'affiche (le
+  // bug "toujours renvoyé sur la connexion, sans erreur visible"). Seul un 401
+  // avec un token déjà présent signifie une vraie session à invalider (ex.
+  // GET /auth/me quand l'utilisateur a été supprimé côté serveur).
   if (res.status === 401) {
-    clearToken()
-    unauthorizedHandler?.()
+    if (token) {
+      console.error(`[api] 401 — ${method} ${path} → déconnexion forcée (token présent mais rejeté)`)
+      clearToken()
+      unauthorizedHandler?.()
+    } else {
+      console.error(`[api] 401 — ${method} ${path} (pas de session en cours)`)
+    }
+  } else if (!res.ok) {
+    console.error(`[api] échec ${res.status} — ${method} ${path}`)
   }
 
   return res

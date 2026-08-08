@@ -9,7 +9,15 @@ import type { OrgRole } from '../../types/api';
 
 const EMPTY = { username: '', email: '', nom: '', orgRole: 'MEMBER' as OrgRole };
 
-export function CreateInviteModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
+export function CreateInviteModal({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (emailSent: boolean) => void;
+}) {
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,9 +27,9 @@ export function CreateInviteModal({ open, onClose, onCreated }: { open: boolean;
     setError('');
     setLoading(true);
     try {
-      await createInvite(form);
+      const invite = await createInvite(form);
       setForm(EMPTY);
-      onCreated();
+      onCreated(!!invite.emailSent);
     } catch (e) {
       setError(describeError(e));
     } finally {

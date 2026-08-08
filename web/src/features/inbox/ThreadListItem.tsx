@@ -2,16 +2,17 @@ import { NavLink } from 'react-router-dom'
 import { Badge, statusBadgeColor } from '../../components/ui/Badge'
 import { relativeTime, stripHtml, canalDisplayName } from '../../lib/format'
 import type { ThreadListItem as ThreadListItemType, MailRoute } from '../../types/api'
+import type { Folder } from './InboxPage'
 
 const STATUS_LABEL: Record<string, string> = { nouveau: 'Nouveau', en_cours: 'En cours', resolu: 'Résolu' }
 
-export function ThreadListItem({ thread, mailRoutes }: { thread: ThreadListItemType; mailRoutes: MailRoute[] }) {
+export function ThreadListItem({ thread, mailRoutes, folder }: { thread: ThreadListItemType; mailRoutes: MailRoute[]; folder: Folder }) {
   const hasUnread = thread.unreadCount > 0
   const label = canalDisplayName(thread.canal, mailRoutes)
 
   return (
     <NavLink
-      to={`/inbox/${thread.id}`}
+      to={`/${folder}/${thread.id}`}
       className={({ isActive }) =>
         `block bg-card rounded-lg border p-3 transition-all ${isActive ? 'border-ring ring-1 ring-ring/30' : 'border-border hover:border-foreground/20'} ${hasUnread ? 'shadow-sm' : ''}`
       }

@@ -28,6 +28,15 @@ function extractFileToken(fileBuffer: Buffer): string | null {
   }
 }
 
+async function loadPendingInviteByFileToken(fileToken: string) {
+  const invite = await prisma.userInvite.findUnique({
+    where: { fileToken },
+    include: { organization: { select: { name: true, companyName: true } } },
+  })
+  if (!invite || invite.status !== 'PENDING' || invite.expiresAt < new Date()) return null
+  return invite
+}
+
 // Étape 1 : l'app uploade les octets du fichier tels quels — elle ne déchiffre
 // jamais rien elle-même, seul ce endpoint (côté serveur) le fait.
 router.post('/resolve', inviteFileUpload.single('file'), async (req, res) => {
@@ -37,13 +46,23 @@ router.post('/resolve', inviteFileUpload.single('file'), async (req, res) => {
   const fileToken = extractFileToken(file.buffer)
   if (!fileToken) return res.status(400).json({ error: 'Fichier invalide.' })
 
-  const invite = await prisma.userInvite.findUnique({
-    where: { fileToken },
-    include: { organization: { select: { name: true, companyName: true } } },
-  })
-  if (!invite || invite.status !== 'PENDING' || invite.expiresAt < new Date()) {
-    return res.status(404).json(GENERIC_INVITE_ERROR)
-  }
+  const invite = await loadPendingInviteByFileToken(fileToken)
+  if (!invite) return res.status(404).json(GENERIC_INVITE_ERROR)
+
+  res.json({ fileToken, organizationName: invite.organization.companyName || invite.organization.name })
+})
+
+// Variante de /resolve pour un lien reçu par email (voir routes/userInvites.ts
+// ::sendInviteEmail) : le fileToken est directement porté par l'URL plutôt
+// qu'emballé dans un fichier chiffré — ni plus ni moins secret, le fichier .jep
+// n'ajoutait aucune entropie au-delà de ce même token. Même réponse que /resolve
+// pour enchaîner sur la même étape 2 (code) côté front.
+router.get('/resolve-by-token', async (req, res) => {
+  const fileToken = typeof req.query.token === 'string' ? req.query.token : null
+  if (!fileToken) return res.status(400).json({ error: 'Token requis.' })
+
+  const invite = await loadPendingInviteByFileToken(fileToken)
+  if (!invite) return res.status(404).json(GENERIC_INVITE_ERROR)
 
   res.json({ fileToken, organizationName: invite.organization.companyName || invite.organization.name })
 })

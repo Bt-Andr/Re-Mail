@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Link } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AtSign, Pencil, Plus, Trash2 } from 'lucide-react-native';
 import { deleteMailRoute, listMailRoutes, updateMailRoute } from '../../../src/api/mailRoutes';
@@ -36,16 +37,26 @@ export default function MailRoutesScreen() {
 
   return (
     <View style={{ paddingBottom: insets.bottom }} className="flex-1 bg-neutral-50 dark:bg-neutral-950">
-      <View className="flex-row items-center justify-between gap-2 border-b border-neutral-200 p-4 dark:border-neutral-800">
-        <Text className="flex-1 text-xs text-neutral-500 dark:text-neutral-400">
-          Alias @votredomaine.com et notification personnelle associée.
+      <View className="gap-2 border-b border-neutral-200 p-4 dark:border-neutral-800">
+        <View className="flex-row items-center justify-between gap-2">
+          <Text className="flex-1 text-xs text-neutral-500 dark:text-neutral-400">
+            Alias @votredomaine.com et notification personnelle associée.
+          </Text>
+          <Button className="flex-row gap-1.5 px-3" onPress={() => setModal({ open: true, editing: null })}>
+            <>
+              <Plus size={14} color="#fff" />
+              <Text className="text-sm font-medium text-white dark:text-neutral-900">Ajouter</Text>
+            </>
+          </Button>
+        </View>
+        <Text className="text-xs text-neutral-400 dark:text-neutral-500">
+          Créer une adresse ne suffit pas à l'assigner : les rôles Propriétaire/Admin y ont accès automatiquement,
+          mais chaque Membre doit recevoir la permission d'envoi individuellement depuis{' '}
+          <Link href="/(app)/admin/users" className="font-medium text-neutral-600 underline dark:text-neutral-300">
+            Utilisateurs
+          </Link>
+          .
         </Text>
-        <Button className="flex-row gap-1.5 px-3" onPress={() => setModal({ open: true, editing: null })}>
-          <>
-            <Plus size={14} color="#fff" />
-            <Text className="text-sm font-medium text-white dark:text-neutral-900">Ajouter</Text>
-          </>
-        </Button>
       </View>
 
       {isLoading ? (

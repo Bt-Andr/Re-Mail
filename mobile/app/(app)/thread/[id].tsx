@@ -3,9 +3,9 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Forward, History, Reply } from 'lucide-react-native';
+import { Forward, History, Mail, Reply } from 'lucide-react-native';
 import { useThread } from '../../../src/hooks/useThread';
-import { assignThread, setThreadStatus } from '../../../src/api/threads';
+import { assignThread, markThreadUnread, setThreadStatus } from '../../../src/api/threads';
 import { useSession } from '../../../src/context/SessionContext';
 import { MessageBubble } from '../../../src/components/thread/MessageBubble';
 import { StatusPicker } from '../../../src/components/thread/StatusPicker';
@@ -42,6 +42,14 @@ export default function ThreadDetailScreen() {
     onSuccess: invalidate,
   });
 
+  const unreadMutation = useMutation({
+    mutationFn: () => markThreadUnread(id),
+    onSuccess: () => {
+      invalidate();
+      router.back();
+    },
+  });
+
   if (isError) {
     return (
       <View style={{ paddingTop: insets.top }} className="flex-1 bg-white dark:bg-neutral-950">
@@ -65,6 +73,9 @@ export default function ThreadDetailScreen() {
       <View className="gap-2 border-b border-neutral-200 px-4 pb-3 pt-2 dark:border-neutral-800">
         <View className="flex-row items-start justify-between gap-2">
           <Text className="flex-1 text-base font-semibold text-neutral-900 dark:text-neutral-100">{thread.sujet}</Text>
+          <Pressable onPress={() => unreadMutation.mutate()} hitSlop={8} className="p-1">
+            <Mail size={16} color="#9ca3af" />
+          </Pressable>
           <Pressable onPress={() => setActivityOpen(true)} hitSlop={8} className="p-1">
             <History size={16} color="#9ca3af" />
           </Pressable>

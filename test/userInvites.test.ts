@@ -1,8 +1,31 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
 import request from 'supertest'
 import app from '../src/app'
 import prisma from '../src/lib/prisma'
 import { seedOrg, cleanupOrg, SeededOrg } from './helpers/seed'
+
+// La création d'invitation envoie désormais un email (routes/userInvites.ts
+// ::sendInviteEmail) — sans ce stub, chaque createInvite() de ce fichier ferait
+// un vrai appel réseau vers api.resend.com avec une fausse clé (échec silencieux
+// mais lent et non déterministe). Même pattern que mailReply.test.ts.
+const originalFetch = global.fetch
+let resendSendCalls: { url: string; body: Record<string, unknown> }[] = []
+
+beforeEach(() => {
+  resendSendCalls = []
+  global.fetch = vi.fn(async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const url = input.toString()
+    if (url.includes('api.resend.com/emails')) {
+      resendSendCalls.push({ url, body: JSON.parse((init?.body as string) || '{}') })
+      return new Response(JSON.stringify({ id: 're_sent_test' }), { status: 200 })
+    }
+    return new Response('not found', { status: 404 })
+  }) as unknown as typeof fetch
+})
+
+afterEach(() => {
+  global.fetch = originalFetch
+})
 
 async function createInvite(org: SeededOrg, overrides: Record<string, unknown> = {}) {
   const res = await request(app)
@@ -42,6 +65,13 @@ describe('User invite activation flow', () => {
     const created = await createInvite(org)
     expect(created.status).toBe(201)
     expect(created.body.status).toBe('PENDING')
+    // L'org de test a resendApiKeyEnc + emailContact (voir helpers/seed.ts) : l'email
+    // d'invitation doit partir, et jamais exposer le fileToken au client.
+    expect(created.body.emailSent).toBe(true)
+    expect(created.body.fileToken).toBeUndefined()
+    expect(resendSendCalls).toHaveLength(1)
+    expect(resendSendCalls[0].body.to).toBe(created.body.email)
+    expect(String(resendSendCalls[0].body.html)).toContain('/activate?token=')
 
     const fileBytes = await downloadFile(org, created.body.id)
     const code = await generateCode(org, created.body.id)
@@ -200,6 +230,34 @@ describe('User invite activation flow', () => {
     expect(first.status).toBe(201)
     const second = await createInvite(org, { username, email })
     expect(second.status).toBe(400)
+  })
+
+  it('resolves an invite by its fileToken (email link) the same way as the uploaded file', async () => {
+    const created = await createInvite(org)
+    const fileBytes = await downloadFile(org, created.body.id)
+    const resolved = await request(app).post('/api/public/user-invites/resolve').attach('file', fileBytes, 'activation.jep')
+
+    const byLink = await request(app).get(`/api/public/user-invites/resolve-by-token?token=${resolved.body.fileToken}`)
+    expect(byLink.status).toBe(200)
+    expect(byLink.body.fileToken).toBe(resolved.body.fileToken)
+    expect(byLink.body.organizationName).toBe(resolved.body.organizationName)
+  })
+
+  it('rejects a made-up or unknown token on resolve-by-token, never 500s', async () => {
+    const res = await request(app).get('/api/public/user-invites/resolve-by-token?token=not-a-real-token')
+    expect(res.status).toBe(404)
+  })
+
+  it('does not send an invitation email when the org has no Resend account connected', async () => {
+    const bareOrg = await seedOrg('invite-no-resend')
+    await prisma.organization.update({ where: { id: bareOrg.organizationId }, data: { resendApiKeyEnc: null, emailContact: null } })
+
+    const created = await createInvite(bareOrg)
+    expect(created.status).toBe(201)
+    expect(created.body.emailSent).toBe(false)
+    expect(resendSendCalls).toHaveLength(0)
+
+    await cleanupOrg(bareOrg.organizationId)
   })
 
   describe('tenant isolation', () => {

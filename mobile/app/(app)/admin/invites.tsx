@@ -107,9 +107,15 @@ export default function InvitesScreen() {
       <CreateInviteModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreated={() => {
+        onCreated={emailSent => {
           setCreateOpen(false);
           invalidate();
+          if (!emailSent) {
+            Alert.alert(
+              "Invitation créée",
+              "L'email n'a pas pu être envoyé (connectez Resend et renseignez un email de contact dans Organisation). Utilisez Fichier + Code en attendant."
+            );
+          }
         }}
       />
       <ActivationCodeModal invite={codeFor} onClose={() => setCodeFor(null)} />

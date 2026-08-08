@@ -13,7 +13,7 @@ export default function AuthGroupLayout() {
     );
   }
 
-  if (user) return <Redirect href="/(app)/(tabs)" />;
+  if (user) return <Redirect href="/(app)/(drawer)/inbox" />;
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }

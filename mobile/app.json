@@ -1,23 +1,43 @@
 {
   "expo": {
-    "name": "Resend Mail",
-    "slug": "resend-mail-mobile",
-    "scheme": "resendmail",
+    "name": "Re-mail",
+    "slug": "re-mail-mobile",
+    "owner": "jepg",
+    "scheme": "re-mail",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.jeprogroup.remail",
       "supportsTablet": true
     },
     "android": {
+      "package": "com.jeprogroup.remail",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "re-mail-beige.vercel.app",
+              "pathPrefix": "/activate"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -34,10 +54,25 @@
           "color": "#111827"
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5cbd8c70-23e8-40d5-9bf3-ae0d8fff7e10"
+      }
     }
   }
 }

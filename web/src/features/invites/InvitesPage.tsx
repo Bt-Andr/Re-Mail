@@ -120,9 +120,14 @@ export function InvitesPage() {
       <CreateInviteModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreated={() => {
+        onCreated={emailSent => {
           setCreateOpen(false)
-          showToast('success', 'Invitation créée.')
+          showToast(
+            'success',
+            emailSent
+              ? "Invitation créée — email envoyé à l'invité(e)."
+              : "Invitation créée, mais l'email n'a pas pu être envoyé (connectez Resend et renseignez un email de contact dans Organisation). Utilisez Fichier + Code en attendant."
+          )
           void load()
         }}
       />

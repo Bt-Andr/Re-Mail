@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "842367482028",
+    "project_id": "re-mail-7564e",
+    "storage_bucket": "re-mail-7564e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:842367482028:android:3b978e63ba446246500709",
+        "android_client_info": {
+          "package_name": "com.jeprogroup.remail"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDA5vcbzAbAl0Paa5lNBAml8BA7pol4AC8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

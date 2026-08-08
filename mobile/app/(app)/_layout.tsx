@@ -1,10 +1,12 @@
 import { Redirect, Stack } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 import { useSession } from '../../src/context/SessionContext';
+import { useTheme } from '../../src/context/ThemeContext';
 import { usePushRegistration } from '../../src/hooks/usePushRegistration';
 
 export default function AppGroupLayout() {
   const { user, loading } = useSession();
+  const { theme } = useTheme();
   usePushRegistration(!!user);
 
   if (loading) {
@@ -18,8 +20,9 @@ export default function AppGroupLayout() {
   if (!user) return <Redirect href="/(auth)/login" />;
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme === 'dark' ? '#0a0a0a' : '#ffffff' } }}>
+      <Stack.Screen name="(drawer)" />
+      <Stack.Screen name="settings" options={{ headerShown: true, title: 'Réglages' }} />
       <Stack.Screen name="thread/[id]" options={{ headerShown: true, title: '' }} />
       <Stack.Screen name="compose" options={{ presentation: 'modal', headerShown: true, title: '' }} />
       <Stack.Screen name="admin/mail-routes" options={{ headerShown: true, title: 'Adresses mail' }} />

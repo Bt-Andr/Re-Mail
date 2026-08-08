@@ -28,7 +28,7 @@ export function SetPasswordStep({ fileToken, activationToken }: SetPasswordStepP
     try {
       const data = await activateInvite(fileToken, activationToken, password);
       await login(data.token, data.user);
-      router.replace('/(app)/(tabs)');
+      router.replace('/(app)/(drawer)/inbox');
     } catch (e) {
       setError(describeError(e));
     } finally {

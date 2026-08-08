@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Text, View, KeyboardAvoidingView, Platform } from 'react-native';
+import { Image, Text, View, KeyboardAvoidingView, Platform } from 'react-native';
 import { Link, router } from 'expo-router';
-import { Mail } from 'lucide-react-native';
 import { login as loginRequest } from '../../src/api/auth';
 import { describeError } from '../../src/api/client';
 import { useSession } from '../../src/context/SessionContext';
@@ -21,7 +20,7 @@ export default function LoginScreen() {
     try {
       const data = await loginRequest(username.trim(), password);
       await login(data.token, data.user);
-      router.replace('/(app)/(tabs)');
+      router.replace('/(app)/(drawer)/inbox');
     } catch (e) {
       setError(describeError(e));
     } finally {
@@ -37,9 +36,7 @@ export default function LoginScreen() {
       <View className="flex-1 items-center justify-center p-6">
         <View className="w-full max-w-sm gap-4 rounded-xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900">
           <View className="mb-2 flex-row items-center gap-2.5">
-            <View className="h-7 w-7 items-center justify-center rounded-md bg-neutral-900 dark:bg-neutral-100">
-              <Mail size={14} color="#fff" />
-            </View>
+            <Image source={require('../../assets/icon.png')} className="h-7 w-7 rounded-md" />
             <Text className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Connexion</Text>
           </View>
 

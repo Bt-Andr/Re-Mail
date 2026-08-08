@@ -1,17 +1,22 @@
 import { NavLink, Outlet, Link } from 'react-router-dom'
-import { Inbox, AtSign, UserPlus, Users, Settings, LogOut, AlertTriangle, Mail } from 'lucide-react'
+import { Inbox, Send, Trash2, Settings, LogOut, AlertTriangle } from 'lucide-react'
 import { useSession } from '../../context/SessionContext'
 import { useOrganization } from '../../hooks/useOrganization'
 import { displayName } from '../../lib/session'
-import type { OrgRole } from '../../types/api'
 
-const NAV_ITEMS: { to: string; label: string; icon: typeof Inbox; roles: OrgRole[] }[] = [
-  { to: '/inbox', label: 'Boîte de réception', icon: Inbox, roles: ['OWNER', 'ADMIN', 'MEMBER'] },
-  { to: '/mail-routes', label: 'Adresses mail', icon: AtSign, roles: ['OWNER', 'ADMIN'] },
-  { to: '/invites', label: 'Invitations', icon: UserPlus, roles: ['OWNER', 'ADMIN'] },
-  { to: '/users', label: 'Utilisateurs', icon: Users, roles: ['OWNER', 'ADMIN'] },
-  { to: '/settings', label: 'Organisation', icon: Settings, roles: ['OWNER', 'ADMIN'] },
+// Sidebar = uniquement la messagerie (comme Gmail : les dossiers sont la nav, pas
+// une page "Boîte de réception" avec des onglets internes). L'administration
+// (Adresses mail/Invitations/Utilisateurs/Organisation) est regroupée derrière
+// l'icône Paramètres tout en bas, visible seulement OWNER/ADMIN — voir SettingsLayout.
+const MAIL_ITEMS = [
+  { to: '/inbox', label: 'Réception', icon: Inbox },
+  { to: '/sent', label: 'Envoyés', icon: Send },
+  { to: '/trash', label: 'Corbeille', icon: Trash2 },
 ]
+
+function isManager(role?: string) {
+  return role === 'OWNER' || role === 'ADMIN'
+}
 
 export function AppShell() {
   const { user, organization, logout } = useSession()
@@ -21,41 +26,55 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen flex bg-background">
-      <aside className="w-60 flex-shrink-0 bg-card border-r border-border flex flex-col">
-        <div className="px-5 py-4 border-b border-border flex items-center gap-2">
-          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary text-primary-foreground flex-shrink-0">
-            <Mail size={13} strokeWidth={2.5} />
-          </div>
-          <span className="font-semibold text-sm tracking-tight">Re-Mail</span>
+      <aside className="w-14 lg:w-60 flex-shrink-0 bg-card border-r border-border flex flex-col">
+        <div className="px-3 lg:px-5 py-5 border-b border-border flex items-center gap-2.5 justify-center lg:justify-start">
+          <img src="/web-app-manifest-192x192.png" alt="Re-Mail" className="w-8 h-8 rounded-md flex-shrink-0" />
+          <span className="hidden lg:inline font-bold text-base tracking-tight">Re-Mail</span>
         </div>
-        <div className="px-5 py-3 border-b border-border">
+        <div className="hidden lg:block px-5 py-3 border-b border-border">
           <p className="font-medium text-foreground text-sm truncate">{organization?.name ?? '...'}</p>
           <p className="text-xs text-muted-foreground truncate">{user ? displayName(user) : ''}</p>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {NAV_ITEMS.filter(item => !user || item.roles.includes(user.orgRole)).map(item => (
+        <nav className="flex-1 px-2 lg:px-3 py-4 space-y-1">
+          {MAIL_ITEMS.map(item => (
             <NavLink
               key={item.to}
               to={item.to}
+              title={item.label}
               className={({ isActive }) =>
-                `flex items-center gap-2.5 px-3 py-2 text-sm rounded-md transition-colors ${
-                  isActive ? 'bg-accent text-foreground font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                `flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-base rounded-md transition-colors ${
+                  isActive ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground hover:bg-accent hover:text-foreground font-medium'
                 }`
               }
             >
-              <item.icon size={16} />
-              {item.label}
+              <item.icon size={20} />
+              <span className="hidden lg:inline">{item.label}</span>
             </NavLink>
           ))}
         </nav>
-        <div className="px-3 py-4 border-t border-border space-y-0.5">
+        <div className="px-2 lg:px-3 py-4 border-t border-border space-y-1">
+          {isManager(user?.orgRole) && (
+            <NavLink
+              to="/settings"
+              title="Paramètres"
+              className={({ isActive }) =>
+                `flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-base rounded-md transition-colors ${
+                  isActive ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground hover:bg-accent hover:text-foreground font-medium'
+                }`
+              }
+            >
+              <Settings size={20} />
+              <span className="hidden lg:inline">Paramètres</span>
+            </NavLink>
+          )}
           <button
             type="button"
             onClick={logout}
-            className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors w-full"
+            title="Déconnexion"
+            className="flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-base font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors w-full"
           >
-            <LogOut size={16} />
-            Déconnexion
+            <LogOut size={20} />
+            <span className="hidden lg:inline">Déconnexion</span>
           </button>
         </div>
       </aside>
@@ -80,7 +99,7 @@ export function AppShell() {
             Configuration incomplète — connectez votre compte Resend pour recevoir/envoyer des emails.
           </Link>
         )}
-        <main className="flex-1 min-h-0 p-6">
+        <main className="flex-1 min-h-0 min-w-0 p-3 lg:p-6">
           <Outlet />
         </main>
       </div>

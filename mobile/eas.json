@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 20.4.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://kbeauty-dynamic-proxy.jepgprox.workers.dev/remail/api",
+        "EXPO_PUBLIC_WEB_URL": "https://re-mail-beige.vercel.app/",
+        "EXPO_PUBLIC_SUPPORT_WHATSAPP": "+237659817417"
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

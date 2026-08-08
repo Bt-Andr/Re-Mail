@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { AtSign, Pencil, Trash2, Plus, Upload } from 'lucide-react'
 import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useToast } from '../../context/ToastContext'
@@ -76,6 +77,11 @@ export function MailRoutesPage() {
         <div>
           <h1 className="text-lg font-semibold">Adresses mail</h1>
           <p className="text-sm text-muted-foreground">Alias @votredomaine.com et notification personnelle associée.</p>
+          <p className="text-xs text-muted-foreground/80 mt-1">
+            Créer une adresse ne suffit pas à l'assigner : les rôles Propriétaire/Admin y ont accès automatiquement,
+            mais chaque Membre doit recevoir la permission d'envoi individuellement depuis{' '}
+            <Link to="/settings/users" className="underline font-medium">Utilisateurs</Link>.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={() => setImportOpen(true)}>

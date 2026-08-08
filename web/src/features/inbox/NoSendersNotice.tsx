@@ -14,7 +14,7 @@ export function NoSendersNotice() {
           <>
             Aucune adresse d'expédition disponible.{' '}
             <Link to="/onboarding" className="underline font-medium">Connectez Resend</Link> et{' '}
-            <Link to="/mail-routes" className="underline font-medium">créez une adresse</Link> pour pouvoir écrire.
+            <Link to="/settings/mail-routes" className="underline font-medium">créez une adresse</Link> pour pouvoir écrire.
           </>
         ) : (
           "Aucune adresse d'expédition ne vous est attribuée. Demandez à un administrateur de vous en accorder une."

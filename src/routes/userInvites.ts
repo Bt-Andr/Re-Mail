@@ -5,6 +5,10 @@ import prisma from '../lib/prisma'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
 import { encryptInviteFile, INVITE_FILE_MAGIC } from '../lib/inviteFileCrypto'
+import { buildResendClient } from '../lib/resendClient'
+import { buildNotificationEmail, sendNotificationEmail } from '../lib/email'
+import { getDecryptedResendKey } from '../helpers/resendAccount'
+import config from '../config'
 
 const router = Router()
 
@@ -34,6 +38,48 @@ const inviteSelect = {
   createdUserId: true,
   createdAt: true,
 } as const
+
+const ORG_ROLE_LABEL: Record<string, string> = { OWNER: 'Propriétaire', ADMIN: 'Administrateur', MEMBER: 'Membre' }
+
+// Best-effort, comme les autres notifications système (voir helpers/thread.ts::notifyUser) :
+// une invitation reste utilisable via les actions manuelles (Fichier/Code) même si
+// l'org n'a pas encore de compte Resend connecté ou d'email de contact renseigné.
+// Le lien porte directement le fileToken de l'invitation (déjà généré à sa création,
+// voir schema.prisma) — ni plus ni moins secret que le fichier .jep, qui ne fait que
+// l'emballer ; /resolve-by-token (publicUserInvites.ts) le résout côté navigateur.
+async function sendInviteEmail(
+  invite: { email: string; nom: string; fileToken: string; orgRole: string },
+  organizationId: string,
+  invitedByName: string
+): Promise<boolean> {
+  const org = await prisma.organization.findUnique({ where: { id: organizationId } })
+  if (!org?.resendApiKeyEnc || !org.emailContact) return false
+
+  try {
+    const resend = buildResendClient(getDecryptedResendKey(org))
+    const activationUrl = `${config.frontendUrl}/activate?token=${invite.fileToken}`
+    const companyName = org.companyName || org.name
+    await sendNotificationEmail(
+      resend,
+      org.emailContact,
+      companyName,
+      invite.email,
+      `Invitation à rejoindre ${companyName}`,
+      buildNotificationEmail(companyName, `Bienvenue, ${invite.nom}`, [
+        { label: 'Invité par', value: invitedByName },
+        { label: 'Rôle', value: ORG_ROLE_LABEL[invite.orgRole] ?? invite.orgRole },
+        {
+          label: 'Activation',
+          value: `<a href="${activationUrl}" style="color:#0F70B7;font-weight:600;">Commencer l'activation →</a>`,
+        },
+      ])
+    )
+    return true
+  } catch (e) {
+    console.error('[INVITE-EMAIL]', (e as Error).message)
+    return false
+  }
+}
 
 router.get('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
   const db = forOrg(req.user!.organizationId)
@@ -75,9 +121,13 @@ router.post('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (r
         expiresAt: new Date(Date.now() + INVITE_HYGIENE_TTL_MS),
         createdById: req.user!.id,
       },
-      select: inviteSelect,
+      select: { ...inviteSelect, fileToken: true },
     })
-    res.status(201).json(invite)
+
+    const emailSent = await sendInviteEmail(invite, req.user!.organizationId, req.user!.nom ?? req.user!.username)
+
+    const { fileToken: _fileToken, ...publicInvite } = invite
+    res.status(201).json({ ...publicInvite, emailSent })
   } catch (e) {
     console.error('[POST /api/user-invites]', e)
     res.status(500).json({ error: 'Erreur serveur.' })

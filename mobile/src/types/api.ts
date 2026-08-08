@@ -175,6 +175,10 @@ export interface UserInvite {
   activationCodeExpiresAt: string | null;
   createdUserId: string | null;
   createdAt: string;
+  // Présent uniquement sur la réponse de création (POST /user-invites) — signale si
+  // l'email d'invitation a pu partir (org sans Resend connecté/emailContact : non envoyé,
+  // l'invitation reste utilisable via Fichier + Code).
+  emailSent?: boolean;
 }
 
 export interface SenderGrant {

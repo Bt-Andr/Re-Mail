@@ -1,6 +1,5 @@
 import { FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Mail } from 'lucide-react'
 import { apiFetch, parseError, networkErrorMessage } from '../../lib/apiClient'
 import { useSession } from '../../context/SessionContext'
 import { Input } from '../../components/ui/Input'
@@ -38,9 +37,7 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm bg-card rounded-lg shadow-sm border border-border p-8">
         <div className="flex items-center gap-2.5 mb-6">
-          <div className="flex items-center justify-center w-7 h-7 rounded-md bg-primary text-primary-foreground flex-shrink-0">
-            <Mail size={14} strokeWidth={2.5} />
-          </div>
+          <img src="/web-app-manifest-192x192.png" alt="Re-Mail" className="w-7 h-7 rounded-md flex-shrink-0" />
           <h1 className="text-lg font-semibold">Connexion</h1>
         </div>
         <form onSubmit={submit} className="space-y-4">

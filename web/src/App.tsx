@@ -18,6 +18,7 @@ import { InboxPlaceholder } from './features/inbox/InboxPlaceholder'
 import { ThreadDetailPane } from './features/inbox/ThreadDetailPane'
 import { InvitesPage } from './features/invites/InvitesPage'
 import { UsersPage } from './features/users/UsersPage'
+import { SettingsLayout } from './features/settings/SettingsLayout'
 import { OrgSettingsPage } from './features/settings/OrgSettingsPage'
 
 export default function App() {
@@ -40,15 +41,26 @@ export default function App() {
               <Route element={<AuthGuard />}>
                 <Route path="/onboarding" element={<OnboardingWizard />} />
                 <Route element={<AppShell />}>
-                  <Route path="/inbox" element={<InboxPage />}>
+                  <Route path="/inbox" element={<InboxPage folder="inbox" />}>
+                    <Route index element={<InboxPlaceholder />} />
+                    <Route path=":threadId" element={<ThreadDetailPane />} />
+                  </Route>
+                  <Route path="/sent" element={<InboxPage folder="sent" />}>
+                    <Route index element={<InboxPlaceholder />} />
+                    <Route path=":threadId" element={<ThreadDetailPane />} />
+                  </Route>
+                  <Route path="/trash" element={<InboxPage folder="trash" />}>
                     <Route index element={<InboxPlaceholder />} />
                     <Route path=":threadId" element={<ThreadDetailPane />} />
                   </Route>
                   <Route element={<RoleGuard allow={['OWNER', 'ADMIN']} />}>
-                    <Route path="/mail-routes" element={<MailRoutesPage />} />
-                    <Route path="/invites" element={<InvitesPage />} />
-                    <Route path="/users" element={<UsersPage />} />
-                    <Route path="/settings" element={<OrgSettingsPage />} />
+                    <Route path="/settings" element={<SettingsLayout />}>
+                      <Route index element={<Navigate to="organization" replace />} />
+                      <Route path="organization" element={<OrgSettingsPage />} />
+                      <Route path="mail-routes" element={<MailRoutesPage />} />
+                      <Route path="invites" element={<InvitesPage />} />
+                      <Route path="users" element={<UsersPage />} />
+                    </Route>
                   </Route>
                 </Route>
               </Route>

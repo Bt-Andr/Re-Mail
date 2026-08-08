@@ -75,6 +75,7 @@ export interface ThreadListItem {
   canal: string
   status: 'nouveau' | 'en_cours' | 'resolu'
   origin: 'inbound' | 'outbound'
+  deletedAt: string | null
   assignedToId: string | null
   assignedTo: { id: string; nom: string; username: string } | null
   lastMessage: { id: string; direction: 'inbound' | 'outbound'; fromName: string; body: string; sentAt: string; readAt: string | null } | null

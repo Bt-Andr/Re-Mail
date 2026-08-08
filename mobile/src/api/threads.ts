@@ -5,6 +5,9 @@ export interface ThreadListParams {
   folder: ThreadFolder;
   status?: ThreadStatus;
   canal?: string;
+  q?: string;
+  take?: number;
+  skip?: number;
 }
 
 export function listThreads(params: ThreadListParams): Promise<Thread[]> {
@@ -12,6 +15,9 @@ export function listThreads(params: ThreadListParams): Promise<Thread[]> {
   query.set('folder', params.folder);
   if (params.status) query.set('status', params.status);
   if (params.canal) query.set('canal', params.canal);
+  if (params.q) query.set('q', params.q);
+  if (params.take !== undefined) query.set('take', String(params.take));
+  if (params.skip !== undefined) query.set('skip', String(params.skip));
   return apiFetch<Thread[]>(`/threads?${query.toString()}`);
 }
 
@@ -25,6 +31,10 @@ export function assignThread(id: string, assignedToId: string | null): Promise<T
 
 export function setThreadStatus(id: string, status: ThreadStatus): Promise<Thread> {
   return apiFetch<Thread>(`/threads/${id}/status`, { method: 'PATCH', body: { status } });
+}
+
+export function markThreadUnread(id: string): Promise<Thread> {
+  return apiFetch<Thread>(`/threads/${id}/unread`, { method: 'PATCH' });
 }
 
 export function trashThread(id: string): Promise<Thread> {

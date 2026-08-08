@@ -16,7 +16,7 @@ function isManager(orgRole: string): boolean {
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const db = forOrg(req.user!.organizationId)
-    const { canal, status, folder } = req.query
+    const { canal, status, folder, q, take, skip } = req.query
     const where: Record<string, unknown> = {}
     if (canal) where.canal = canal
     if (status) where.status = status
@@ -33,9 +33,29 @@ router.get('/', authenticateToken, async (req, res) => {
       where.assignedToId = req.user!.id
     }
 
+    // Recherche texte : sujet/expéditeur + corps des messages du fil. Combinée en AND
+    // avec le reste du where (canal/statut/dossier/portée) — Prisma fusionne les clés
+    // top-level en AND, seul le contenu du OR ci-dessous porte la recherche elle-même.
+    if (typeof q === 'string' && q.trim()) {
+      const query = q.trim()
+      where.OR = [
+        { sujet: { contains: query, mode: 'insensitive' } },
+        { externalFrom: { contains: query, mode: 'insensitive' } },
+        { externalEmail: { contains: query, mode: 'insensitive' } },
+        { messages: { some: { body: { contains: query, mode: 'insensitive' } } } },
+      ]
+    }
+
+    // Pagination optionnelle (rétrocompatible : sans `take`, comportement inchangé —
+    // tout le dossier en un appel, comme avant).
+    const takeNum = typeof take === 'string' ? parseInt(take, 10) : undefined
+    const skipNum = typeof skip === 'string' ? parseInt(skip, 10) : undefined
+
     const threads = await db.thread.findMany({
       where,
       orderBy: { updatedAt: 'desc' },
+      ...(takeNum !== undefined && Number.isFinite(takeNum) ? { take: takeNum } : {}),
+      ...(skipNum !== undefined && Number.isFinite(skipNum) ? { skip: skipNum } : {}),
       include: {
         assignedTo: { select: { id: true, nom: true, username: true } },
         messages: {
@@ -160,6 +180,25 @@ async function canTouchThread(db: ReturnType<typeof forOrg>, userId: string, org
   const t = await db.thread.findUnique({ where: { id: threadId }, select: { assignedToId: true } })
   return !!t && t.assignedToId === userId
 }
+
+// Contrepartie explicite du "lu" automatique (effet de bord de GET /:id) : remet
+// tous les messages entrants du fil à non-lu, sur demande volontaire de l'utilisateur.
+router.patch('/:id/unread', authenticateToken, async (req, res) => {
+  try {
+    const db = forOrg(req.user!.organizationId)
+    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
+      return res.status(403).json({ error: 'Accès non autorisé.' })
+    await db.threadMessage.updateMany({
+      where: { threadId: req.params.id, direction: 'inbound' },
+      data: { readAt: null },
+    })
+    const thread = await db.thread.findUnique({ where: { id: req.params.id } })
+    if (!thread) return res.status(404).json({ error: 'Thread introuvable.' })
+    res.json(thread)
+  } catch {
+    res.status(404).json({ error: 'Thread introuvable.' })
+  }
+})
 
 router.patch('/:id/trash', authenticateToken, async (req, res) => {
   try {

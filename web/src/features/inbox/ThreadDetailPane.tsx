@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, useOutletContext } from 'react-router-dom'
-import { Forward, Reply } from 'lucide-react'
+import { useParams, useOutletContext, useNavigate, Link } from 'react-router-dom'
+import { ArrowLeft, Forward, Reply, Trash2, Undo2 } from 'lucide-react'
 import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useSession } from '../../context/SessionContext'
 import { useToast } from '../../context/ToastContext'
@@ -19,9 +19,10 @@ function isManager(role?: string) {
 
 export function ThreadDetailPane() {
   const { threadId } = useParams<{ threadId: string }>()
+  const navigate = useNavigate()
   const { user } = useSession()
   const { showToast } = useToast()
-  const { openComposer, onThreadChanged } = useOutletContext<InboxOutletContext>()
+  const { openComposer, onThreadChanged, folder } = useOutletContext<InboxOutletContext>()
   const [thread, setThread] = useState<ThreadDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -81,6 +82,21 @@ export function ThreadDetailPane() {
     }
   }
 
+  const toggleTrash = async () => {
+    if (!thread) return
+    try {
+      const res = await apiFetch(`/threads/${thread.id}/${thread.deletedAt ? 'restore' : 'trash'}`, { method: 'PATCH' })
+      if (res.ok) {
+        onThreadChanged()
+        navigate(thread.deletedAt ? '/trash' : '/inbox')
+      } else {
+        showToast('error', await parseError(res))
+      }
+    } catch (err) {
+      showToast('error', networkErrorMessage(err))
+    }
+  }
+
   if (loadError) return <ErrorState message={loadError} onRetry={load} />
 
   if (loading || !thread) return <Spinner />
@@ -91,6 +107,12 @@ export function ThreadDetailPane() {
     <div className="flex-1 flex flex-col bg-card rounded-lg border border-border overflow-hidden min-w-0 h-full">
       <div className="px-5 py-3 border-b border-border bg-muted/30">
         <div className="flex items-start gap-3">
+          <Link
+            to={`/${folder}`}
+            className="lg:hidden flex-shrink-0 text-muted-foreground hover:text-foreground p-1 -ml-1 rounded-md hover:bg-accent transition-colors"
+          >
+            <ArrowLeft size={18} />
+          </Link>
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-foreground text-sm leading-snug">{thread.sujet}</p>
             <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-muted-foreground">
@@ -129,6 +151,19 @@ export function ThreadDetailPane() {
             Transférer
           </Button>
         )}
+        <Button variant="secondary" className="ml-auto" onClick={toggleTrash}>
+          {thread.deletedAt ? (
+            <>
+              <Undo2 size={14} />
+              Restaurer
+            </>
+          ) : (
+            <>
+              <Trash2 size={14} />
+              Supprimer
+            </>
+          )}
+        </Button>
       </div>
     </div>
   )

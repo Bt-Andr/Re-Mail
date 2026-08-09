@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "842367482028",
-    "project_id": "re-mail-7564e",
-    "storage_bucket": "re-mail-7564e.firebasestorage.app"
+    "project_number": "000000000000",
+    "project_id": "your-firebase-project-id",
+    "storage_bucket": "your-firebase-project-id.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:842367482028:android:3b978e63ba446246500709",
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
         "android_client_info": {
           "package_name": "com.jeprogroup.remail"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDA5vcbzAbAl0Paa5lNBAml8BA7pol4AC8"
+          "current_key": "REPLACE_WITH_YOUR_FIREBASE_ANDROID_API_KEY"
         }
       ],
       "services": {

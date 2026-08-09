@@ -23,6 +23,7 @@ export default function DrawerLayout() {
       >
         <Drawer.Screen name="inbox" options={{ drawerLabel: 'Réception', title: 'Réception' }} />
         <Drawer.Screen name="sent" options={{ drawerLabel: 'Envoyés', title: 'Envoyés' }} />
+        <Drawer.Screen name="archive" options={{ drawerLabel: 'Archivés', title: 'Archivés' }} />
         <Drawer.Screen name="trash" options={{ drawerLabel: 'Corbeille', title: 'Corbeille' }} />
       </Drawer>
     </InboxSearchProvider>

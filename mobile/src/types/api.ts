@@ -1,7 +1,7 @@
 export type OrgRole = 'OWNER' | 'ADMIN' | 'MEMBER';
 
 export type ThreadStatus = 'nouveau' | 'en_cours' | 'resolu';
-export type ThreadFolder = 'inbox' | 'sent' | 'trash';
+export type ThreadFolder = 'inbox' | 'sent' | 'archive' | 'trash';
 export type MessageDirection = 'inbound' | 'outbound';
 
 export interface Organization {
@@ -51,6 +51,8 @@ export interface Thread {
   status: ThreadStatus;
   origin: MessageDirection;
   deletedAt: string | null;
+  archivedAt: string | null;
+  starred: boolean;
   assignedToId: string | null;
   assignedTo: AssignedTo | null;
   createdAt: string;
@@ -95,7 +97,9 @@ export type ThreadActivityType =
   | 'sent'
   | 'forwarded'
   | 'trashed'
-  | 'restored';
+  | 'restored'
+  | 'archived'
+  | 'unarchived';
 
 export interface ThreadActivity {
   id: string;

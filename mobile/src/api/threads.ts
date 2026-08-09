@@ -37,6 +37,18 @@ export function markThreadUnread(id: string): Promise<Thread> {
   return apiFetch<Thread>(`/threads/${id}/unread`, { method: 'PATCH' });
 }
 
+export function setThreadStarred(id: string, starred: boolean): Promise<Thread> {
+  return apiFetch<Thread>(`/threads/${id}/star`, { method: 'PATCH', body: { starred } });
+}
+
+export function archiveThread(id: string): Promise<Thread> {
+  return apiFetch<Thread>(`/threads/${id}/archive`, { method: 'PATCH' });
+}
+
+export function unarchiveThread(id: string): Promise<Thread> {
+  return apiFetch<Thread>(`/threads/${id}/unarchive`, { method: 'PATCH' });
+}
+
 export function trashThread(id: string): Promise<Thread> {
   return apiFetch<Thread>(`/threads/${id}/trash`, { method: 'PATCH' });
 }

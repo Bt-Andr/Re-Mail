@@ -1,4 +1,4 @@
-import { Inbox as InboxIcon, Loader2, Trash2 } from 'lucide-react'
+import { Archive, Inbox as InboxIcon, Loader2, Trash2 } from 'lucide-react'
 import { Spinner } from '../../components/ui/Spinner'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
@@ -18,6 +18,7 @@ interface ThreadListPaneProps {
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => void
+  onToggleStar?: (threadId: string, starred: boolean) => void
 }
 
 // Déclenche le chargement de la page suivante à 200px du bas — même seuil que
@@ -36,6 +37,7 @@ export function ThreadListPane({
   hasMore,
   loadingMore,
   onLoadMore,
+  onToggleStar,
 }: ThreadListPaneProps) {
   if (loading) return <Spinner />
 
@@ -50,6 +52,9 @@ export function ThreadListPane({
     }
     if (folder === 'trash') {
       return <EmptyState icon={<Trash2 size={32} />} title="Corbeille vide" />
+    }
+    if (folder === 'archive') {
+      return <EmptyState icon={<Archive size={32} />} title="Aucun mail archivé" />
     }
     return (
       <EmptyState
@@ -69,7 +74,7 @@ export function ThreadListPane({
       }}
     >
       {threads.map(t => (
-        <ThreadListItem key={t.id} thread={t} mailRoutes={mailRoutes} folder={folder} />
+        <ThreadListItem key={t.id} thread={t} mailRoutes={mailRoutes} folder={folder} onToggleStar={onToggleStar} />
       ))}
       {loadingMore && (
         <div className="flex justify-center py-3 text-muted-foreground">

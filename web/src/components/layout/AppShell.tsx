@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router-dom'
-import { Inbox, Send, Trash2, Settings, LogOut, AlertTriangle } from 'lucide-react'
+import { Archive, Inbox, Send, Trash2, Settings, LogOut, AlertTriangle } from 'lucide-react'
 import { useSession } from '../../context/SessionContext'
 import { useOrganization } from '../../hooks/useOrganization'
 import { displayName } from '../../lib/session'
@@ -11,6 +11,7 @@ import { displayName } from '../../lib/session'
 const MAIL_ITEMS = [
   { to: '/inbox', label: 'Réception', icon: Inbox },
   { to: '/sent', label: 'Envoyés', icon: Send },
+  { to: '/archive', label: 'Archivés', icon: Archive },
   { to: '/trash', label: 'Corbeille', icon: Trash2 },
 ]
 

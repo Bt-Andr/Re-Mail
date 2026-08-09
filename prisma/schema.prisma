@@ -260,6 +260,8 @@ model Thread {
   status        String  @default("nouveau") // nouveau | en_cours | resolu
   origin        String  @default("inbound") // inbound | outbound
   deletedAt     DateTime? // corbeille (null = actif)
+  archivedAt    DateTime? // archivé (null = actif) — distinct de la corbeille, jamais les deux à la fois
+  starred       Boolean   @default(false)
 
   assignedToId String?
   assignedTo   User?   @relation("ThreadAssignee", fields: [assignedToId], references: [id])
@@ -276,6 +278,7 @@ model Thread {
 
   @@index([organizationId, status])
   @@index([organizationId, externalEmail, canal])
+  @@index([organizationId, archivedAt])
 }
 
 model ThreadMessage {

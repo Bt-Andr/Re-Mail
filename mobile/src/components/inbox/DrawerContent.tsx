@@ -2,13 +2,14 @@ import { Image, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
-import { AtSign, FileEdit, Inbox, LogOut, Send, Settings, Trash2, UserPlus, Users as UsersIcon, Building2, FileText } from 'lucide-react-native';
+import { Archive, AtSign, FileEdit, Inbox, LogOut, Send, Settings, Trash2, UserPlus, Users as UsersIcon, Building2, FileText } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import { useSession } from '../../context/SessionContext';
 
 const FOLDER_ITEMS = [
   { route: 'inbox', label: 'Réception', icon: Inbox },
   { route: 'sent', label: 'Envoyés', icon: Send },
+  { route: 'archive', label: 'Archivés', icon: Archive },
   { route: 'trash', label: 'Corbeille', icon: Trash2 },
 ] as const;
 

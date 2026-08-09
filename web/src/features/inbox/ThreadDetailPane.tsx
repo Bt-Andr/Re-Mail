@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useOutletContext, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Forward, Mail, Reply, Trash2, Undo2 } from 'lucide-react'
+import { Archive, ArrowLeft, Forward, Mail, Reply, Star, Trash2, Undo2 } from 'lucide-react'
 import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useSession } from '../../context/SessionContext'
 import { useToast } from '../../context/ToastContext'
@@ -112,6 +112,41 @@ export function ThreadDetailPane() {
     }
   }
 
+  const toggleArchive = async () => {
+    if (!thread) return
+    try {
+      const res = await apiFetch(`/threads/${thread.id}/${thread.archivedAt ? 'unarchive' : 'archive'}`, { method: 'PATCH' })
+      if (res.ok) {
+        onThreadChanged()
+        navigate(`/${folder}`)
+      } else {
+        showToast('error', await parseError(res))
+      }
+    } catch (err) {
+      showToast('error', networkErrorMessage(err))
+    }
+  }
+
+  // Optimiste (comme le toggle étoile de la liste) : marqueur personnel à faible
+  // enjeu, pas besoin d'attendre la réponse serveur pour mettre à jour l'icône.
+  const toggleStar = async () => {
+    if (!thread) return
+    const next = !thread.starred
+    setThread(prev => (prev ? { ...prev, starred: next } : prev))
+    try {
+      const res = await apiFetch(`/threads/${thread.id}/star`, { method: 'PATCH', body: JSON.stringify({ starred: next }) })
+      if (res.ok) {
+        onThreadChanged()
+      } else {
+        setThread(prev => (prev ? { ...prev, starred: !next } : prev))
+        showToast('error', await parseError(res))
+      }
+    } catch (err) {
+      setThread(prev => (prev ? { ...prev, starred: !next } : prev))
+      showToast('error', networkErrorMessage(err))
+    }
+  }
+
   if (loadError) return <ErrorState message={loadError} onRetry={load} />
 
   if (loading || !thread) return <Spinner />
@@ -135,6 +170,14 @@ export function ThreadDetailPane() {
               {thread.toEmail && <span><span className="font-medium">À :</span> {thread.toEmail}</span>}
             </div>
           </div>
+          <button
+            type="button"
+            onClick={toggleStar}
+            title={thread.starred ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+            className="flex-shrink-0 text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors"
+          >
+            <Star size={16} className={thread.starred ? 'fill-amber-400 text-amber-400' : ''} />
+          </button>
           <button
             type="button"
             onClick={markUnread}
@@ -174,7 +217,22 @@ export function ThreadDetailPane() {
             Transférer
           </Button>
         )}
-        <Button variant="secondary" className="ml-auto" onClick={toggleTrash}>
+        {!thread.deletedAt && (
+          <Button variant="secondary" className="ml-auto" onClick={toggleArchive}>
+            {thread.archivedAt ? (
+              <>
+                <Undo2 size={14} />
+                Désarchiver
+              </>
+            ) : (
+              <>
+                <Archive size={14} />
+                Archiver
+              </>
+            )}
+          </Button>
+        )}
+        <Button variant="secondary" className={thread.deletedAt ? 'ml-auto' : ''} onClick={toggleTrash}>
           {thread.deletedAt ? (
             <>
               <Undo2 size={14} />

@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { Star } from 'lucide-react'
 import { Badge, statusBadgeColor } from '../../components/ui/Badge'
 import { relativeTime, stripHtml, canalDisplayName } from '../../lib/format'
 import type { ThreadListItem as ThreadListItemType, MailRoute } from '../../types/api'
@@ -6,7 +7,17 @@ import type { Folder } from './InboxPage'
 
 const STATUS_LABEL: Record<string, string> = { nouveau: 'Nouveau', en_cours: 'En cours', resolu: 'Résolu' }
 
-export function ThreadListItem({ thread, mailRoutes, folder }: { thread: ThreadListItemType; mailRoutes: MailRoute[]; folder: Folder }) {
+export function ThreadListItem({
+  thread,
+  mailRoutes,
+  folder,
+  onToggleStar,
+}: {
+  thread: ThreadListItemType
+  mailRoutes: MailRoute[]
+  folder: Folder
+  onToggleStar?: (threadId: string, starred: boolean) => void
+}) {
   const hasUnread = thread.unreadCount > 0
   const label = canalDisplayName(thread.canal, mailRoutes)
 
@@ -21,6 +32,18 @@ export function ThreadListItem({ thread, mailRoutes, folder }: { thread: ThreadL
         <Badge>{label ?? thread.canal}</Badge>
         <Badge color={statusBadgeColor(thread.status)}>{STATUS_LABEL[thread.status] ?? thread.status}</Badge>
         {hasUnread && <span className="ml-auto px-1.5 py-0.5 bg-primary text-primary-foreground text-xs rounded-full font-bold">{thread.unreadCount}</span>}
+        <button
+          type="button"
+          title={thread.starred ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+          onClick={e => {
+            e.preventDefault()
+            e.stopPropagation()
+            onToggleStar?.(thread.id, !thread.starred)
+          }}
+          className={`p-0.5 rounded ${hasUnread ? '' : 'ml-auto'} text-muted-foreground/60 hover:text-foreground`}
+        >
+          <Star size={14} className={thread.starred ? 'fill-amber-400 text-amber-400' : ''} />
+        </button>
       </div>
       <p className={`text-sm truncate ${hasUnread ? 'font-semibold text-foreground' : 'font-medium text-foreground/90'}`}>{thread.sujet}</p>
       <p className="text-xs text-muted-foreground truncate">{thread.externalFrom} · {thread.toEmail ?? thread.externalEmail}</p>

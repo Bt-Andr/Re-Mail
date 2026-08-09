@@ -49,6 +49,10 @@ export default function App() {
                     <Route index element={<InboxPlaceholder />} />
                     <Route path=":threadId" element={<ThreadDetailPane />} />
                   </Route>
+                  <Route path="/archive" element={<InboxPage folder="archive" />}>
+                    <Route index element={<InboxPlaceholder />} />
+                    <Route path=":threadId" element={<ThreadDetailPane />} />
+                  </Route>
                   <Route path="/trash" element={<InboxPage folder="trash" />}>
                     <Route index element={<InboxPlaceholder />} />
                     <Route path=":threadId" element={<ThreadDetailPane />} />

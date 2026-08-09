@@ -106,7 +106,7 @@ export function FolderScreen({ folder }: { folder: ThreadFolder }) {
             if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
           }}
           renderItem={({ item }) => (
-            <ThreadListItem thread={item} onPress={() => router.push(`/(app)/thread/${item.id}`)} />
+            <ThreadListItem thread={item} folder={folder} onPress={() => router.push(`/(app)/thread/${item.id}`)} />
           )}
           ListFooterComponent={isFetchingNextPage ? <ActivityIndicator className="py-4" /> : null}
           ListEmptyComponent={
@@ -118,7 +118,9 @@ export function FolderScreen({ folder }: { folder: ThreadFolder }) {
                     ? 'Aucun mail envoyé'
                     : folder === 'trash'
                       ? 'Corbeille vide'
-                      : 'Aucun résultat'}
+                      : folder === 'archive'
+                        ? 'Aucun mail archivé'
+                        : 'Aucun résultat'}
               </Text>
             </View>
           }

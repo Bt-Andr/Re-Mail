@@ -11,7 +11,7 @@ import { ThreadListPane } from './ThreadListPane'
 import { ComposerPanel, ComposerRequest } from './ComposerPanel'
 import type { ThreadListItem, MailRoute } from '../../types/api'
 
-export type Folder = 'inbox' | 'sent' | 'trash'
+export type Folder = 'inbox' | 'sent' | 'archive' | 'trash'
 
 const PAGE_SIZE = 30
 
@@ -108,6 +108,26 @@ export function InboxPage({ folder }: { folder: Folder }) {
     }
   }, [fetchPage, threads.length, hasMore, loadingMore, showToast])
 
+  // Optimiste : l'étoile est un marqueur personnel à faible enjeu (comme dans
+  // Gmail), pas besoin d'attendre la réponse serveur ni de recharger la page —
+  // on revient juste en arrière si l'appel échoue.
+  const toggleStar = useCallback(
+    async (threadId: string, starred: boolean) => {
+      setThreads(prev => prev.map(t => (t.id === threadId ? { ...t, starred } : t)))
+      try {
+        const res = await apiFetch(`/threads/${threadId}/star`, { method: 'PATCH', body: JSON.stringify({ starred }) })
+        if (!res.ok) {
+          setThreads(prev => prev.map(t => (t.id === threadId ? { ...t, starred: !starred } : t)))
+          showToast('error', await parseError(res))
+        }
+      } catch (err) {
+        setThreads(prev => prev.map(t => (t.id === threadId ? { ...t, starred: !starred } : t)))
+        showToast('error', networkErrorMessage(err))
+      }
+    },
+    [showToast]
+  )
+
   useEffect(() => {
     apiFetch('/mail-routes')
       .then(async res => (res.ok ? setMailRoutes(await res.json()) : null))
@@ -144,6 +164,7 @@ export function InboxPage({ folder }: { folder: Folder }) {
           hasMore={hasMore}
           loadingMore={loadingMore}
           onLoadMore={loadMore}
+          onToggleStar={toggleStar}
         />
       </div>
 

@@ -39,6 +39,10 @@ function describe(activity: ThreadActivity): string {
       return 'Déplacé vers la corbeille';
     case 'restored':
       return 'Restauré depuis la corbeille';
+    case 'archived':
+      return 'Archivé';
+    case 'unarchived':
+      return "Sorti de l'archive";
     default:
       return activity.type;
   }

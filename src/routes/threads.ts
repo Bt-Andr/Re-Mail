@@ -21,11 +21,17 @@ router.get('/', authenticateToken, async (req, res) => {
     if (canal) where.canal = canal
     if (status) where.status = status
 
-    // Dossiers : inbox (reçus), sent (envoyés), trash (corbeille)
+    // Dossiers : inbox (reçus), sent (envoyés), archive, trash (corbeille).
+    // Archive et trash sont mutuellement exclusifs (voir /:id/trash qui efface
+    // archivedAt) : un fil archivé sort de inbox/sent mais reste hors corbeille.
     if (folder === 'trash') {
       where.deletedAt = { not: null }
+    } else if (folder === 'archive') {
+      where.deletedAt = null
+      where.archivedAt = { not: null }
     } else {
       where.deletedAt = null
+      where.archivedAt = null
       where.origin = folder === 'sent' ? 'outbound' : 'inbound'
     }
 
@@ -205,8 +211,52 @@ router.patch('/:id/trash', authenticateToken, async (req, res) => {
     const db = forOrg(req.user!.organizationId)
     if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
       return res.status(403).json({ error: 'Accès non autorisé.' })
-    const thread = await db.thread.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } })
+    // archivedAt: null — un fil trashé sort aussi de l'archive, les deux dossiers
+    // restent mutuellement exclusifs (voir GET / plus haut).
+    const thread = await db.thread.update({ where: { id: req.params.id }, data: { deletedAt: new Date(), archivedAt: null } })
     await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'trashed', {})
+    res.json(thread)
+  } catch {
+    res.status(404).json({ error: 'Thread introuvable.' })
+  }
+})
+
+router.patch('/:id/archive', authenticateToken, async (req, res) => {
+  try {
+    const db = forOrg(req.user!.organizationId)
+    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
+      return res.status(403).json({ error: 'Accès non autorisé.' })
+    const thread = await db.thread.update({ where: { id: req.params.id }, data: { archivedAt: new Date() } })
+    await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'archived', {})
+    res.json(thread)
+  } catch {
+    res.status(404).json({ error: 'Thread introuvable.' })
+  }
+})
+
+router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
+  try {
+    const db = forOrg(req.user!.organizationId)
+    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
+      return res.status(403).json({ error: 'Accès non autorisé.' })
+    const thread = await db.thread.update({ where: { id: req.params.id }, data: { archivedAt: null } })
+    await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'unarchived', {})
+    res.json(thread)
+  } catch {
+    res.status(404).json({ error: 'Thread introuvable.' })
+  }
+})
+
+// Pas de journal d'activité pour l'étoile : comme /unread, c'est un simple
+// marqueur personnel, pas un événement métier du fil.
+router.patch('/:id/star', authenticateToken, async (req, res) => {
+  const { starred } = req.body
+  if (typeof starred !== 'boolean') return res.status(400).json({ error: 'starred (boolean) requis.' })
+  try {
+    const db = forOrg(req.user!.organizationId)
+    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
+      return res.status(403).json({ error: 'Accès non autorisé.' })
+    const thread = await db.thread.update({ where: { id: req.params.id }, data: { starred } })
     res.json(thread)
   } catch {
     res.status(404).json({ error: 'Thread introuvable.' })

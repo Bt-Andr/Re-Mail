@@ -276,6 +276,45 @@ router.patch('/:id/restore', authenticateToken, async (req, res) => {
   }
 })
 
+// Actions groupées (sélection multiple liste web/mobile) : statut / archivage /
+// corbeille sur plusieurs fils en un appel. Restreint via le `where` aux fils
+// accessibles à l'appelant (mêmes règles que les routes individuelles) — les ids
+// inaccessibles ou inexistants sont silencieusement ignorés par updateMany plutôt
+// que de faire échouer tout l'appel pour une sélection partiellement invalide.
+router.patch('/bulk', authenticateToken, async (req, res) => {
+  const { ids, status, archivedAt, deletedAt } = req.body
+  if (!Array.isArray(ids) || ids.length === 0 || !ids.every((id: unknown) => typeof id === 'string')) {
+    return res.status(400).json({ error: 'ids (tableau non vide) requis.' })
+  }
+  if (ids.length > 200) return res.status(400).json({ error: 'Trop de fils sélectionnés (200 maximum).' })
+
+  const data: Record<string, unknown> = {}
+  if (status !== undefined) {
+    if (!['nouveau', 'en_cours', 'resolu'].includes(status)) return res.status(400).json({ error: 'Statut invalide.' })
+    data.status = status
+  }
+  if (typeof archivedAt === 'boolean') data.archivedAt = archivedAt ? new Date() : null
+  if (typeof deletedAt === 'boolean') {
+    data.deletedAt = deletedAt ? new Date() : null
+    // Mêmes dossiers mutuellement exclusifs que /:id/trash.
+    if (deletedAt) data.archivedAt = null
+  }
+  if (Object.keys(data).length === 0) return res.status(400).json({ error: 'Aucune modification demandée.' })
+
+  try {
+    const db = forOrg(req.user!.organizationId)
+    const where = {
+      id: { in: ids as string[] },
+      ...(isManager(req.user!.orgRole) ? {} : { assignedToId: req.user!.id }),
+    }
+    const result = await db.thread.updateMany({ where, data })
+    res.json({ updated: result.count })
+  } catch (err) {
+    console.error('[PATCH /api/threads/bulk]', err)
+    res.status(500).json({ error: 'Erreur serveur.' })
+  }
+})
+
 // DELETE /api/threads/:id — suppression définitive (uniquement depuis la corbeille)
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {

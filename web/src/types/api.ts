@@ -66,6 +66,13 @@ export interface SenderAddress {
   isDefault: boolean
 }
 
+export interface Contact {
+  email: string
+  name: string | null
+  lastUsed: string
+  count: number
+}
+
 export interface ThreadListItem {
   id: string
   sujet: string

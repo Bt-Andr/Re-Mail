@@ -1,8 +1,9 @@
 import { useRef } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
+import { useColorScheme } from 'nativewind';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Archive, ArchiveRestore, Star, Trash2, Undo2 } from 'lucide-react-native';
+import { Archive, ArchiveRestore, Check, Star, Trash2, Undo2 } from 'lucide-react-native';
 import { avatarColor, formatRelativeTime, initials, stripHtml } from '../../lib/format';
 import { archiveThread, restoreThread, setThreadStarred, trashThread, unarchiveThread } from '../../api/threads';
 import type { Thread, ThreadFolder } from '../../types/api';
@@ -32,10 +33,26 @@ function swipeActionsFor(folder: ThreadFolder) {
   return { left: 'archive', right: 'trash' } as const;
 }
 
-export function ThreadListItem({ thread, folder, onPress }: { thread: Thread; folder: ThreadFolder; onPress: () => void }) {
+export function ThreadListItem({
+  thread,
+  folder,
+  onPress,
+  onLongPress,
+  selected,
+  selectionMode,
+}: {
+  thread: Thread;
+  folder: ThreadFolder;
+  onPress: () => void;
+  onLongPress?: () => void;
+  selected?: boolean;
+  selectionMode?: boolean;
+}) {
   const unread = thread.unreadCount > 0;
   const senderSeed = thread.externalEmail || thread.externalFrom;
   const queryClient = useQueryClient();
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const swipeableRef = useRef<Swipeable>(null);
   const actions = swipeActionsFor(folder);
 
@@ -92,6 +109,7 @@ export function ThreadListItem({ thread, folder, onPress }: { thread: Thread; fo
   return (
     <Swipeable
       ref={swipeableRef}
+      enabled={!selectionMode}
       overshootLeft={false}
       overshootRight={false}
       renderLeftActions={actions.left ? progress => renderAction(actions.left as 'archive' | 'unarchive' | 'restore', progress) : undefined}
@@ -99,14 +117,23 @@ export function ThreadListItem({ thread, folder, onPress }: { thread: Thread; fo
     >
       <Pressable
         onPress={onPress}
-        className="flex-row gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-3 dark:border-neutral-800 dark:bg-neutral-900"
+        onLongPress={onLongPress}
+        className={`flex-row gap-3 rounded-lg border px-3 py-3 dark:bg-neutral-900 ${selected ? 'border-neutral-900 bg-neutral-50 dark:border-neutral-100' : 'border-neutral-200 bg-white dark:border-neutral-800'}`}
       >
-        <View
-          className="h-10 w-10 items-center justify-center rounded-full"
-          style={{ backgroundColor: avatarColor(senderSeed) }}
-        >
-          <Text className="text-sm font-semibold text-white">{initials(thread.externalFrom || thread.externalEmail)}</Text>
-        </View>
+        {selectionMode ? (
+          <View
+            className={`h-10 w-10 items-center justify-center rounded-full border-2 ${selected ? 'border-neutral-900 bg-neutral-900 dark:border-neutral-100 dark:bg-neutral-100' : 'border-neutral-300 dark:border-neutral-600'}`}
+          >
+            {selected && <Check size={18} color={isDark ? '#111827' : '#fff'} />}
+          </View>
+        ) : (
+          <View
+            className="h-10 w-10 items-center justify-center rounded-full"
+            style={{ backgroundColor: avatarColor(senderSeed) }}
+          >
+            <Text className="text-sm font-semibold text-white">{initials(thread.externalFrom || thread.externalEmail)}</Text>
+          </View>
+        )}
         <View className="flex-1 gap-1">
           <View className="flex-row items-center justify-between gap-2">
             <Text

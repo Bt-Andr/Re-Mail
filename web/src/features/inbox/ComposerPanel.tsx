@@ -9,6 +9,7 @@ import { Button } from '../../components/ui/Button'
 import { SenderSelect } from './SenderSelect'
 import { NoSendersNotice } from './NoSendersNotice'
 import { AttachmentPicker } from './AttachmentPicker'
+import { ContactAutocomplete } from './ContactAutocomplete'
 
 export type ComposerMode = 'new' | 'reply' | 'forward'
 
@@ -111,7 +112,7 @@ export function ComposerPanel({ request, onClose, onSent }: { request: ComposerR
       ) : (
         <>
           <SenderSelect senders={senders} value={fromEmail} onChange={setFromEmail} disabled={request.mode !== 'new'} />
-          <Input label="À" type="email" value={to} onChange={e => setTo(e.target.value)} readOnly={request.mode === 'reply'} required />
+          <ContactAutocomplete label="À" value={to} onChange={setTo} readOnly={request.mode === 'reply'} required />
           {!showCcBcc ? (
             <button type="button" onClick={() => setShowCcBcc(true)} className="text-xs text-foreground font-medium hover:underline">
               + Cc / Cci

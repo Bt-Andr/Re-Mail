@@ -8,6 +8,7 @@ import { useToast } from '../../context/ToastContext'
 import { Button } from '../../components/ui/Button'
 import { FiltersBar } from './FiltersBar'
 import { ThreadListPane } from './ThreadListPane'
+import { BulkActionBar, type BulkPatch } from './BulkActionBar'
 import { ComposerPanel, ComposerRequest } from './ComposerPanel'
 import type { ThreadListItem, MailRoute } from '../../types/api'
 
@@ -41,6 +42,7 @@ export function InboxPage({ folder }: { folder: Folder }) {
   const [loadError, setLoadError] = useState('')
   const [mailRoutes, setMailRoutes] = useState<MailRoute[]>([])
   const [composerRequest, setComposerRequest] = useState<ComposerRequest | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Recherche côté serveur (sujet/expéditeur/corps des messages) — débouncée pour
   // ne pas déclencher une requête à chaque frappe.
@@ -83,6 +85,7 @@ export function InboxPage({ folder }: { folder: Folder }) {
 
   useEffect(() => {
     setLoading(true)
+    setSelectedIds(new Set())
     void loadFirstPage()
   }, [loadFirstPage])
 
@@ -128,6 +131,40 @@ export function InboxPage({ folder }: { folder: Folder }) {
     [showToast]
   )
 
+  const toggleSelect = useCallback((threadId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(threadId)) next.delete(threadId)
+      else next.add(threadId)
+      return next
+    })
+  }, [])
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), [])
+
+  // Les ids qui ne sont plus dans la sélection après l'action groupée (statut
+  // changé sans quitter le dossier => reste visible ; archivage/corbeille => quitte
+  // le dossier courant) sont retirés localement plutôt que d'attendre le prochain
+  // rechargement, pour un retour visuel immédiat.
+  const bulkAction = useCallback(
+    async (patch: BulkPatch) => {
+      const ids = [...selectedIds]
+      if (ids.length === 0) return
+      try {
+        const res = await apiFetch('/threads/bulk', { method: 'PATCH', body: JSON.stringify({ ids, ...patch }) })
+        if (res.ok) {
+          clearSelection()
+          void loadFirstPage()
+        } else {
+          showToast('error', await parseError(res))
+        }
+      } catch (err) {
+        showToast('error', networkErrorMessage(err))
+      }
+    },
+    [selectedIds, clearSelection, loadFirstPage, showToast]
+  )
+
   useEffect(() => {
     apiFetch('/mail-routes')
       .then(async res => (res.ok ? setMailRoutes(await res.json()) : null))
@@ -147,11 +184,17 @@ export function InboxPage({ folder }: { folder: Folder }) {
       <div
         className={`flex-col gap-2 w-full lg:w-80 lg:flex-shrink-0 ${selectedThreadId ? 'hidden lg:flex' : 'flex'}`}
       >
-        <Button onClick={() => setComposerRequest({ mode: 'new' })} className="w-full">
-          <Send size={14} />
-          Nouveau mail
-        </Button>
-        <FiltersBar search={search} onSearch={setSearch} status={status} onStatus={setStatus} />
+        {selectedIds.size > 0 ? (
+          <BulkActionBar folder={folder} count={selectedIds.size} onClear={clearSelection} onAction={bulkAction} />
+        ) : (
+          <>
+            <Button onClick={() => setComposerRequest({ mode: 'new' })} className="w-full">
+              <Send size={14} />
+              Nouveau mail
+            </Button>
+            <FiltersBar search={search} onSearch={setSearch} status={status} onStatus={setStatus} />
+          </>
+        )}
         <ThreadListPane
           threads={threads}
           loading={loading}
@@ -165,6 +208,8 @@ export function InboxPage({ folder }: { folder: Folder }) {
           loadingMore={loadingMore}
           onLoadMore={loadMore}
           onToggleStar={toggleStar}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
         />
       </div>
 

@@ -110,6 +110,13 @@ export interface ThreadActivity {
   user: AssignedTo | null;
 }
 
+export interface Contact {
+  email: string;
+  name: string | null;
+  lastUsed: string;
+  count: number;
+}
+
 export interface SenderAddress {
   email: string;
   label: string;

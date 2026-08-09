@@ -13,6 +13,7 @@ import { SenderSelect } from '../../src/components/composer/SenderSelect';
 import { NoSendersNotice } from '../../src/components/composer/NoSendersNotice';
 import { AttachmentPicker } from '../../src/components/composer/AttachmentPicker';
 import { TemplatePickerModal } from '../../src/components/composer/TemplatePickerModal';
+import { ContactAutocomplete } from '../../src/components/composer/ContactAutocomplete';
 import type { PickedAttachment, ReplyTemplate } from '../../src/types/api';
 
 const DRAFT_AUTOSAVE_DELAY_MS = 1200;
@@ -151,7 +152,7 @@ export default function ComposeScreen() {
         ) : (
           <>
             <SenderSelect senders={senders} value={fromEmail} onChange={setFromEmail} disabled={mode !== 'new'} />
-            <Input label="À" value={to} onChangeText={setTo} editable={mode !== 'reply'} autoCapitalize="none" keyboardType="email-address" />
+            <ContactAutocomplete label="À" value={to} onChangeText={setTo} editable={mode !== 'reply'} autoCapitalize="none" keyboardType="email-address" />
             {!showCcBcc ? (
               <Text onPress={() => setShowCcBcc(true)} className="text-xs font-medium text-neutral-900 dark:text-neutral-100">
                 + Cc / Cci

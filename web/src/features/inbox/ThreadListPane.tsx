@@ -19,6 +19,8 @@ interface ThreadListPaneProps {
   loadingMore?: boolean
   onLoadMore?: () => void
   onToggleStar?: (threadId: string, starred: boolean) => void
+  selectedIds?: Set<string>
+  onToggleSelect?: (threadId: string) => void
 }
 
 // Déclenche le chargement de la page suivante à 200px du bas — même seuil que
@@ -38,6 +40,8 @@ export function ThreadListPane({
   loadingMore,
   onLoadMore,
   onToggleStar,
+  selectedIds,
+  onToggleSelect,
 }: ThreadListPaneProps) {
   if (loading) return <Spinner />
 
@@ -74,7 +78,15 @@ export function ThreadListPane({
       }}
     >
       {threads.map(t => (
-        <ThreadListItem key={t.id} thread={t} mailRoutes={mailRoutes} folder={folder} onToggleStar={onToggleStar} />
+        <ThreadListItem
+          key={t.id}
+          thread={t}
+          mailRoutes={mailRoutes}
+          folder={folder}
+          onToggleStar={onToggleStar}
+          selected={selectedIds?.has(t.id)}
+          onToggleSelect={onToggleSelect}
+        />
       ))}
       {loadingMore && (
         <div className="flex justify-center py-3 text-muted-foreground">

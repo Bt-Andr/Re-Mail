@@ -64,3 +64,13 @@ export function deleteThread(id: string): Promise<{ success: boolean }> {
 export function getThreadActivity(id: string): Promise<ThreadActivity[]> {
   return apiFetch<ThreadActivity[]>(`/threads/${id}/activity`);
 }
+
+export interface BulkPatch {
+  status?: ThreadStatus;
+  archivedAt?: boolean;
+  deletedAt?: boolean;
+}
+
+export function bulkUpdateThreads(ids: string[], patch: BulkPatch): Promise<{ updated: number }> {
+  return apiFetch<{ updated: number }>('/threads/bulk', { method: 'PATCH', body: { ids, ...patch } });
+}

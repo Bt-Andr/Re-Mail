@@ -1,6 +1,22 @@
+import DOMPurify from 'dompurify'
 import { Paperclip } from 'lucide-react'
 import { formatDateTime, formatFileSize, initials } from '../../lib/format'
 import type { ThreadMessage } from '../../types/api'
+
+// Le corps d'un message vient d'un expéditeur externe non fiable (email entrant) —
+// on ne le rend jamais tel quel : DOMPurify retire scripts/handlers/balises dangereuses
+// avant dangerouslySetInnerHTML. target="_blank" forcé sur les liens pour éviter le
+// reverse tabnabbing (window.opener) sur du HTML qu'on ne contrôle pas.
+DOMPurify.addHook('afterSanitizeAttributes', node => {
+  if (node.tagName === 'A') {
+    node.setAttribute('target', '_blank')
+    node.setAttribute('rel', 'noopener noreferrer')
+  }
+})
+
+function sanitizeHtml(html: string): string {
+  return DOMPurify.sanitize(html, { ADD_ATTR: ['target'], FORBID_TAGS: ['form', 'input', 'button'] })
+}
 
 export function MessageBubble({ message }: { message: ThreadMessage }) {
   const isOut = message.direction === 'outbound'
@@ -18,7 +34,7 @@ export function MessageBubble({ message }: { message: ThreadMessage }) {
         </div>
         <div
           className={`inline-block text-left text-sm rounded-lg px-4 py-3 max-w-full prose-sm ${isOut ? 'bg-accent text-foreground' : 'bg-muted text-foreground'}`}
-          dangerouslySetInnerHTML={{ __html: message.body }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(message.body) }}
           onErrorCapture={e => {
             // Image distante indisponible (réseau, hotlink-protection, URL expirée...) :
             // masquer plutôt que d'afficher l'icône "image cassée" du navigateur.

@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
 import bcrypt from 'bcryptjs'
 import prisma from '../lib/prisma'
 import { forOrg } from '../middleware/scopedPrisma'
@@ -11,6 +12,16 @@ const router = Router()
 
 const ACTIVATION_TOKEN_TTL_MS = 15 * 60 * 1000 // 15 minutes
 const MAX_CODE_ATTEMPTS = 5
+
+// Contrairement à /verify-code (verrou par invitation, cf. MAX_CODE_ATTEMPTS), ces routes
+// publiques n'avaient aucune protection par IP — même limite que loginLimiter (routes/auth.ts).
+const publicInviteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives. Réessayez dans quelques minutes.' },
+})
 
 // Message générique volontaire : ne jamais distinguer "introuvable" / "expiré" /
 // "révoqué" à un appelant non authentifié, pour ne rien laisser deviner.
@@ -39,7 +50,7 @@ async function loadPendingInviteByFileToken(fileToken: string) {
 
 // Étape 1 : l'app uploade les octets du fichier tels quels — elle ne déchiffre
 // jamais rien elle-même, seul ce endpoint (côté serveur) le fait.
-router.post('/resolve', inviteFileUpload.single('file'), async (req, res) => {
+router.post('/resolve', publicInviteLimiter, inviteFileUpload.single('file'), async (req, res) => {
   const file = req.file
   if (!file) return res.status(400).json({ error: 'Fichier requis.' })
 
@@ -57,7 +68,7 @@ router.post('/resolve', inviteFileUpload.single('file'), async (req, res) => {
 // qu'emballé dans un fichier chiffré — ni plus ni moins secret, le fichier .jep
 // n'ajoutait aucune entropie au-delà de ce même token. Même réponse que /resolve
 // pour enchaîner sur la même étape 2 (code) côté front.
-router.get('/resolve-by-token', async (req, res) => {
+router.get('/resolve-by-token', publicInviteLimiter, async (req, res) => {
   const fileToken = typeof req.query.token === 'string' ? req.query.token : null
   if (!fileToken) return res.status(400).json({ error: 'Token requis.' })
 
@@ -69,7 +80,7 @@ router.get('/resolve-by-token', async (req, res) => {
 
 // Étape 2 : code obtenu par l'utilisateur en contactant l'admin — indépendant du
 // fichier, jamais utilisé pour déchiffrer quoi que ce soit, juste comparé côté serveur.
-router.post('/verify-code', async (req, res) => {
+router.post('/verify-code', publicInviteLimiter, async (req, res) => {
   const { fileToken, code } = req.body
   if (!fileToken || !code) return res.status(400).json({ error: 'fileToken et code requis.' })
 
@@ -116,7 +127,7 @@ router.post('/verify-code', async (req, res) => {
 
 // Étape 3 : crée le vrai User (jamais avant ce point), consomme l'invitation,
 // renvoie une session — même forme que POST /api/auth/login.
-router.post('/activate', async (req, res) => {
+router.post('/activate', publicInviteLimiter, async (req, res) => {
   const { fileToken, activationToken, password } = req.body
   if (!fileToken || !activationToken || !password) {
     return res.status(400).json({ error: 'fileToken, activationToken et password requis.' })

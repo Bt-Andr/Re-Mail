@@ -37,7 +37,10 @@
             "DEFAULT"
           ]
         }
-      ]
+      ],
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -73,6 +76,9 @@
       "eas": {
         "projectId": "5cbd8c70-23e8-40d5-9bf3-ae0d8fff7e10"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/5cbd8c70-23e8-40d5-9bf3-ae0d8fff7e10"
     }
   }
 }

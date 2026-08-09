@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useOutletContext, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Forward, Reply, Trash2, Undo2 } from 'lucide-react'
+import { ArrowLeft, Forward, Mail, Reply, Trash2, Undo2 } from 'lucide-react'
 import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useSession } from '../../context/SessionContext'
 import { useToast } from '../../context/ToastContext'
@@ -82,6 +82,21 @@ export function ThreadDetailPane() {
     }
   }
 
+  const markUnread = async () => {
+    if (!thread) return
+    try {
+      const res = await apiFetch(`/threads/${thread.id}/unread`, { method: 'PATCH' })
+      if (res.ok) {
+        onThreadChanged()
+        navigate(`/${folder}`)
+      } else {
+        showToast('error', await parseError(res))
+      }
+    } catch (err) {
+      showToast('error', networkErrorMessage(err))
+    }
+  }
+
   const toggleTrash = async () => {
     if (!thread) return
     try {
@@ -120,6 +135,14 @@ export function ThreadDetailPane() {
               {thread.toEmail && <span><span className="font-medium">À :</span> {thread.toEmail}</span>}
             </div>
           </div>
+          <button
+            type="button"
+            onClick={markUnread}
+            title="Marquer comme non lu"
+            className="flex-shrink-0 text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors"
+          >
+            <Mail size={16} />
+          </button>
           <StatusDropdown status={thread.status} onChange={changeStatus} />
         </div>
         <div className="flex items-center gap-2 mt-2">

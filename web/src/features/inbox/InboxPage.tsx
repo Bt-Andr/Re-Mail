@@ -4,6 +4,7 @@ import { Send } from 'lucide-react'
 import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useOrganization } from '../../hooks/useOrganization'
 import { usePolling } from '../../hooks/usePolling'
+import { useToast } from '../../context/ToastContext'
 import { Button } from '../../components/ui/Button'
 import { FiltersBar } from './FiltersBar'
 import { ThreadListPane } from './ThreadListPane'
@@ -11,6 +12,8 @@ import { ComposerPanel, ComposerRequest } from './ComposerPanel'
 import type { ThreadListItem, MailRoute } from '../../types/api'
 
 export type Folder = 'inbox' | 'sent' | 'trash'
+
+const PAGE_SIZE = 30
 
 export interface InboxOutletContext {
   openComposer: (req: ComposerRequest) => void
@@ -27,11 +30,14 @@ export function InboxPage({ folder }: { folder: Folder }) {
   // liste et détail sur petit écran, où les deux ne peuvent pas tenir côte à côte.
   const { threadId: selectedThreadId } = useParams<{ threadId?: string }>()
   const { organization } = useOrganization()
+  const { showToast } = useToast()
   const [status, setStatus] = useState('all')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [threads, setThreads] = useState<ThreadListItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [mailRoutes, setMailRoutes] = useState<MailRoute[]>([])
   const [composerRequest, setComposerRequest] = useState<ComposerRequest | null>(null)
@@ -43,31 +49,64 @@ export function InboxPage({ folder }: { folder: Folder }) {
     return () => clearTimeout(timer)
   }, [search])
 
-  const loadThreads = useCallback(async () => {
-    const params = new URLSearchParams({ folder })
-    if (status !== 'all') params.set('status', status)
-    if (debouncedSearch) params.set('q', debouncedSearch)
-    try {
+  // Page unique (skip/take) plutôt qu'un fil complet d'un coup — évite de charger
+  // des milliers de threads en une requête sur une boîte qui grossit. `loadFirstPage`
+  // remplace la liste (filtre changé, poll périodique) ; `loadMore` accumule au scroll.
+  const fetchPage = useCallback(
+    async (skip: number): Promise<{ ok: true; data: ThreadListItem[] } | { ok: false; error: string }> => {
+      const params = new URLSearchParams({ folder, take: String(PAGE_SIZE), skip: String(skip) })
+      if (status !== 'all') params.set('status', status)
+      if (debouncedSearch) params.set('q', debouncedSearch)
       const res = await apiFetch(`/threads?${params}`)
-      if (res.ok) {
-        setThreads(await res.json())
+      if (res.ok) return { ok: true, data: await res.json() }
+      return { ok: false, error: await parseError(res) }
+    },
+    [folder, status, debouncedSearch]
+  )
+
+  const loadFirstPage = useCallback(async () => {
+    try {
+      const result = await fetchPage(0)
+      if (result.ok) {
+        setThreads(result.data)
+        setHasMore(result.data.length === PAGE_SIZE)
         setLoadError('')
       } else {
-        setLoadError(await parseError(res))
+        setLoadError(result.error)
       }
     } catch (err) {
       setLoadError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }
-  }, [folder, status, debouncedSearch])
+  }, [fetchPage])
 
   useEffect(() => {
     setLoading(true)
-    void loadThreads()
-  }, [loadThreads])
+    void loadFirstPage()
+  }, [loadFirstPage])
 
-  usePolling(loadThreads, 30_000)
+  usePolling(loadFirstPage, 30_000)
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const result = await fetchPage(threads.length)
+      if (result.ok) {
+        setThreads(prev => [...prev, ...result.data])
+        setHasMore(result.data.length === PAGE_SIZE)
+      } else {
+        setHasMore(false)
+        showToast('error', result.error)
+      }
+    } catch (err) {
+      setHasMore(false)
+      showToast('error', networkErrorMessage(err))
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [fetchPage, threads.length, hasMore, loadingMore, showToast])
 
   useEffect(() => {
     apiFetch('/mail-routes')
@@ -77,7 +116,7 @@ export function InboxPage({ folder }: { folder: Folder }) {
 
   const outletContext: InboxOutletContext = {
     openComposer: setComposerRequest,
-    onThreadChanged: loadThreads,
+    onThreadChanged: loadFirstPage,
     folder,
   }
 
@@ -97,11 +136,14 @@ export function InboxPage({ folder }: { folder: Folder }) {
           threads={threads}
           loading={loading}
           error={loadError}
-          onRetry={loadThreads}
+          onRetry={loadFirstPage}
           folder={folder}
           mailRoutes={mailRoutes}
           resendConnected={!!organization?.resendConnected}
           searching={!!debouncedSearch}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          onLoadMore={loadMore}
         />
       </div>
 
@@ -114,7 +156,7 @@ export function InboxPage({ folder }: { folder: Folder }) {
         onClose={() => setComposerRequest(null)}
         onSent={threadId => {
           setComposerRequest(null)
-          void loadThreads()
+          void loadFirstPage()
           navigate(`/${folder}/${threadId}`)
         }}
       />

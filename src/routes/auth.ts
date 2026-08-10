@@ -101,7 +101,13 @@ router.post('/signup', signupLimiter, async (req, res) => {
     res.status(201).json({
       token,
       user: { id: result.user.id, username: result.user.username, nom: result.user.nom, email: result.user.email, orgRole: result.user.orgRole },
-      organization: { id: result.organization.id, name: result.organization.name, slug: result.organization.slug },
+      organization: {
+        id: result.organization.id,
+        name: result.organization.name,
+        slug: result.organization.slug,
+        isPersonal: result.organization.isPersonal,
+        memberCount: 1,
+      },
     })
   } catch (e) {
     const err = e as { code?: string }

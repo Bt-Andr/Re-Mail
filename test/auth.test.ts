@@ -46,6 +46,10 @@ describe('POST /api/auth/signup', () => {
       })
     expect(res.status).toBe(201)
     expect(res.body.user.orgRole).toBe('OWNER')
+    // Le client (SignupPage) se base sur cette réponse pour son état de session
+    // immédiat, avant tout refetch de /auth/me — isPersonal doit donc déjà y être.
+    expect(res.body.organization.isPersonal).toBe(true)
+    expect(res.body.organization.memberCount).toBe(1)
     createdOrgIds.push(res.body.organization.id)
 
     const org = await prisma.organization.findUnique({ where: { id: res.body.organization.id } })
@@ -63,6 +67,8 @@ describe('POST /api/auth/signup', () => {
         nom: 'Pro Test',
       })
     expect(res.status).toBe(201)
+    expect(res.body.organization.isPersonal).toBe(false)
+    expect(res.body.organization.memberCount).toBe(1)
     createdOrgIds.push(res.body.organization.id)
 
     const org = await prisma.organization.findUnique({ where: { id: res.body.organization.id } })
@@ -88,6 +94,39 @@ describe('POST /api/auth/signup', () => {
       .post('/api/auth/signup')
       .send({ orgName: `Dup Org 2 ${Date.now()}`, username, email, password: 'another-password', nom: 'Seconde' })
     expect(second.status).toBe(409)
+  })
+})
+
+describe('GET /api/auth/me', () => {
+  let org: SeededOrg
+
+  beforeAll(async () => {
+    org = await seedOrg('me-test')
+  })
+
+  afterAll(async () => {
+    await cleanupOrg(org.organizationId)
+  })
+
+  it('exposes isPersonal and memberCount on organization, reflecting the actual team size', async () => {
+    const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${org.token}`)
+    expect(res.status).toBe(200)
+    expect(res.body.user.organization.isPersonal).toBe(false)
+    expect(res.body.user.organization.memberCount).toBe(1)
+
+    await prisma.user.create({
+      data: {
+        organizationId: org.organizationId,
+        username: `${org.username}-teammate`,
+        email: `${org.username}-teammate@test-co.example`,
+        password: 'irrelevant-not-logged-in-with',
+        nom: 'Coéquipier',
+        orgRole: 'MEMBER',
+      },
+    })
+
+    const afterInvite = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${org.token}`)
+    expect(afterInvite.body.user.organization.memberCount).toBe(2)
   })
 })
 

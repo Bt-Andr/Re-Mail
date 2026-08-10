@@ -5,6 +5,7 @@ import * as Sharing from 'expo-sharing';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, Download, KeyRound, Plus, UserPlus } from 'lucide-react-native';
 import { downloadInviteFile, listInvites, revokeInvite } from '../../../src/api/invites.admin';
+import { useAdminGuard } from '../../../src/hooks/useAdminGuard';
 import { formatDateTime } from '../../../src/lib/format';
 import { Button } from '../../../src/components/ui/Button';
 import { Badge, statusBadgeColor } from '../../../src/components/ui/Badge';
@@ -21,6 +22,7 @@ export default function InvitesScreen() {
   const { data: invites = [], isLoading, isError, refetch } = useQuery({ queryKey: ['invites'], queryFn: listInvites });
   const [createOpen, setCreateOpen] = useState(false);
   const [codeFor, setCodeFor] = useState<UserInvite | null>(null);
+  const allowed = useAdminGuard();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['invites'] });
 
@@ -41,6 +43,8 @@ export default function InvitesScreen() {
       Alert.alert('Erreur', 'Téléchargement impossible.');
     }
   };
+
+  if (!allowed) return null;
 
   return (
     <View style={{ paddingBottom: insets.bottom }} className="flex-1 bg-neutral-50 dark:bg-neutral-950">

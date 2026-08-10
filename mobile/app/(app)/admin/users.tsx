@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck, Users as UsersIcon } from 'lucide-react-native';
 import { listOrgUsers } from '../../../src/api/users';
+import { useAdminGuard } from '../../../src/hooks/useAdminGuard';
 import { Badge, type BadgeColor } from '../../../src/components/ui/Badge';
 import { ErrorState } from '../../../src/components/ui/EmptyState';
 import { SenderGrantsModal } from '../../../src/components/admin/SenderGrantsModal';
@@ -17,6 +18,9 @@ export default function UsersScreen() {
   const queryClient = useQueryClient();
   const { data: users = [], isLoading, isError, refetch } = useQuery({ queryKey: ['org-users'], queryFn: listOrgUsers });
   const [grantsFor, setGrantsFor] = useState<OrgUser | null>(null);
+  const allowed = useAdminGuard();
+
+  if (!allowed) return null;
 
   return (
     <View style={{ paddingBottom: insets.bottom }} className="flex-1 bg-neutral-50 dark:bg-neutral-950">

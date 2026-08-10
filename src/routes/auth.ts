@@ -54,19 +54,28 @@ async function uniqueSlug(base: string): Promise<string> {
 // Crée une organisation + son premier utilisateur (OWNER) en une seule étape —
 // pattern "créez votre espace" volontairement simple pour la v1 (un utilisateur
 // appartient à une seule organisation, pas d'invitation multi-org).
+//
+// accountType 'perso' : même mécanisme, mais l'Organization créée est marquée
+// isPersonal (une "org à un seul membre", jamais montrée comme telle côté produit —
+// voir CLAUDE.md) et orgName n'est pas requis, son nom interne est dérivé de nom/email.
 router.post('/signup', signupLimiter, async (req, res) => {
   const { orgName, username, email, password, nom } = req.body
-  if (!orgName || !username || !email || !password || !nom) {
+  const isPersonal = req.body.accountType === 'perso'
+  if (!isPersonal && !orgName) {
+    return res.status(400).json({ error: 'Champs requis manquants.' })
+  }
+  if (!username || !email || !password || !nom) {
     return res.status(400).json({ error: 'Champs requis manquants.' })
   }
 
   try {
-    const slug = await uniqueSlug(slugify(orgName))
+    const orgNameToUse = isPersonal ? nom || email.split('@')[0] : orgName
+    const slug = await uniqueSlug(slugify(orgNameToUse))
     const hash = await bcrypt.hash(password, 12)
 
     const result = await prisma.$transaction(async tx => {
       const organization = await tx.organization.create({
-        data: { name: orgName.trim(), slug },
+        data: { name: orgNameToUse.trim(), slug, isPersonal },
       })
       const user = await tx.user.create({
         data: {
@@ -134,11 +143,31 @@ router.get('/me', authenticateToken, async (req, res) => {
         orgRole: true,
         isDeptHead: true,
         createdAt: true,
-        organization: { select: { id: true, name: true, slug: true } },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isPersonal: true,
+            _count: { select: { users: true } },
+          },
+        },
       },
     })
     if (!user) return res.status(401).json({ error: 'Session invalide.' })
-    res.json({ user })
+    const { organization, ...rest } = user
+    res.json({
+      user: {
+        ...rest,
+        organization: {
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+          isPersonal: organization.isPersonal,
+          memberCount: organization._count.users,
+        },
+      },
+    })
   } catch {
     res.status(500).json({ error: 'Erreur serveur.' })
   }

@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { CheckCircle2, Copy, XCircle } from 'lucide-react-native';
 import { getOrgSummary } from '../../../src/api/organizations';
+import { useAdminGuard } from '../../../src/hooks/useAdminGuard';
 import { ErrorState } from '../../../src/components/ui/EmptyState';
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -20,6 +21,9 @@ export default function OrgSettingsScreen() {
   const insets = useSafeAreaInsets();
   const { data: org, isLoading, isError, refetch } = useQuery({ queryKey: ['org-summary'], queryFn: getOrgSummary });
   const [copied, setCopied] = useState(false);
+  const allowed = useAdminGuard();
+
+  if (!allowed) return null;
 
   if (isError) {
     return (

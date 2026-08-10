@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileText, Pencil, Plus, Trash2 } from 'lucide-react-native';
 import { deleteReplyTemplate, listReplyTemplates } from '../../../src/api/replyTemplates';
+import { useAdminGuard } from '../../../src/hooks/useAdminGuard';
 import { ReplyTemplateFormModal } from '../../../src/components/admin/ReplyTemplateFormModal';
 import { Button } from '../../../src/components/ui/Button';
 import { EmptyState, ErrorState } from '../../../src/components/ui/EmptyState';
@@ -15,6 +16,7 @@ export default function ReplyTemplatesScreen() {
   const queryClient = useQueryClient();
   const { data: templates = [], isLoading, isError, refetch } = useQuery({ queryKey: ['reply-templates', 'all'], queryFn: () => listReplyTemplates() });
   const [modal, setModal] = useState<{ open: boolean; editing: ReplyTemplate | null }>({ open: false, editing: null });
+  const allowed = useAdminGuard();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['reply-templates'] });
 
@@ -29,6 +31,8 @@ export default function ReplyTemplatesScreen() {
       { text: 'Supprimer', style: 'destructive', onPress: () => deleteMutation.mutate(template.id) },
     ]);
   };
+
+  if (!allowed) return null;
 
   return (
     <View style={{ paddingBottom: insets.bottom }} className="flex-1 bg-neutral-50 dark:bg-neutral-950">

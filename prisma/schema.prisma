@@ -41,6 +41,11 @@ model Organization {
   companyName  String?
   emailContact String?
 
+  // Compte "perso" : une Organization à un seul membre, jamais présentée comme
+  // une organisation côté produit (pas d'invitation/admin/vocabulaire "organisation"
+  // visible) — réutilise tel quel forOrg()/JWT/chiffrement Resend, voir CLAUDE.md.
+  isPersonal Boolean @default(false)
+
   users              User[]
   mailRoutes         MailRoute[]
   threads            Thread[]

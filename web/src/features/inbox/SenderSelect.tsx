@@ -2,6 +2,7 @@ import { Select } from '../../components/ui/Select'
 import type { SenderAddress } from '../../types/api'
 
 export function SenderSelect({ senders, value, onChange, disabled }: { senders: SenderAddress[]; value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  if (senders.length <= 1 && !disabled) return null
   if (disabled) {
     return (
       <div>

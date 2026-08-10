@@ -6,23 +6,19 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Archive, ArchiveRestore, Forward, History, Mail, Reply, Star } from 'lucide-react-native';
 import { useThread } from '../../../src/hooks/useThread';
 import { archiveThread, assignThread, markThreadUnread, setThreadStarred, setThreadStatus, unarchiveThread } from '../../../src/api/threads';
-import { useSession } from '../../../src/context/SessionContext';
+import { useAccountContext } from '../../../src/hooks/useAccountContext';
 import { MessageBubble } from '../../../src/components/thread/MessageBubble';
-import { StatusPicker } from '../../../src/components/thread/StatusPicker';
+import { StatusPicker, STATUS_LABEL } from '../../../src/components/thread/StatusPicker';
 import { AssignPicker } from '../../../src/components/thread/AssignPicker';
 import { ActivityLogModal } from '../../../src/components/thread/ActivityLogModal';
 import { Button } from '../../../src/components/ui/Button';
 import { ErrorState } from '../../../src/components/ui/EmptyState';
 import type { ThreadStatus } from '../../../src/types/api';
 
-function isManager(role?: string) {
-  return role === 'OWNER' || role === 'ADMIN';
-}
-
 export default function ThreadDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { user } = useSession();
+  const { isManager, isSoloTeam } = useAccountContext();
   const { data: thread, isLoading, isError, refetch } = useThread(id);
   const queryClient = useQueryClient();
   const [activityOpen, setActivityOpen] = useState(false);
@@ -102,17 +98,23 @@ export default function ThreadDetailScreen() {
         <Text className="text-xs text-neutral-500 dark:text-neutral-400">
           De : {thread.externalFrom} &lt;{thread.externalEmail}&gt;
         </Text>
-        <StatusPicker status={thread.status} onChange={s => statusMutation.mutate(s)} />
-        <View className="flex-row items-center gap-2">
-          <Text className="text-xs text-neutral-400 dark:text-neutral-500">Assigné à :</Text>
-          {isManager(user?.orgRole) ? (
-            <AssignPicker assignedTo={thread.assignedTo} onAssign={userId => assignMutation.mutate(userId)} />
-          ) : (
-            <Text className="text-xs font-medium text-neutral-700 dark:text-neutral-300">
-              {thread.assignedTo?.nom ?? 'Non assigné'}
-            </Text>
-          )}
-        </View>
+        {isSoloTeam ? (
+          <Text className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{STATUS_LABEL[thread.status]}</Text>
+        ) : (
+          <StatusPicker status={thread.status} onChange={s => statusMutation.mutate(s)} />
+        )}
+        {!isSoloTeam && (
+          <View className="flex-row items-center gap-2">
+            <Text className="text-xs text-neutral-400 dark:text-neutral-500">Assigné à :</Text>
+            {isManager ? (
+              <AssignPicker assignedTo={thread.assignedTo} onAssign={userId => assignMutation.mutate(userId)} />
+            ) : (
+              <Text className="text-xs font-medium text-neutral-700 dark:text-neutral-300">
+                {thread.assignedTo?.nom ?? 'Non assigné'}
+              </Text>
+            )}
+          </View>
+        )}
       </View>
 
       <ScrollView contentContainerClassName="gap-5 p-4">

@@ -9,12 +9,15 @@ export interface User {
   orgRole: OrgRole
   isDeptHead: boolean
   createdAt: string
+  organization?: OrganizationSummary
 }
 
 export interface OrganizationSummary {
   id: string
   name: string
   slug: string
+  isPersonal: boolean
+  memberCount: number
 }
 
 export interface OrganizationStatus {
@@ -29,6 +32,8 @@ export interface OrganizationStatus {
   webhookConfigured: boolean
   webhookUrl: string
   mailRoutesCount: number
+  isPersonal: boolean
+  memberCount: number
 }
 
 export interface MailRoute {

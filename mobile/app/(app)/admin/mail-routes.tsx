@@ -5,6 +5,7 @@ import { Link } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AtSign, Pencil, Plus, Trash2 } from 'lucide-react-native';
 import { deleteMailRoute, listMailRoutes, updateMailRoute } from '../../../src/api/mailRoutes';
+import { useAdminGuard } from '../../../src/hooks/useAdminGuard';
 import { MailRouteFormModal } from '../../../src/components/admin/MailRouteFormModal';
 import { Button } from '../../../src/components/ui/Button';
 import { ErrorState } from '../../../src/components/ui/EmptyState';
@@ -15,6 +16,7 @@ export default function MailRoutesScreen() {
   const queryClient = useQueryClient();
   const { data: routes = [], isLoading, isError, refetch } = useQuery({ queryKey: ['mail-routes'], queryFn: listMailRoutes });
   const [modal, setModal] = useState<{ open: boolean; editing: MailRoute | null }>({ open: false, editing: null });
+  const allowed = useAdminGuard();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['mail-routes'] });
 
@@ -34,6 +36,8 @@ export default function MailRoutesScreen() {
       { text: 'Supprimer', style: 'destructive', onPress: () => deleteMutation.mutate(route.id) },
     ]);
   };
+
+  if (!allowed) return null;
 
   return (
     <View style={{ paddingBottom: insets.bottom }} className="flex-1 bg-neutral-50 dark:bg-neutral-950">

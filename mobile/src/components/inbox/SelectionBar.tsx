@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useColorScheme } from 'nativewind';
 import { Archive, ArchiveRestore, Tag, Trash2, Undo2, X } from 'lucide-react-native';
+import { useAccountContext } from '../../hooks/useAccountContext';
 import { Modal } from '../ui/Modal';
 import type { BulkPatch } from '../../api/threads';
 import type { ThreadFolder, ThreadStatus } from '../../types/api';
@@ -30,6 +31,7 @@ export function SelectionBar({
   const { colorScheme } = useColorScheme();
   const iconColor = colorScheme === 'dark' ? '#f5f5f5' : '#111827';
   const [statusOpen, setStatusOpen] = useState(false);
+  const { isSoloTeam } = useAccountContext();
 
   return (
     <View className="flex-row items-center gap-3 border-b border-neutral-200 px-4 pb-3 pt-3 dark:border-neutral-800">
@@ -44,9 +46,11 @@ export function SelectionBar({
         </Pressable>
       ) : (
         <>
-          <Pressable onPress={() => setStatusOpen(true)} hitSlop={8}>
-            <Tag size={19} color={iconColor} />
-          </Pressable>
+          {!isSoloTeam && (
+            <Pressable onPress={() => setStatusOpen(true)} hitSlop={8}>
+              <Tag size={19} color={iconColor} />
+            </Pressable>
+          )}
           <Pressable onPress={() => onAction({ archivedAt: folder !== 'archive' })} hitSlop={8}>
             {folder === 'archive' ? <ArchiveRestore size={19} color={iconColor} /> : <Archive size={19} color={iconColor} />}
           </Pressable>

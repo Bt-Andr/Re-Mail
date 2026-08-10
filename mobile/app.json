@@ -59,6 +59,12 @@
       ],
       "expo-sharing",
       [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Autoriser Re-Mail à utiliser Face ID pour déverrouiller l'application."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",

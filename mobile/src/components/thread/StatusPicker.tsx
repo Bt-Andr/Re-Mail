@@ -7,6 +7,11 @@ const OPTIONS: { id: ThreadStatus; label: string }[] = [
   { id: 'resolu', label: 'Résolu' },
 ];
 
+export const STATUS_LABEL: Record<ThreadStatus, string> = Object.fromEntries(OPTIONS.map(o => [o.id, o.label])) as Record<
+  ThreadStatus,
+  string
+>;
+
 export function StatusPicker({ status, onChange }: { status: ThreadStatus; onChange: (status: ThreadStatus) => void }) {
   return (
     <View className="flex-row gap-1.5">

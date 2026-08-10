@@ -2,25 +2,21 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, useOutletContext, useNavigate, Link } from 'react-router-dom'
 import { Archive, ArrowLeft, Forward, Mail, Reply, Star, Trash2, Undo2 } from 'lucide-react'
 import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
-import { useSession } from '../../context/SessionContext'
 import { useToast } from '../../context/ToastContext'
+import { useAccountContext } from '../../hooks/useAccountContext'
 import { Spinner } from '../../components/ui/Spinner'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { Button } from '../../components/ui/Button'
 import { MessageList } from './MessageList'
 import { AssignDropdown } from './AssignDropdown'
-import { StatusDropdown } from './StatusDropdown'
+import { StatusDropdown, STATUS_LABEL } from './StatusDropdown'
 import type { ThreadDetail } from '../../types/api'
 import type { InboxOutletContext } from './InboxPage'
-
-function isManager(role?: string) {
-  return role === 'OWNER' || role === 'ADMIN'
-}
 
 export function ThreadDetailPane() {
   const { threadId } = useParams<{ threadId: string }>()
   const navigate = useNavigate()
-  const { user } = useSession()
+  const { isManager, isSoloTeam } = useAccountContext()
   const { showToast } = useToast()
   const { openComposer, onThreadChanged, folder } = useOutletContext<InboxOutletContext>()
   const [thread, setThread] = useState<ThreadDetail | null>(null)
@@ -186,16 +182,22 @@ export function ThreadDetailPane() {
           >
             <Mail size={16} />
           </button>
-          <StatusDropdown status={thread.status} onChange={changeStatus} />
-        </div>
-        <div className="flex items-center gap-2 mt-2">
-          <span className="text-xs text-muted-foreground/80 flex-shrink-0">Assigné à :</span>
-          {isManager(user?.orgRole) ? (
-            <AssignDropdown assignedToId={thread.assignedToId} onAssign={assign} />
+          {isSoloTeam ? (
+            <span className="text-xs font-medium text-muted-foreground">{STATUS_LABEL[thread.status] ?? thread.status}</span>
           ) : (
-            <span className="text-xs font-medium text-foreground/90">{thread.assignedTo?.nom ?? <span className="text-muted-foreground italic">Non assigné</span>}</span>
+            <StatusDropdown status={thread.status} onChange={changeStatus} />
           )}
         </div>
+        {!isSoloTeam && (
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-muted-foreground/80 flex-shrink-0">Assigné à :</span>
+            {isManager ? (
+              <AssignDropdown assignedToId={thread.assignedToId} onAssign={assign} />
+            ) : (
+              <span className="text-xs font-medium text-foreground/90">{thread.assignedTo?.nom ?? <span className="text-muted-foreground italic">Non assigné</span>}</span>
+            )}
+          </div>
+        )}
       </div>
 
       <MessageList messages={thread.messages} />

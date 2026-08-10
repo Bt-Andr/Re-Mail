@@ -28,7 +28,10 @@ router.get('/me', authenticateToken, async (req, res) => {
   const org = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
   if (!org) return res.status(404).json({ error: 'Organisation introuvable.' })
 
-  const mailRoutesCount = await prisma.mailRoute.count({ where: { organizationId: org.id } })
+  const [mailRoutesCount, memberCount] = await Promise.all([
+    prisma.mailRoute.count({ where: { organizationId: org.id } }),
+    prisma.user.count({ where: { organizationId: org.id } }),
+  ])
 
   res.json({
     id: org.id,
@@ -42,6 +45,8 @@ router.get('/me', authenticateToken, async (req, res) => {
     webhookConfigured: !!org.webhookSecretEnc,
     webhookUrl: webhookUrlFor(org.webhookToken),
     mailRoutesCount,
+    isPersonal: org.isPersonal,
+    memberCount,
   })
 })
 

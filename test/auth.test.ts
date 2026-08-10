@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import app from '../src/app'
+import prisma from '../src/lib/prisma'
 import { seedOrg, cleanupOrg, SeededOrg } from './helpers/seed'
 
 describe('POST /api/auth/signup', () => {
@@ -30,6 +31,46 @@ describe('POST /api/auth/signup', () => {
 
   it('rejects missing required fields', async () => {
     const res = await request(app).post('/api/auth/signup').send({ orgName: 'Champs manquants' })
+    expect(res.status).toBe(400)
+  })
+
+  it('creates an invisible personal organization when accountType is perso, without requiring orgName', async () => {
+    const res = await request(app)
+      .post('/api/auth/signup')
+      .send({
+        accountType: 'perso',
+        username: `perso-${Date.now()}`,
+        email: `perso-${Date.now()}@example.com`,
+        password: 'a-strong-password',
+        nom: 'Perso Test',
+      })
+    expect(res.status).toBe(201)
+    expect(res.body.user.orgRole).toBe('OWNER')
+    createdOrgIds.push(res.body.organization.id)
+
+    const org = await prisma.organization.findUnique({ where: { id: res.body.organization.id } })
+    expect(org?.isPersonal).toBe(true)
+  })
+
+  it('creates a pro organization (isPersonal false) on a regular signup', async () => {
+    const res = await request(app)
+      .post('/api/auth/signup')
+      .send({
+        orgName: `Pro Org ${Date.now()}`,
+        username: `pro-${Date.now()}`,
+        email: `pro-${Date.now()}@example.com`,
+        password: 'a-strong-password',
+        nom: 'Pro Test',
+      })
+    expect(res.status).toBe(201)
+    createdOrgIds.push(res.body.organization.id)
+
+    const org = await prisma.organization.findUnique({ where: { id: res.body.organization.id } })
+    expect(org?.isPersonal).toBe(false)
+  })
+
+  it('rejects a perso signup missing required fields other than orgName', async () => {
+    const res = await request(app).post('/api/auth/signup').send({ accountType: 'perso', nom: 'Sans rien' })
     expect(res.status).toBe(400)
   })
 

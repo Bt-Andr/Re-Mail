@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { router } from 'expo-router';
 import { me } from '../api/auth';
-import { registerUnauthorizedHandler } from '../api/client';
-import { clearToken, getToken, setToken } from '../lib/session';
+import { ApiError, registerUnauthorizedHandler } from '../api/client';
+import { clearCachedUser, clearToken, getCachedUser, getToken, setCachedUser, setToken } from '../lib/session';
 import { unregisterDevice } from '../api/devices';
 import type { User } from '../types/api';
 
@@ -25,11 +25,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await unregisterDevice(pushToken).catch(() => {});
     }
     await clearToken();
+    await clearCachedUser();
     setUser(null);
   }, []);
 
   const login = useCallback(async (token: string, nextUser: User) => {
     await setToken(token);
+    await setCachedUser(nextUser);
     setUser(nextUser);
   }, []);
 
@@ -42,8 +44,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       const { user: fetchedUser } = await me();
       setUser(fetchedUser);
-    } catch {
-      setUser(null);
+      await setCachedUser(fetchedUser);
+    } catch (e) {
+      // Un 401 avec token signifie une session réellement invalidée (apiFetch a déjà
+      // effacé le token) : déconnexion légitime. Toute autre erreur (réseau injoignable
+      // le temps que l'app ressorte du fond, backend momentanément down, timeout) ne
+      // prouve rien sur la validité de la session — garder l'utilisateur affiché à partir
+      // du profil mis en cache plutôt que de le renvoyer sur l'écran de connexion alors
+      // que son token est toujours valide (c'était le bug : déco après une courte fermeture).
+      if (e instanceof ApiError && e.status === 401) {
+        setUser(null);
+      } else {
+        setUser(await getCachedUser());
+      }
     }
   }, []);
 

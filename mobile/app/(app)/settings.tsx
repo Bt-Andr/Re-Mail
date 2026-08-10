@@ -1,9 +1,13 @@
-import { Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { Moon, Sun } from 'lucide-react-native';
 import { useSession } from '../../src/context/SessionContext';
+import { useAccountContext } from '../../src/hooks/useAccountContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { Button } from '../../src/components/ui/Button';
+import { getBiometricLockEnabled, setBiometricLockEnabled } from '../../src/lib/biometricLock';
 
 const ROLE_LABEL: Record<string, string> = {
   OWNER: 'Propriétaire',
@@ -17,7 +21,34 @@ const ROLE_LABEL: Record<string, string> = {
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout } = useSession();
+  const { isPersonal } = useAccountContext();
   const { theme, toggleTheme } = useTheme();
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricBusy, setBiometricBusy] = useState(false);
+
+  useEffect(() => {
+    Promise.all([LocalAuthentication.hasHardwareAsync(), LocalAuthentication.isEnrolledAsync(), getBiometricLockEnabled()]).then(
+      ([hasHardware, isEnrolled, enabled]) => {
+        setBiometricAvailable(hasHardware && isEnrolled);
+        setBiometricEnabled(enabled);
+      }
+    );
+  }, []);
+
+  const toggleBiometricLock = async (next: boolean) => {
+    setBiometricBusy(true);
+    try {
+      if (next) {
+        const result = await LocalAuthentication.authenticateAsync({ promptMessage: 'Confirmer pour activer le verrouillage' });
+        if (!result.success) return;
+      }
+      await setBiometricLockEnabled(next);
+      setBiometricEnabled(next);
+    } finally {
+      setBiometricBusy(false);
+    }
+  };
 
   return (
     <View style={{ paddingTop: insets.top }} className="flex-1 gap-6 bg-neutral-50 px-4 pb-6 dark:bg-neutral-950">
@@ -26,9 +57,11 @@ export default function SettingsScreen() {
       <View className="gap-1 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
         <Text className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{user?.nom}</Text>
         <Text className="text-xs text-neutral-500 dark:text-neutral-400">{user?.email}</Text>
-        <Text className="text-xs text-neutral-500 dark:text-neutral-400">
-          {user?.orgRole ? ROLE_LABEL[user.orgRole] ?? user.orgRole : ''} · {user?.organization?.name}
-        </Text>
+        {!isPersonal && (
+          <Text className="text-xs text-neutral-500 dark:text-neutral-400">
+            {user?.orgRole ? ROLE_LABEL[user.orgRole] ?? user.orgRole : ''} · {user?.organization?.name}
+          </Text>
+        )}
       </View>
 
       <View className="gap-3 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
@@ -42,6 +75,16 @@ export default function SettingsScreen() {
           </>
         </Button>
       </View>
+
+      {biometricAvailable && (
+        <View className="gap-3 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+          <Text className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Sécurité</Text>
+          <View className="flex-row items-center justify-between">
+            <Text className="text-sm font-medium text-neutral-900 dark:text-neutral-100">Verrouillage biométrique</Text>
+            <Switch value={biometricEnabled} onValueChange={toggleBiometricLock} disabled={biometricBusy} />
+          </View>
+        </View>
+      )}
 
       <Button variant="destructive" onPress={() => logout()}>
         Se déconnecter

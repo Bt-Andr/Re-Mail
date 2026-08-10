@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View, type TextInputProps } from 'react-native';
+import { Contact as DeviceContact } from 'expo-contacts';
+import { BookUser } from 'lucide-react-native';
 import { listContacts } from '../../api/contacts';
 import { Input } from '../ui/Input';
 import type { Contact } from '../../types/api';
@@ -21,6 +23,23 @@ export function ContactAutocomplete({
 } & Omit<TextInputProps, 'value' | 'onChangeText' | 'editable'>) {
   const [suggestions, setSuggestions] = useState<Contact[]>([]);
   const [focused, setFocused] = useState(false);
+
+  // Contact.presentPicker() ouvre le sélecteur natif du système (CNContactPickerViewController
+  // sur iOS, ACTION_PICK sur Android) : contrairement à une lecture en masse du carnet, ce
+  // picker est exempté de permission des deux côtés — pas besoin de demander l'accès complet
+  // aux contacts (ni du plugin expo-contacts dans app.json) juste pour en choisir un seul.
+  const importFromDevice = async () => {
+    try {
+      const picked = await DeviceContact.presentPicker();
+      if (!picked) return;
+      const emails = await picked.getEmails();
+      const address = emails[0]?.address;
+      if (address) onChangeText(address);
+    } catch {
+      // Picker annulé ou indisponible sur ce device : la saisie manuelle reste possible.
+    }
+    setFocused(false);
+  };
 
   useEffect(() => {
     if (editable === false || !value.trim()) {
@@ -45,6 +64,14 @@ export function ContactAutocomplete({
     <View className="gap-1.5">
       <Input
         label={label}
+        labelRight={
+          editable !== false ? (
+            <Pressable onPress={importFromDevice} hitSlop={8} className="flex-row items-center gap-1">
+              <BookUser size={12} color="#6b7280" />
+              <Text className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Contacts</Text>
+            </Pressable>
+          ) : undefined
+        }
         value={value}
         onChangeText={onChangeText}
         editable={editable}

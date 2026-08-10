@@ -1,3 +1,5 @@
+export const STATUS_LABEL: Record<string, string> = { nouveau: 'Nouveau', en_cours: 'En cours', resolu: 'Résolu' }
+
 export function StatusDropdown({ status, onChange }: { status: string; onChange: (status: string) => void }) {
   return (
     <select

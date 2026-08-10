@@ -5,6 +5,7 @@ import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { Archive, AtSign, FileEdit, Inbox, LogOut, Send, Settings, Trash2, UserPlus, Users as UsersIcon, Building2, FileText } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import { useSession } from '../../context/SessionContext';
+import { useAccountContext } from '../../hooks/useAccountContext';
 
 const FOLDER_ITEMS = [
   { route: 'inbox', label: 'Réception', icon: Inbox },
@@ -21,15 +22,12 @@ const ADMIN_ITEMS = [
   { href: '/(app)/admin/reply-templates', label: 'Modèles de réponse', icon: FileText },
 ] as const;
 
-function isManager(role?: string) {
-  return role === 'OWNER' || role === 'ADMIN';
-}
-
 // Tiroir façon Gmail : dossiers de mail en premier, Brouillons + Réglages/Administration
 // ensuite — remplace entièrement les anciens onglets du bas (Inbox/Réglages).
 export function InboxDrawerContent({ state, navigation }: DrawerContentComponentProps) {
   const insets = useSafeAreaInsets();
-  const { user, logout } = useSession();
+  const { logout } = useSession();
+  const { isManager, isPersonal } = useAccountContext();
   const { colorScheme } = useColorScheme();
   const iconColor = colorScheme === 'dark' ? '#f5f5f5' : '#111827';
   const activeRoute = state.routeNames[state.index];
@@ -76,7 +74,7 @@ export function InboxDrawerContent({ state, navigation }: DrawerContentComponent
         </Pressable>
       </View>
 
-      {isManager(user?.orgRole) && (
+      {isManager && !isPersonal && (
         <View className="mt-5 gap-1 border-t border-neutral-100 px-3 pt-5 dark:border-neutral-800">
           <Text className="px-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
             Administration

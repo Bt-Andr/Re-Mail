@@ -2,6 +2,7 @@ import { NavLink, Outlet, Link } from 'react-router-dom'
 import { Archive, Inbox, Send, Trash2, Settings, LogOut, AlertTriangle } from 'lucide-react'
 import { useSession } from '../../context/SessionContext'
 import { useOrganization } from '../../hooks/useOrganization'
+import { useAccountContext } from '../../hooks/useAccountContext'
 import { displayName } from '../../lib/session'
 
 // Sidebar = uniquement la messagerie (comme Gmail : les dossiers sont la nav, pas
@@ -15,13 +16,10 @@ const MAIL_ITEMS = [
   { to: '/trash', label: 'Corbeille', icon: Trash2 },
 ]
 
-function isManager(role?: string) {
-  return role === 'OWNER' || role === 'ADMIN'
-}
-
 export function AppShell() {
   const { user, organization, logout } = useSession()
   const { organization: orgStatus, error: orgError, refetch: refetchOrgStatus } = useOrganization()
+  const { isManager, isPersonal } = useAccountContext()
 
   const setupIncomplete = orgStatus && (!orgStatus.resendConnected || !orgStatus.webhookConfigured)
 
@@ -54,7 +52,7 @@ export function AppShell() {
           ))}
         </nav>
         <div className="px-2 lg:px-3 py-4 border-t border-border space-y-1">
-          {isManager(user?.orgRole) && (
+          {isManager && !isPersonal && (
             <NavLink
               to="/settings"
               title="Paramètres"

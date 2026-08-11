@@ -173,6 +173,22 @@ export interface MailRoute {
   active: boolean;
 }
 
+export interface ExternalMailboxConnection {
+  id: string;
+  provider: string;
+  email: string;
+  imapHost: string;
+  imapPort: number;
+  imapSecure: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  status: 'connected' | 'error';
+  lastError: string | null;
+  lastPolledAt: string | null;
+  createdAt: string;
+}
+
 export type InviteStatus = 'PENDING' | 'ACTIVATED' | 'REVOKED';
 
 export interface UserInvite {

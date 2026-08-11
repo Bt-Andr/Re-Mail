@@ -13,6 +13,7 @@ import { SignupPage } from './features/auth/SignupPage'
 import { ActivatePage } from './features/activate/ActivatePage'
 import { OnboardingWizard } from './features/onboarding/OnboardingWizard'
 import { MailRoutesPage } from './features/mailRoutes/MailRoutesPage'
+import { ExternalMailboxesPage } from './features/mailboxes/ExternalMailboxesPage'
 import { InboxPage } from './features/inbox/InboxPage'
 import { InboxPlaceholder } from './features/inbox/InboxPlaceholder'
 import { ThreadDetailPane } from './features/inbox/ThreadDetailPane'
@@ -57,6 +58,7 @@ export default function App() {
                     <Route index element={<InboxPlaceholder />} />
                     <Route path=":threadId" element={<ThreadDetailPane />} />
                   </Route>
+                  <Route path="/mailboxes" element={<ExternalMailboxesPage />} />
                   <Route element={<RoleGuard allow={['OWNER', 'ADMIN']} />}>
                     <Route path="/settings" element={<SettingsLayout />}>
                       <Route index element={<Navigate to="organization" replace />} />

@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import nodemailer from 'nodemailer'
 import type { Organization } from '@prisma/client'
 import prisma from '../lib/prisma'
 import { forOrg } from '../middleware/scopedPrisma'
@@ -6,6 +7,7 @@ import { authenticateToken } from '../middleware/auth'
 import { attachmentUpload } from '../lib/upload'
 import { buildResendClient } from '../lib/resendClient'
 import { getDecryptedResendKey, getDecryptedWebhookSecret } from '../helpers/resendAccount'
+import { decryptMailboxCredential } from '../lib/mailboxCredentialCrypto'
 import { verifyResendWebhook } from '../helpers/webhookSignature'
 import { extractEmail, stripQuotedText } from '../helpers/inbound'
 import { getAllowedSenders } from '../helpers/senders'
@@ -54,7 +56,7 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
   const isForward = mode === 'forward'
 
   const org = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
-  if (!org?.resendApiKeyEnc) return res.status(400).json({ error: 'Aucun compte Resend connecté pour cette organisation.' })
+  if (!org) return res.status(404).json({ error: 'Organisation introuvable.' })
 
   const db = forOrg(req.user!.organizationId)
   const allowed = await getAllowedSenders(db, req.user!.id)
@@ -106,7 +108,17 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
     senderName = match.label
   }
 
-  const resend = buildResendClient(getDecryptedResendKey(org))
+  // Un expéditeur peut être soit une adresse du domaine Resend de l'org, soit une boîte
+  // externe connectée par CET utilisateur (voir ExternalMailboxConnection) — deux
+  // mécanismes d'envoi différents, déterminés une fois fromEmail résolu ci-dessus. Un
+  // compte perso qui n'a connecté qu'une boîte externe (pas de clé Resend) doit pouvoir
+  // envoyer : la vérification resendApiKeyEnc ne s'applique donc qu'à la branche Resend.
+  const mailbox = await db.externalMailboxConnection.findFirst({
+    where: { email: fromEmail, userId: req.user!.id, status: 'connected' },
+  })
+  if (!mailbox && !org.resendApiKeyEnc) {
+    return res.status(400).json({ error: 'Aucun compte Resend connecté pour cette organisation.' })
+  }
 
   // Nouveau mail (ou fil sans adresse de réception) : crée un fil « Envoyés »
   let effectiveThreadId: string | null = threadId || null
@@ -133,8 +145,12 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
     }
   }
 
+  // reply+{token}@{domaine} ne fonctionne que parce que Resend route le courrier entrant
+  // vers le domaine vérifié de l'org — sans objet pour un envoi SMTP : les réponses
+  // arrivent directement dans la boîte externe de l'utilisateur, rattachées au fil par le
+  // poller via externalEmail/canal, le même chemin que le courrier entrant non tokenisé.
   let replyToAddr = fromEmail
-  if (effectiveThreadId) {
+  if (effectiveThreadId && !mailbox) {
     try {
       const replyToken = await db.mailReplyToken.create({
         data: {
@@ -180,16 +196,41 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
   }
 
   try {
-    await resend.emails.send({
-      from: `${senderName} <${fromEmail}>`,
-      replyTo: replyToAddr,
-      to,
-      cc: cc.length ? cc : undefined,
-      bcc: bcc.length ? bcc : undefined,
-      subject: isForward && !/^fwd:/i.test(subject || '') ? `Fwd: ${subject}` : subject,
-      html,
-      attachments: forwardAttachments ?? (files.length ? files.map(f => ({ content: f.buffer, filename: f.originalname })) : undefined),
-    })
+    const emailSubject = isForward && !/^fwd:/i.test(subject || '') ? `Fwd: ${subject}` : subject
+    const emailAttachments = forwardAttachments ?? (files.length ? files.map(f => ({ content: f.buffer, filename: f.originalname })) : undefined)
+
+    if (mailbox) {
+      // storedToResendAttachments()/pièces jointes manuelles produisent déjà {path|content, filename},
+      // un format que nodemailer consomme tel quel (pas de conversion nécessaire).
+      const transporter = nodemailer.createTransport({
+        host: mailbox.smtpHost,
+        port: mailbox.smtpPort,
+        secure: mailbox.smtpSecure,
+        auth: { user: mailbox.email, pass: decryptMailboxCredential(mailbox.credentialEnc) },
+      })
+      await transporter.sendMail({
+        from: `${senderName} <${fromEmail}>`,
+        replyTo: replyToAddr,
+        to,
+        cc: cc.length ? cc : undefined,
+        bcc: bcc.length ? bcc : undefined,
+        subject: emailSubject,
+        html,
+        attachments: emailAttachments,
+      })
+    } else {
+      const resend = buildResendClient(getDecryptedResendKey(org))
+      await resend.emails.send({
+        from: `${senderName} <${fromEmail}>`,
+        replyTo: replyToAddr,
+        to,
+        cc: cc.length ? cc : undefined,
+        bcc: bcc.length ? bcc : undefined,
+        subject: emailSubject,
+        html,
+        attachments: emailAttachments,
+      })
+    }
 
     if (effectiveThreadId) {
       try {

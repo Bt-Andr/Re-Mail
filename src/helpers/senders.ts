@@ -51,6 +51,12 @@ export async function getAllowedSenders(db: PrismaClient, userId: string): Promi
     }
   }
 
+  const mailboxes = await db.externalMailboxConnection.findMany({
+    where: { userId, status: 'connected' },
+    select: { email: true },
+  })
+  for (const mailbox of mailboxes) add(mailbox.email, mailbox.email)
+
   if (senders.length > 0 && !senders.some(s => s.isDefault)) senders[0].isDefault = true
   return senders
 }

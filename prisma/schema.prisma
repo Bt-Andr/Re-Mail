@@ -58,6 +58,7 @@ model Organization {
   senderGrants       SenderGrant[]
   deviceTokens       DeviceToken[]
   userInvites        UserInvite[]
+  externalMailboxConnections ExternalMailboxConnection[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -90,6 +91,7 @@ model User {
   activities      ThreadActivity[]    @relation("ActivityUser")
   deviceTokens    DeviceToken[]
   invitesCreated  UserInvite[]        @relation("InviteCreatedBy")
+  externalMailboxConnections ExternalMailboxConnection[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -193,6 +195,50 @@ model MailRoute {
 
   @@unique([organizationId, alias])
   @@index([organizationId])
+}
+
+// Boîte externe connectée par un UTILISATEUR (pas par l'organisation) — un membre pro ou
+// un compte perso peut lire/écrire via son propre Gmail/Outlook/IMAP en plus (ou à la
+// place) du domaine Resend de son org. Scopée organisation (forOrg) ET restreinte à son
+// propriétaire (userId) dans toutes les routes : ce n'est pas une ressource d'équipe
+// comme MailRoute — un OWNER/ADMIN n'a aucune raison de voir le Gmail perso d'un membre.
+model ExternalMailboxConnection {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider String @default("imap") // 'imap' pour l'instant — 'gmail'/'outlook' arriveront plus tard
+  email    String
+
+  imapHost   String
+  imapPort   Int     @default(993)
+  imapSecure Boolean @default(true)
+  smtpHost   String
+  smtpPort   Int     @default(465)
+  smtpSecure Boolean @default(true)
+
+  // Mot de passe IMAP/SMTP — chiffré avec une clé DÉDIÉE, jamais MASTER_ENCRYPTION_KEY
+  // (voir src/lib/mailboxCredentialCrypto.ts).
+  credentialEnc String
+
+  status       String    @default("connected") // connected | error
+  lastError    String?
+  lastPolledAt DateTime?
+
+  // Curseur de polling IMAP — UID plutôt que timestamp (RFC 3501, plus fiable).
+  // uidValidity détecte un renumérotage serveur (rare) : si elle change, lastSeenUid n'a
+  // plus de sens, le dossier doit être resynchronisé depuis 0.
+  lastSeenUid Int    @default(0)
+  uidValidity BigInt?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([status])
 }
 
 model MailDraft {

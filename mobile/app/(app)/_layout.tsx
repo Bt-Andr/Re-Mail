@@ -25,6 +25,7 @@ export default function AppGroupLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme === 'dark' ? '#0a0a0a' : '#ffffff' } }}>
         <Stack.Screen name="(drawer)" />
         <Stack.Screen name="settings" options={{ headerShown: true, title: 'Réglages' }} />
+        <Stack.Screen name="mailboxes" options={{ headerShown: true, title: 'Boîtes externes' }} />
         <Stack.Screen name="thread/[id]" options={{ headerShown: true, title: '' }} />
         <Stack.Screen name="compose" options={{ presentation: 'modal', headerShown: true, title: '' }} />
         <Stack.Screen name="admin/mail-routes" options={{ headerShown: true, title: 'Adresses mail' }} />

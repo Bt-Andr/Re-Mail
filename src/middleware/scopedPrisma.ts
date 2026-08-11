@@ -19,6 +19,7 @@ const SCOPED_MODELS = new Set([
   'ReplyTemplate',
   'ThreadActivity',
   'UserInvite',
+  'ExternalMailboxConnection',
 ])
 
 const READ_FILTER_OPS = new Set(['findMany', 'findFirst', 'findFirstOrThrow', 'findUnique', 'findUniqueOrThrow', 'count', 'aggregate', 'groupBy'])

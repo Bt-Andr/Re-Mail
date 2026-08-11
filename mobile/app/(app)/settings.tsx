@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Switch, Text, View } from 'react-native';
+import { Pressable, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { Moon, Sun } from 'lucide-react-native';
+import { ChevronRight, Mail, Moon, Sun } from 'lucide-react-native';
 import { useSession } from '../../src/context/SessionContext';
 import { useAccountContext } from '../../src/hooks/useAccountContext';
 import { useTheme } from '../../src/context/ThemeContext';
@@ -63,6 +64,17 @@ export default function SettingsScreen() {
           </Text>
         )}
       </View>
+
+      <Pressable
+        onPress={() => router.push('/(app)/mailboxes')}
+        className="flex-row items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
+      >
+        <View className="flex-row items-center gap-2.5">
+          <Mail size={16} color="#6b7280" />
+          <Text className="text-sm font-medium text-neutral-900 dark:text-neutral-100">Boîtes externes</Text>
+        </View>
+        <ChevronRight size={16} color="#9ca3af" />
+      </Pressable>
 
       <View className="gap-3 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
         <Text className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Apparence</Text>

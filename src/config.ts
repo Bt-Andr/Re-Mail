@@ -17,6 +17,12 @@ const config = {
   // Clé dédiée aux fichiers d'invitation d'activation (voir src/lib/inviteFileCrypto.ts) —
   // volontairement distincte de MASTER_ENCRYPTION_KEY.
   inviteFileEncryptionKey: required('INVITE_FILE_ENCRYPTION_KEY'),
+  // Clé dédiée aux identifiants de boîtes externes (voir src/lib/mailboxCredentialCrypto.ts) —
+  // volontairement distincte de MASTER_ENCRYPTION_KEY.
+  mailboxCredentialEncryptionKey: required('MAILBOX_CREDENTIAL_ENCRYPTION_KEY'),
+
+  // Intervalle du polling des boîtes externes connectées (IMAP) — voir src/jobs/mailboxPoller.ts.
+  mailboxPollIntervalMs: parseInt(process.env.MAILBOX_POLL_INTERVAL_MS || '240000', 10),
 
   allowedOrigins: process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',')

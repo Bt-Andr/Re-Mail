@@ -32,8 +32,25 @@ export interface OrganizationStatus {
   webhookConfigured: boolean
   webhookUrl: string
   mailRoutesCount: number
+  externalMailboxCount: number
   isPersonal: boolean
   memberCount: number
+}
+
+export interface ExternalMailboxConnection {
+  id: string
+  provider: string
+  email: string
+  imapHost: string
+  imapPort: number
+  imapSecure: boolean
+  smtpHost: string
+  smtpPort: number
+  smtpSecure: boolean
+  status: 'connected' | 'error'
+  lastError: string | null
+  lastPolledAt: string | null
+  createdAt: string
 }
 
 export interface MailRoute {

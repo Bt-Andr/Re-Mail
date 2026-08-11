@@ -21,6 +21,7 @@ import userRoutes from './routes/users'
 import userInviteRoutes from './routes/userInvites'
 import publicUserInviteRoutes from './routes/publicUserInvites'
 import contactRoutes from './routes/contacts'
+import mailboxConnectionRoutes from './routes/mailboxConnections'
 
 const app = express()
 
@@ -57,6 +58,7 @@ app.use('/api/users', userRoutes)
 app.use('/api/user-invites', userInviteRoutes)
 app.use('/api/public/user-invites', publicUserInviteRoutes)
 app.use('/api/contacts', contactRoutes)
+app.use('/api/mailbox-connections', mailboxConnectionRoutes)
 
 // Filet de sécurité final : toute erreur qui atteint ici (async, throw synchrone,
 // etc.) reçoit une réponse propre au lieu de laisser Express fermer la connexion en

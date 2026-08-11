@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router-dom'
-import { Archive, Inbox, Send, Trash2, Settings, LogOut, AlertTriangle } from 'lucide-react'
+import { Archive, Inbox, Mail, Send, Trash2, Settings, LogOut, AlertTriangle } from 'lucide-react'
 import { useSession } from '../../context/SessionContext'
 import { useOrganization } from '../../hooks/useOrganization'
 import { useAccountContext } from '../../hooks/useAccountContext'
@@ -52,6 +52,18 @@ export function AppShell() {
           ))}
         </nav>
         <div className="px-2 lg:px-3 py-4 border-t border-border space-y-1">
+          <NavLink
+            to="/mailboxes"
+            title="Boîtes externes"
+            className={({ isActive }) =>
+              `flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-base rounded-md transition-colors ${
+                isActive ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground hover:bg-accent hover:text-foreground font-medium'
+              }`
+            }
+          >
+            <Mail size={20} />
+            <span className="hidden lg:inline">Boîtes externes</span>
+          </NavLink>
           {isManager && !isPersonal && (
             <NavLink
               to="/settings"

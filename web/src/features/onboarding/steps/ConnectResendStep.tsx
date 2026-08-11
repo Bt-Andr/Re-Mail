@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { apiFetch, parseError } from '../../../lib/apiClient'
 import { Input } from '../../../components/ui/Input'
 import { Button } from '../../../components/ui/Button'
@@ -34,6 +35,12 @@ export function ConnectResendStep({ onDone }: { onDone: (verifiedDomains: string
       <Input label="Clé API Resend" placeholder="re_xxxxxxxxxxxx" value={apiKey} onChange={e => setApiKey(e.target.value)} autoFocus required />
       {error && <p className="text-xs text-destructive">{error}</p>}
       <Button type="submit" loading={loading} disabled={!apiKey.trim()}>Connecter</Button>
+      <p className="text-xs text-muted-foreground text-center">
+        Pas de domaine à vous ?{' '}
+        <Link to="/mailboxes" className="text-foreground font-medium hover:underline">
+          Connecter une boîte existante à la place
+        </Link>
+      </p>
     </form>
   )
 }

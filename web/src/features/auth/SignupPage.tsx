@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/Button'
 export function SignupPage() {
   const { login } = useSession()
   const navigate = useNavigate()
+  const [accountType, setAccountType] = useState<'pro' | 'perso'>('pro')
   const [form, setForm] = useState({ orgName: '', nom: '', username: '', email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -19,7 +20,7 @@ export function SignupPage() {
     setError('')
     setLoading(true)
     try {
-      const res = await apiFetch('/auth/signup', { method: 'POST', body: JSON.stringify(form) })
+      const res = await apiFetch('/auth/signup', { method: 'POST', body: JSON.stringify({ ...form, accountType }) })
       if (!res.ok) {
         setError(await parseError(res, 'Impossible de créer votre espace.'))
         return
@@ -41,9 +42,25 @@ export function SignupPage() {
           <img src="/web-app-manifest-192x192.png" alt="Re-Mail" className="w-7 h-7 rounded-md flex-shrink-0" />
           <h1 className="text-lg font-semibold">Créer votre espace</h1>
         </div>
+        <div className="grid grid-cols-2 gap-1 p-1 mb-5 rounded-md bg-muted">
+          {(['pro', 'perso'] as const).map(type => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => setAccountType(type)}
+              className={`py-2 text-xs font-medium rounded-sm transition-colors ${
+                accountType === type ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
+              }`}
+            >
+              {type === 'pro' ? 'Équipe' : 'Perso — usage personnel'}
+            </button>
+          ))}
+        </div>
         <form onSubmit={submit} className="space-y-4">
-          <Input label="Nom de l'organisation" value={form.orgName} onChange={set('orgName')} autoFocus required />
-          <Input label="Votre nom" value={form.nom} onChange={set('nom')} required />
+          {accountType === 'pro' && (
+            <Input label="Nom de l'organisation" value={form.orgName} onChange={set('orgName')} autoFocus required />
+          )}
+          <Input label="Votre nom" value={form.nom} onChange={set('nom')} autoFocus={accountType === 'perso'} required />
           <Input label="Nom d'utilisateur" value={form.username} onChange={set('username')} required />
           <Input label="Email" type="email" value={form.email} onChange={set('email')} required />
           <Input label="Mot de passe" type="password" value={form.password} onChange={set('password')} required />

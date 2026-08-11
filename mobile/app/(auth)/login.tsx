@@ -67,6 +67,12 @@ export default function LoginScreen() {
               <Text className="font-medium text-neutral-900 dark:text-neutral-100">Activer mon compte</Text>
             </Text>
           </Link>
+          <Link href="/(auth)/signup" asChild>
+            <Text className="text-center text-xs text-neutral-500 dark:text-neutral-400">
+              Pas encore de compte ?{' '}
+              <Text className="font-medium text-neutral-900 dark:text-neutral-100">Créer un compte</Text>
+            </Text>
+          </Link>
         </View>
       </View>
     </KeyboardAvoidingView>

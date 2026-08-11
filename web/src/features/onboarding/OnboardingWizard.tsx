@@ -8,9 +8,12 @@ import { ConnectResendStep } from './steps/ConnectResendStep'
 import { SelectDomainStep } from './steps/SelectDomainStep'
 import { WebhookSecretStep } from './steps/WebhookSecretStep'
 import { FirstMailRouteStep } from './steps/FirstMailRouteStep'
+import { PersonalSenderStep } from './steps/PersonalSenderStep'
 
 // L'étape courante se déduit de l'état de l'organisation (GET /organizations/me),
 // donc un rechargement en cours de route reprend automatiquement au bon endroit.
+// Exception : l'étape "sender" (perso uniquement) — proEmail vit sur User, pas sur
+// Organization, donc ce dernier pas garde un état local (voir personalSenderDone).
 export function OnboardingWizard() {
   const { organization, loading, refetch } = useOrganization()
   const navigate = useNavigate()
@@ -18,15 +21,21 @@ export function OnboardingWizard() {
   // serveur, donc perdu si la page est rechargée entre les étapes 1 et 2 ;
   // SelectDomainStep gère ce cas avec une saisie manuelle de secours.
   const [verifiedDomains, setVerifiedDomains] = useState<string[] | null>(null)
+  const [personalSenderDone, setPersonalSenderDone] = useState(false)
 
   if (loading || !organization) return <Spinner label="Chargement de la configuration…" />
 
-  let step: 'connect' | 'domain' | 'webhook' | 'route' | 'done'
+  const isPersonal = organization.isPersonal
+
+  let step: 'connect' | 'domain' | 'webhook' | 'route' | 'sender' | 'done'
   if (!organization.resendConnected) step = 'connect'
   else if (!organization.resendVerifiedDomain) step = 'domain'
   else if (!organization.webhookConfigured) step = 'webhook'
+  else if (isPersonal) step = personalSenderDone ? 'done' : 'sender'
   else if (organization.mailRoutesCount === 0) step = 'route'
   else step = 'done'
+
+  const stepOrder = isPersonal ? (['connect', 'domain', 'webhook', 'sender'] as const) : (['connect', 'domain', 'webhook', 'route'] as const)
 
   return (
     <div className="min-h-screen bg-background px-4 py-16">
@@ -35,7 +44,7 @@ export function OnboardingWizard() {
       <p className="text-sm text-muted-foreground mb-6">Configurez votre compte Resend pour commencer à recevoir et envoyer des emails.</p>
 
       <ol className="flex items-center gap-2 mb-8 text-xs text-muted-foreground">
-        {(['connect', 'domain', 'webhook', 'route'] as const).map((s, i) => (
+        {stepOrder.map((s, i) => (
           <li key={s} className={`flex items-center gap-1 ${step === s ? 'text-foreground font-medium' : ''}`}>
             {i > 0 && <span className="mx-1">→</span>}
             {i + 1}
@@ -53,6 +62,9 @@ export function OnboardingWizard() {
       )}
       {step === 'domain' && <SelectDomainStep verifiedDomains={verifiedDomains} onDone={refetch} />}
       {step === 'webhook' && <WebhookSecretStep organization={organization} onDone={refetch} />}
+      {step === 'sender' && (
+        <PersonalSenderStep domain={organization.resendVerifiedDomain!} onDone={() => setPersonalSenderDone(true)} />
+      )}
       {step === 'route' && <FirstMailRouteStep onDone={refetch} onSkip={() => navigate('/inbox')} />}
       {step === 'done' && (
         <div className="text-center py-10">

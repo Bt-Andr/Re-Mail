@@ -37,7 +37,7 @@ export default function SignupScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 bg-neutral-50 dark:bg-neutral-950">
-      <ScrollView contentContainerClassName="flex-1 items-center justify-center p-6">
+      <ScrollView contentContainerClassName="grow items-center justify-center p-6">
         <View className="w-full max-w-sm gap-4 rounded-xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900">
           <View className="mb-2 flex-row items-center gap-2.5">
             <Image source={require('../../assets/icon.png')} className="h-7 w-7 rounded-md" />

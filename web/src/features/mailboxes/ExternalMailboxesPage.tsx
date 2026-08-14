@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Mail, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useToast } from '../../context/ToastContext'
@@ -11,18 +12,60 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { MailboxConnectionFormModal } from './MailboxConnectionFormModal'
 import type { ExternalMailboxConnection } from '../../types/api'
 
+const GMAIL_ERROR_MESSAGES: Record<string, string> = {
+  oauth_denied: 'Consentement Google annulé.',
+  state_invalid: 'La demande de connexion a expiré, réessayez.',
+  token_exchange_failed: 'La connexion à Google a échoué.',
+  already_connected_by_another_user: 'Cette adresse Gmail est déjà connectée par un autre membre de votre organisation.',
+}
+
 // Accessible à TOUT utilisateur authentifié (pas seulement OWNER/ADMIN) — c'est un
 // identifiant personnel, pas une ressource d'équipe comme les adresses mail de l'org
 // (voir /settings/mail-routes) : ne vit donc pas sous /settings, qui est réservé aux
 // managers d'une org pro (RoleGuard exclut aussi les comptes perso, voir App.tsx).
 export function ExternalMailboxesPage() {
   const { showToast } = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [connections, setConnections] = useState<ExternalMailboxConnection[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [toDelete, setToDelete] = useState<ExternalMailboxConnection | null>(null)
   const [retryingId, setRetryingId] = useState<string | null>(null)
+  const [connectingGmail, setConnectingGmail] = useState(false)
+
+  // Retour de /gmail/callback (succès sans erreur → juste un rechargement de la liste
+  // via le `load` normal ; échec → ?error=... à traduire et effacer de l'URL).
+  useEffect(() => {
+    const error = searchParams.get('error')
+    if (!error) return
+    showToast('error', GMAIL_ERROR_MESSAGES[error] ?? 'La connexion Gmail a échoué.')
+    setSearchParams(
+      prev => {
+        prev.delete('error')
+        return prev
+      },
+      { replace: true }
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  const connectGmail = async () => {
+    setConnectingGmail(true)
+    try {
+      const returnTo = `${window.location.origin}/mailboxes`
+      const res = await apiFetch(`/mailbox-connections/gmail/start?returnTo=${encodeURIComponent(returnTo)}`)
+      if (!res.ok) {
+        showToast('error', await parseError(res, 'Connexion Gmail indisponible.'))
+        return
+      }
+      const { url } = await res.json()
+      window.location.href = url
+    } catch (err) {
+      showToast('error', networkErrorMessage(err))
+      setConnectingGmail(false)
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -86,10 +129,15 @@ export function ExternalMailboxesPage() {
             <h1 className="text-lg font-semibold">Boîtes externes</h1>
             <p className="text-sm text-muted-foreground">Connectez un Gmail, Outlook ou toute autre boîte mail existante.</p>
           </div>
-          <Button onClick={() => setFormOpen(true)}>
-            <Plus size={15} />
-            Connecter
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={() => void connectGmail()} loading={connectingGmail}>
+              Connecter Gmail
+            </Button>
+            <Button onClick={() => setFormOpen(true)}>
+              <Plus size={15} />
+              Connecter
+            </Button>
+          </div>
         </div>
 
         {loading && <Spinner />}

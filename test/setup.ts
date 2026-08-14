@@ -8,3 +8,5 @@ process.env.DATABASE_URL ??= 'postgresql://postgres:test@localhost:5433/resend_m
 process.env.NODE_ENV = 'test'
 process.env.FRONTEND_URL ??= 'http://localhost:5173'
 process.env.BACKEND_URL ??= 'http://localhost:3001'
+process.env.GOOGLE_OAUTH_CLIENT_ID ??= 'test-google-client-id'
+process.env.GOOGLE_OAUTH_CLIENT_SECRET ??= 'test-google-client-secret'

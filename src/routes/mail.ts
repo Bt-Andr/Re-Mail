@@ -7,7 +7,7 @@ import { authenticateToken } from '../middleware/auth'
 import { attachmentUpload } from '../lib/upload'
 import { buildResendClient } from '../lib/resendClient'
 import { getDecryptedResendKey, getDecryptedWebhookSecret } from '../helpers/resendAccount'
-import { decryptMailboxCredential } from '../lib/mailboxCredentialCrypto'
+import { getMailboxAuth } from '../lib/mailboxAuth'
 import { verifyResendWebhook } from '../helpers/webhookSignature'
 import { extractEmail, stripQuotedText } from '../helpers/inbound'
 import { getAllowedSenders } from '../helpers/senders'
@@ -202,11 +202,15 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
     if (mailbox) {
       // storedToResendAttachments()/pièces jointes manuelles produisent déjà {path|content, filename},
       // un format que nodemailer consomme tel quel (pas de conversion nécessaire).
+      const mailboxAuth = await getMailboxAuth(mailbox)
       const transporter = nodemailer.createTransport({
         host: mailbox.smtpHost,
         port: mailbox.smtpPort,
         secure: mailbox.smtpSecure,
-        auth: { user: mailbox.email, pass: decryptMailboxCredential(mailbox.credentialEnc) },
+        // nodemailer exige le discriminant explicite type:'OAuth2' pour activer XOAUTH2 —
+        // sans ça, un accessToken serait traité comme un mot de passe LOGIN/PLAIN classique
+        // et l'envoi échouerait silencieusement contre les serveurs Google.
+        auth: 'accessToken' in mailboxAuth ? { type: 'OAuth2', ...mailboxAuth } : mailboxAuth,
       })
       await transporter.sendMail({
         from: `${senderName} <${fromEmail}>`,

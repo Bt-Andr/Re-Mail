@@ -4,7 +4,7 @@ import type { ExternalMailboxConnection, Organization, PrismaClient } from '@pri
 import config from '../config'
 import prisma from '../lib/prisma'
 import { forOrg } from '../middleware/scopedPrisma'
-import { decryptMailboxCredential } from '../lib/mailboxCredentialCrypto'
+import { getMailboxAuth } from '../lib/mailboxAuth'
 import { createThread, createActivity, notifyUser } from '../helpers/thread'
 import { uploadBufferToCloudinary, buildOrgFolder, saveAttachmentRecords, StoredAttachment } from '../helpers/attachments'
 
@@ -51,12 +51,12 @@ export async function pollConnection(connection: ExternalMailboxConnection): Pro
   if (!org) return
 
   const db = forOrg(connection.organizationId)
-  const password = decryptMailboxCredential(connection.credentialEnc)
+  const auth = await getMailboxAuth(connection)
   const client = new ImapFlow({
     host: connection.imapHost,
     port: connection.imapPort,
     secure: connection.imapSecure,
-    auth: { user: connection.email, pass: password },
+    auth,
     logger: false,
   })
 

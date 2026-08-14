@@ -37,6 +37,13 @@ const config = {
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,
+
+  // OAuth Gmail (boîtes externes) — un seul client OAuth partagé pour tout le SaaS,
+  // enregistré une fois dans Google Cloud Console. Optionnel : son absence ne doit pas
+  // empêcher le serveur de démarrer, le connecteur IMAP/SMTP générique reste utilisable
+  // sans Gmail OAuth configuré (même raisonnement que les identifiants cloudinary*).
+  googleOAuthClientId: process.env.GOOGLE_OAUTH_CLIENT_ID,
+  googleOAuthClientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
 }
 
 export default config

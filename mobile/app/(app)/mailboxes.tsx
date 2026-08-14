@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Mail, Plus, RefreshCw, Trash2 } from 'lucide-react-native';
 import { deleteMailboxConnection, listMailboxConnections, retryMailboxConnection } from '../../src/api/mailboxConnections';
+import { apiFetch, describeError } from '../../src/api/client';
 import { MailboxConnectionFormModal } from '../../src/components/mailboxes/MailboxConnectionFormModal';
 import { Button } from '../../src/components/ui/Button';
 import { ErrorState } from '../../src/components/ui/EmptyState';
@@ -18,11 +21,35 @@ export default function MailboxesScreen() {
   const queryClient = useQueryClient();
   const { data: connections = [], isLoading, isError, refetch } = useQuery({ queryKey: ['mailbox-connections'], queryFn: listMailboxConnections });
   const [formOpen, setFormOpen] = useState(false);
+  const [connectingGmail, setConnectingGmail] = useState(false);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['mailbox-connections'] });
 
   const retryMutation = useMutation({ mutationFn: (id: string) => retryMailboxConnection(id), onSuccess: invalidate });
   const deleteMutation = useMutation({ mutationFn: (id: string) => deleteMailboxConnection(id), onSuccess: invalidate });
+
+  const connectGmail = async () => {
+    setConnectingGmail(true);
+    try {
+      // Résout en re-mail://mailboxes dans un vrai build, en exp://... (proxy Expo Go) en
+      // dev — le backend accepte les deux (voir isAllowedReturnTo côté serveur).
+      const redirectUri = Linking.createURL('mailboxes');
+      const { url } = await apiFetch<{ url: string }>(`/mailbox-connections/gmail/start?returnTo=${encodeURIComponent(redirectUri)}`);
+      const result = await WebBrowser.openAuthSessionAsync(url, redirectUri);
+      if (result.type === 'success' && result.url) {
+        const parsed = Linking.parse(result.url);
+        if (parsed.queryParams?.error) {
+          Alert.alert('Connexion Gmail échouée', String(parsed.queryParams.error));
+        } else {
+          invalidate();
+        }
+      }
+    } catch (e) {
+      Alert.alert('Erreur', describeError(e));
+    } finally {
+      setConnectingGmail(false);
+    }
+  };
 
   const confirmDelete = (connection: ExternalMailboxConnection) => {
     Alert.alert('Déconnecter cette boîte ?', `${connection.email} ne sera plus consultable dans l'app.`, [
@@ -38,7 +65,12 @@ export default function MailboxesScreen() {
           <Text className="flex-1 text-xs text-neutral-500 dark:text-neutral-400">
             Connectez un Gmail, Outlook ou toute autre boîte mail existante.
           </Text>
-          <Button className="flex-row gap-1.5 px-3" onPress={() => setFormOpen(true)}>
+        </View>
+        <View className="flex-row gap-2">
+          <Button variant="secondary" className="flex-1" onPress={() => void connectGmail()} loading={connectingGmail}>
+            Connecter Gmail
+          </Button>
+          <Button className="flex-row items-center gap-1.5 px-3" onPress={() => setFormOpen(true)}>
             <>
               <Plus size={14} color="#fff" />
               <Text className="text-sm font-medium text-white dark:text-neutral-900">Connecter</Text>

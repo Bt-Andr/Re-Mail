@@ -19,6 +19,7 @@ describe('getAllowedSenders — boîtes externes connectées', () => {
     const db = forOrg(org.organizationId)
     await db.externalMailboxConnection.create({
       data: {
+        organizationId: org.organizationId,
         userId: org.userId,
         provider: 'imap',
         email: 'moi@example.com',
@@ -39,6 +40,7 @@ describe('getAllowedSenders — boîtes externes connectées', () => {
     const db = forOrg(org.organizationId)
     await db.externalMailboxConnection.create({
       data: {
+        organizationId: org.organizationId,
         userId: org.userId,
         provider: 'imap',
         email: 'broken@example.com',

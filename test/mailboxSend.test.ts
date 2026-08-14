@@ -1,9 +1,18 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
 import request from 'supertest'
 
-const mockSendMail = vi.fn()
+const { mockSendMail, mockCreateTransport, mockRefreshGoogleAccessToken } = vi.hoisted(() => ({
+  mockSendMail: vi.fn(),
+  mockCreateTransport: vi.fn(),
+  mockRefreshGoogleAccessToken: vi.fn(),
+}))
+mockCreateTransport.mockImplementation(() => ({ sendMail: mockSendMail, verify: vi.fn() }))
+
 vi.mock('nodemailer', () => ({
-  default: { createTransport: vi.fn().mockImplementation(() => ({ sendMail: mockSendMail, verify: vi.fn() })) },
+  default: { createTransport: mockCreateTransport },
+}))
+vi.mock('../src/lib/googleOAuth', () => ({
+  refreshGoogleAccessToken: mockRefreshGoogleAccessToken,
 }))
 
 import app from '../src/app'
@@ -78,5 +87,52 @@ describe('POST /api/emails/reply — via boîte externe (SMTP), sans Resend conn
       .send({ to: 'client3@example.com', subject: 'Bonjour', message: 'Contenu', fromEmail: 'inconnu@example.com' })
 
     expect(res.status).toBe(403) // adresse d'expédition non autorisée, résolue avant la vérification resendApiKeyEnc
+  })
+})
+
+describe('POST /api/emails/reply — via boîte externe (gmail, XOAUTH2)', () => {
+  let org: SeededOrg
+
+  beforeAll(async () => {
+    org = await seedOrg('mailbox-send-gmail-test')
+    await prisma.organization.update({ where: { id: org.organizationId }, data: { resendApiKeyEnc: null } })
+    await prisma.externalMailboxConnection.create({
+      data: {
+        organizationId: org.organizationId,
+        userId: org.userId,
+        provider: 'gmail',
+        email: 'moi@gmail.com',
+        imapHost: 'imap.gmail.com',
+        imapPort: 993,
+        smtpHost: 'smtp.gmail.com',
+        smtpPort: 465,
+        credentialEnc: encryptMailboxCredential('the-refresh-token'),
+        status: 'connected',
+      },
+    })
+  })
+
+  afterAll(async () => {
+    await cleanupOrg(org.organizationId)
+  })
+
+  beforeEach(() => {
+    mockSendMail.mockReset().mockResolvedValue({ messageId: 'test' })
+    mockCreateTransport.mockClear()
+    mockRefreshGoogleAccessToken.mockReset().mockResolvedValue('fresh-access-token')
+  })
+
+  it('sends via XOAUTH2 (type: OAuth2 + accessToken), never a plain password', async () => {
+    const res = await request(app)
+      .post('/api/emails/reply')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ to: 'client@example.com', subject: 'Bonjour', message: 'Contenu', fromEmail: 'moi@gmail.com' })
+
+    expect(res.status).toBe(200)
+    expect(mockRefreshGoogleAccessToken).toHaveBeenCalledWith('the-refresh-token')
+    expect(mockCreateTransport).toHaveBeenCalledTimes(1)
+    const { auth } = mockCreateTransport.mock.calls[0][0]
+    expect(auth).toEqual({ type: 'OAuth2', user: 'moi@gmail.com', accessToken: 'fresh-access-token' })
+    expect(auth.pass).toBeUndefined()
   })
 })

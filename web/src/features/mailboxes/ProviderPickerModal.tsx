@@ -17,11 +17,26 @@ const PROVIDERS: { id: MailboxProvider; label: string; icon: JSX.Element }[] = [
 // vérifié, pas une boîte mail existante) — les 3 autres ouvrent le connecteur IMAP
 // générique déjà existant, avec des préréglages hôte/port par fournisseur (voir
 // MAILBOX_PRESETS dans MailboxConnectionFormModal) plutôt qu'un formulaire vide.
-export function ProviderPickerModal({ open, onClose, onSelect }: { open: boolean; onClose: () => void; onSelect: (provider: MailboxProvider) => void }) {
+export function ProviderPickerModal({
+  open,
+  onClose,
+  onSelect,
+  showResend = true,
+}: {
+  open: boolean
+  onClose: () => void
+  onSelect: (provider: MailboxProvider) => void
+  // Resend est une ressource d'équipe (clé API/domaine PARTAGÉS par l'org), contrairement
+  // au reste du picker (identifiants personnels) — POST /organizations/me/resend/connect
+  // exige OWNER/ADMIN côté backend (requireOrgRole). Masqué ici pour un MEMBER plutôt que
+  // de le laisser cliquer dessus pour finir sur un 403 "Accès non autorisé pour ce rôle".
+  showResend?: boolean
+}) {
+  const providers = showResend ? PROVIDERS : PROVIDERS.filter(p => p.id !== 'resend')
   return (
     <Modal open={open} title="Configurez votre adresse e-mail" onClose={onClose}>
       <div className="-mx-6 -mb-6 divide-y divide-border border-t border-border">
-        {PROVIDERS.map(provider => (
+        {providers.map(provider => (
           <button
             key={provider.id}
             type="button"

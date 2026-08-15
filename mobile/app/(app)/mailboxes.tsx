@@ -11,6 +11,7 @@ import { MailboxConnectionFormModal, MAILBOX_PRESETS } from '../../src/component
 import { ProviderPickerSheet, type MailboxProvider } from '../../src/components/mailboxes/ProviderPickerSheet';
 import { ResendConnectSheet } from '../../src/components/mailboxes/ResendConnectSheet';
 import { useAccountSwitcher } from '../../src/context/AccountSwitcherContext';
+import { useAccountContext } from '../../src/hooks/useAccountContext';
 import { Button } from '../../src/components/ui/Button';
 import { ErrorState } from '../../src/components/ui/EmptyState';
 import type { ExternalMailboxConnection } from '../../src/types/api';
@@ -24,6 +25,7 @@ export default function MailboxesScreen() {
   const queryClient = useQueryClient();
   const { data: connections = [], isLoading, isError, refetch } = useQuery({ queryKey: ['mailbox-connections'], queryFn: listMailboxConnections });
   const { refetch: refetchAccounts } = useAccountSwitcher();
+  const { isManager } = useAccountContext();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [resendOpen, setResendOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -150,7 +152,7 @@ export default function MailboxesScreen() {
         />
       )}
 
-      <ProviderPickerSheet open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={selectProvider} />
+      <ProviderPickerSheet open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={selectProvider} showResend={isManager} />
       <ResendConnectSheet
         open={resendOpen}
         onClose={() => setResendOpen(false)}

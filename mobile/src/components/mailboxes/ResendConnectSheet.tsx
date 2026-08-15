@@ -160,6 +160,11 @@ export function ResendConnectSheet({ open, onClose, onConnected }: { open: boole
             </View>
           )}
           <Input label="Nom de domaine" placeholder="mail.votredomaine.com" value={domain} onChangeText={setDomain} autoCapitalize="none" />
+          {verifiedDomains === null && (
+            <Text className="text-xs text-neutral-400 dark:text-neutral-500">
+              Fenêtre rouverte : saisissez à nouveau le domaine déjà vérifié dans Resend.
+            </Text>
+          )}
           {error ? <Text className="text-xs text-red-600">{error}</Text> : null}
           <Button onPress={submitDomain} loading={loading} disabled={!domain.trim()}>
             Continuer

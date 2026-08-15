@@ -4,6 +4,7 @@ import { Mail, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useToast } from '../../context/ToastContext'
 import { useAccountSwitcher } from '../../context/AccountSwitcherContext'
+import { useAccountContext } from '../../hooks/useAccountContext'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Spinner } from '../../components/ui/Spinner'
@@ -29,6 +30,7 @@ const GMAIL_ERROR_MESSAGES: Record<string, string> = {
 export function ExternalMailboxesPage() {
   const { showToast } = useToast()
   const { refetch: refetchAccounts } = useAccountSwitcher()
+  const { isManager } = useAccountContext()
   const [searchParams, setSearchParams] = useSearchParams()
   const [connections, setConnections] = useState<ExternalMailboxConnection[]>([])
   const [loading, setLoading] = useState(true)
@@ -208,7 +210,7 @@ export function ExternalMailboxesPage() {
           ))}
         </div>
 
-        <ProviderPickerModal open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={selectProvider} />
+        <ProviderPickerModal open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={selectProvider} showResend={isManager} />
         {resendOpen && (
           // Montée seulement à l'ouverture (pas toujours rendue comme les autres modales) :
           // useOrganization() à l'intérieur ferait sinon un GET /organizations/me à chaque

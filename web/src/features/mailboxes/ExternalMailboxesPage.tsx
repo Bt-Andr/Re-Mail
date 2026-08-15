@@ -12,6 +12,7 @@ import { ErrorState } from '../../components/ui/ErrorState'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { MailboxConnectionFormModal, MAILBOX_PRESETS } from './MailboxConnectionFormModal'
 import { ProviderPickerModal, type MailboxProvider } from './ProviderPickerModal'
+import { ResendConnectModal } from './ResendConnectModal'
 import type { ExternalMailboxConnection } from '../../types/api'
 
 const GMAIL_ERROR_MESSAGES: Record<string, string> = {
@@ -33,6 +34,7 @@ export function ExternalMailboxesPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [resendOpen, setResendOpen] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [formPreset, setFormPreset] = useState<Partial<(typeof MAILBOX_PRESETS)[string]> | undefined>(undefined)
   const [toDelete, setToDelete] = useState<ExternalMailboxConnection | null>(null)
@@ -76,6 +78,10 @@ export function ExternalMailboxesPage() {
     setPickerOpen(false)
     if (provider === 'google') {
       void connectGmail()
+      return
+    }
+    if (provider === 'resend') {
+      setResendOpen(true)
       return
     }
     setFormPreset(provider === 'other' ? undefined : MAILBOX_PRESETS[provider])
@@ -203,6 +209,19 @@ export function ExternalMailboxesPage() {
         </div>
 
         <ProviderPickerModal open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={selectProvider} />
+        {resendOpen && (
+          // Montée seulement à l'ouverture (pas toujours rendue comme les autres modales) :
+          // useOrganization() à l'intérieur ferait sinon un GET /organizations/me à chaque
+          // visite de /mailboxes, même quand personne n'ouvre jamais ce picker.
+          <ResendConnectModal
+            open={resendOpen}
+            onClose={() => setResendOpen(false)}
+            onConnected={() => {
+              showToast('success', 'Resend connecté.')
+              refetchAccounts()
+            }}
+          />
+        )}
         <MailboxConnectionFormModal
           open={formOpen}
           preset={formPreset}

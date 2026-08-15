@@ -305,11 +305,11 @@ describe('Gmail OAuth', () => {
         expect(connection?.userId).toBe(user.id)
       })
 
-      it('rejects sign-in for an email already tied to a pro (team) account, without logging in or touching the mailbox', async () => {
+      it('connects the mailbox to an existing pro (team) account but issues no session — password still required', async () => {
         const proOrg = await prisma.organization.create({
           data: { name: 'Pro Co', slug: `pro-co-${Date.now()}`, isPersonal: false },
         })
-        await prisma.user.create({
+        const proUser = await prisma.user.create({
           data: {
             organizationId: proOrg.id,
             username: `pro-owner-${Date.now()}`,
@@ -323,12 +323,21 @@ describe('Gmail OAuth', () => {
         const state = await getSignedSigninState(signinReturnTo)
         const res = await request(app).get('/api/mailbox-connections/gmail/callback').query({ code: 'auth-code', state }).redirects(0)
         expect(res.status).toBe(302)
-        expect(res.headers.location).toBe(`${signinReturnTo}?error=pro_account_use_password`)
+        // Code d'erreur générique et volontairement partagé avec les échecs internes
+        // (voir gmailOAuth.ts) : un code dédié laisserait deviner qu'une adresse donnée
+        // est un compte d'équipe à quiconque complète l'OAuth Google pour cette adresse.
+        expect(res.headers.location).toBe(`${signinReturnTo}?error=account_provisioning_failed`)
 
+        // Aucune session émise — réussir l'OAuth Google ne doit jamais, à lui seul,
+        // déverrouiller un compte pro (portée du raccourci "signin" limitée au perso).
         const handoffCount = await prisma.loginHandoff.count({ where: { user: { email: 'moi@gmail.com' } } })
         expect(handoffCount).toBe(0)
+
+        // Mais le Gmail est bien rattaché à ce compte pro, prêt dès la connexion par mot
+        // de passe — évite une manipulation manuelle redondante dans Boîtes externes.
         const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: proOrg.id, email: 'moi@gmail.com' } })
-        expect(connection).toBeNull()
+        expect(connection?.userId).toBe(proUser.id)
+        expect(connection?.status).toBe('connected')
 
         await cleanupOrg(proOrg.id)
       })

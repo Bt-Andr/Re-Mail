@@ -215,10 +215,19 @@ router.get('/gmail/callback', async (req, res) => {
   try {
     const existingUser = await prisma.user.findUnique({ where: { email }, include: { organization: true } })
     if (existingUser && !existingUser.organization.isPersonal) {
-      // Compte d'équipe existant avec cet email — on refuse plutôt que de connecter
-      // silencieusement sur un compte pro via ce mécanisme pensé pour le perso (portée
-      // validée avec l'utilisateur) : redirige vers le login classique.
-      return res.redirect(withError(returnTo, 'pro_account_use_password'))
+      // Compte d'équipe existant avec cet email — on ne délivre PAS de session via ce
+      // mécanisme pensé pour le perso (portée validée avec l'utilisateur : le mot de passe
+      // reste requis pour accéder à un compte pro), mais on connecte quand même le Gmail à
+      // ce compte : réussir l'OAuth Google prouve la possession de l'adresse aussi
+      // fiablement qu'un mot de passe, et ça évite une manipulation manuelle redondante
+      // dans Boîtes externes une fois connecté normalement.
+      // Erreur volontairement réutilisée telle quelle (pas de code dédié type
+      // 'pro_account_use_password') : un code distinct confirmerait à quiconque complète
+      // l'OAuth Google pour une adresse donnée que cette adresse est un compte d'équipe —
+      // même principe que GENERIC_INVITE_ERROR dans publicUserInvites.ts, ne jamais laisser
+      // un appelant non authentifié distinguer les cas d'échec.
+      const result = await connectGmailMailbox(existingUser.organizationId, existingUser.id, email, refreshToken, accessToken)
+      return res.redirect(withError(returnTo, result.ok ? 'account_provisioning_failed' : result.error))
     }
     if (existingUser) {
       userId = existingUser.id

@@ -9,6 +9,7 @@ import { deleteMailboxConnection, listMailboxConnections, retryMailboxConnection
 import { apiFetch, describeError } from '../../src/api/client';
 import { MailboxConnectionFormModal, MAILBOX_PRESETS } from '../../src/components/mailboxes/MailboxConnectionFormModal';
 import { ProviderPickerSheet, type MailboxProvider } from '../../src/components/mailboxes/ProviderPickerSheet';
+import { ResendConnectSheet } from '../../src/components/mailboxes/ResendConnectSheet';
 import { useAccountSwitcher } from '../../src/context/AccountSwitcherContext';
 import { Button } from '../../src/components/ui/Button';
 import { ErrorState } from '../../src/components/ui/EmptyState';
@@ -24,6 +25,7 @@ export default function MailboxesScreen() {
   const { data: connections = [], isLoading, isError, refetch } = useQuery({ queryKey: ['mailbox-connections'], queryFn: listMailboxConnections });
   const { refetch: refetchAccounts } = useAccountSwitcher();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [resendOpen, setResendOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [formPreset, setFormPreset] = useState<Partial<(typeof MAILBOX_PRESETS)[string]> | undefined>(undefined);
   const [connectingGmail, setConnectingGmail] = useState(false);
@@ -63,6 +65,10 @@ export default function MailboxesScreen() {
     setPickerOpen(false);
     if (provider === 'google') {
       void connectGmail();
+      return;
+    }
+    if (provider === 'resend') {
+      setResendOpen(true);
       return;
     }
     setFormPreset(provider === 'other' ? undefined : MAILBOX_PRESETS[provider]);
@@ -145,6 +151,14 @@ export default function MailboxesScreen() {
       )}
 
       <ProviderPickerSheet open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={selectProvider} />
+      <ResendConnectSheet
+        open={resendOpen}
+        onClose={() => setResendOpen(false)}
+        onConnected={() => {
+          Alert.alert('Resend connecté');
+          refetchAccounts();
+        }}
+      />
       <MailboxConnectionFormModal
         open={formOpen}
         preset={formPreset}

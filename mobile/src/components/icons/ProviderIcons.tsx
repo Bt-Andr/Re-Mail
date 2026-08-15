@@ -52,3 +52,12 @@ export function ExchangeIcon({ size = 20 }: IconProps) {
     </Svg>
   );
 }
+
+export function ResendIcon({ size = 20 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48">
+      <Rect width="48" height="48" rx="8" fill="#000" />
+      <Path d="M14 34V14h11a7 7 0 0 1 0 14h-5l9 6" stroke="#fff" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}

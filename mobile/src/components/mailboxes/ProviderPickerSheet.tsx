@@ -1,20 +1,22 @@
 import { Pressable, Text } from 'react-native';
 import { Mail, ChevronRight } from 'lucide-react-native';
 import { Modal } from '../ui/Modal';
-import { GoogleIcon, OutlookIcon, YahooIcon, ExchangeIcon } from '../icons/ProviderIcons';
+import { GoogleIcon, OutlookIcon, YahooIcon, ExchangeIcon, ResendIcon } from '../icons/ProviderIcons';
 
-export type MailboxProvider = 'google' | 'outlook' | 'yahoo' | 'exchange' | 'other';
+export type MailboxProvider = 'google' | 'outlook' | 'yahoo' | 'exchange' | 'resend' | 'other';
 
 const PROVIDERS: { id: MailboxProvider; label: string; icon: React.ReactElement }[] = [
   { id: 'google', label: 'Google', icon: <GoogleIcon /> },
   { id: 'outlook', label: 'Outlook, Hotmail et Live', icon: <OutlookIcon /> },
   { id: 'yahoo', label: 'Yahoo', icon: <YahooIcon /> },
   { id: 'exchange', label: 'Exchange et Office 365', icon: <ExchangeIcon /> },
+  { id: 'resend', label: 'Domaine professionnel (Resend)', icon: <ResendIcon /> },
   { id: 'other', label: 'Autre', icon: <Mail size={20} color="#9ca3af" /> },
 ];
 
-// Seul "Google" passe par OAuth (connectGmail) — les 4 autres ouvrent le connecteur
-// IMAP générique déjà existant, avec des préréglages hôte/port par fournisseur (voir
+// "Google" passe par OAuth (connectGmail), "Resend" ouvre ResendConnectSheet (domaine
+// vérifié, pas une boîte mail existante) — les 3 autres ouvrent le connecteur IMAP
+// générique déjà existant, avec des préréglages hôte/port par fournisseur (voir
 // MAILBOX_PRESETS dans MailboxConnectionFormModal) plutôt qu'un formulaire vide.
 export function ProviderPickerSheet({ open, onClose, onSelect }: { open: boolean; onClose: () => void; onSelect: (provider: MailboxProvider) => void }) {
   return (

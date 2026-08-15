@@ -40,7 +40,11 @@
       ],
       "runtimeVersion": {
         "policy": "appVersion"
-      }
+      },
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -86,6 +90,9 @@
     },
     "updates": {
       "url": "https://u.expo.dev/5cbd8c70-23e8-40d5-9bf3-ae0d8fff7e10"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }

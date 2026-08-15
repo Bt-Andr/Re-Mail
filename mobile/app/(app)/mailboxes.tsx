@@ -7,7 +7,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Mail, Plus, RefreshCw, Trash2 } from 'lucide-react-native';
 import { deleteMailboxConnection, listMailboxConnections, retryMailboxConnection } from '../../src/api/mailboxConnections';
 import { apiFetch, describeError } from '../../src/api/client';
-import { MailboxConnectionFormModal } from '../../src/components/mailboxes/MailboxConnectionFormModal';
+import { MailboxConnectionFormModal, MAILBOX_PRESETS } from '../../src/components/mailboxes/MailboxConnectionFormModal';
+import { ProviderPickerSheet, type MailboxProvider } from '../../src/components/mailboxes/ProviderPickerSheet';
+import { useAccountSwitcher } from '../../src/context/AccountSwitcherContext';
 import { Button } from '../../src/components/ui/Button';
 import { ErrorState } from '../../src/components/ui/EmptyState';
 import type { ExternalMailboxConnection } from '../../src/types/api';
@@ -20,10 +22,16 @@ export default function MailboxesScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { data: connections = [], isLoading, isError, refetch } = useQuery({ queryKey: ['mailbox-connections'], queryFn: listMailboxConnections });
+  const { refetch: refetchAccounts } = useAccountSwitcher();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [formPreset, setFormPreset] = useState<Partial<(typeof MAILBOX_PRESETS)[string]> | undefined>(undefined);
   const [connectingGmail, setConnectingGmail] = useState(false);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['mailbox-connections'] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['mailbox-connections'] });
+    refetchAccounts();
+  };
 
   const retryMutation = useMutation({ mutationFn: (id: string) => retryMailboxConnection(id), onSuccess: invalidate });
   const deleteMutation = useMutation({ mutationFn: (id: string) => deleteMailboxConnection(id), onSuccess: invalidate });
@@ -51,6 +59,16 @@ export default function MailboxesScreen() {
     }
   };
 
+  const selectProvider = (provider: MailboxProvider) => {
+    setPickerOpen(false);
+    if (provider === 'google') {
+      void connectGmail();
+      return;
+    }
+    setFormPreset(provider === 'other' ? undefined : MAILBOX_PRESETS[provider]);
+    setFormOpen(true);
+  };
+
   const confirmDelete = (connection: ExternalMailboxConnection) => {
     Alert.alert('Déconnecter cette boîte ?', `${connection.email} ne sera plus consultable dans l'app.`, [
       { text: 'Annuler', style: 'cancel' },
@@ -66,17 +84,12 @@ export default function MailboxesScreen() {
             Connectez un Gmail, Outlook ou toute autre boîte mail existante.
           </Text>
         </View>
-        <View className="flex-row gap-2">
-          <Button variant="secondary" className="flex-1" onPress={() => void connectGmail()} loading={connectingGmail}>
-            Connecter Gmail
-          </Button>
-          <Button className="flex-row items-center gap-1.5 px-3" onPress={() => setFormOpen(true)}>
-            <>
-              <Plus size={14} color="#fff" />
-              <Text className="text-sm font-medium text-white dark:text-neutral-900">Connecter</Text>
-            </>
-          </Button>
-        </View>
+        <Button className="flex-row items-center gap-1.5 px-3 self-start" onPress={() => setPickerOpen(true)} loading={connectingGmail}>
+          <>
+            <Plus size={14} color="#fff" />
+            <Text className="text-sm font-medium text-white dark:text-neutral-900">Connecter</Text>
+          </>
+        </Button>
       </View>
 
       {isLoading ? (
@@ -131,8 +144,10 @@ export default function MailboxesScreen() {
         />
       )}
 
+      <ProviderPickerSheet open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={selectProvider} />
       <MailboxConnectionFormModal
         open={formOpen}
+        preset={formPreset}
         onClose={() => setFormOpen(false)}
         onSaved={() => {
           setFormOpen(false);

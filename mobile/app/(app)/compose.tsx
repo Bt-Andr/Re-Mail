@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileText, Trash2 } from 'lucide-react-native';
 import { useSenders } from '../../src/hooks/useSenders';
+import { useAccountSwitcher } from '../../src/context/AccountSwitcherContext';
 import { sendReply } from '../../src/api/mail';
 import { createDraft, deleteDraft, updateDraft } from '../../src/api/drafts';
 import { describeError } from '../../src/api/client';
@@ -33,6 +34,7 @@ export default function ComposeScreen() {
   }>();
   const mode = params.mode ?? 'new';
   const { senders, loading: sendersLoading } = useSenders();
+  const { accounts, selectedAccountId } = useAccountSwitcher();
   const queryClient = useQueryClient();
 
   const [fromEmail, setFromEmail] = useState('');
@@ -94,10 +96,15 @@ export default function ComposeScreen() {
     setTemplatePickerOpen(false);
   };
 
+  // Le compte actif dans le switcher devient l'expéditeur par défaut d'un nouveau
+  // message — n'a d'effet que si cette adresse fait bien partie des senders autorisés ;
+  // sinon repli sur l'isDefault habituel. Pour une réponse/transfert, SenderSelect est
+  // désactivé (voir plus bas), le "De" réel suit le fil d'origine.
   useEffect(() => {
-    const def = senders.find(s => s.isDefault) ?? senders[0];
+    const preferredEmail = selectedAccountId && selectedAccountId !== 'resend' ? accounts.find(a => a.id === selectedAccountId)?.email : undefined;
+    const def = senders.find(s => s.email === preferredEmail) ?? senders.find(s => s.isDefault) ?? senders[0];
     if (def) setFromEmail(def.email);
-  }, [senders]);
+  }, [senders, accounts, selectedAccountId]);
 
   const canWrite = senders.length > 0;
   const title = mode === 'new' ? 'Nouveau mail' : mode === 'forward' ? 'Transférer' : `Répondre à ${to}`;

@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../src/lib/queryClient';
 import { SessionProvider } from '../src/context/SessionContext';
+import { AccountSwitcherProvider } from '../src/context/AccountSwitcherContext';
 import { ThemeProvider, useTheme } from '../src/context/ThemeContext';
 
 // Bande d'état (Android) désormais transparente par défaut (edge-to-edge, voir
@@ -41,9 +42,11 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <SessionProvider>
-            <ThemeProvider>
-              <RootNavigator />
-            </ThemeProvider>
+            <AccountSwitcherProvider>
+              <ThemeProvider>
+                <RootNavigator />
+              </ThemeProvider>
+            </AccountSwitcherProvider>
           </SessionProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

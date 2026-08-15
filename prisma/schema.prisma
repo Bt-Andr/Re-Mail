@@ -92,11 +92,33 @@ model User {
   deviceTokens    DeviceToken[]
   invitesCreated  UserInvite[]        @relation("InviteCreatedBy")
   externalMailboxConnections ExternalMailboxConnection[]
+  loginHandoffs   LoginHandoff[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+}
+
+// Jeton d'échange unique et court (60s) entre la redirection OAuth publique (GET
+// .../gmail/callback, intent 'signin') et la vraie session (POST /auth/google/exchange).
+// Jamais le vrai JWT de session dans l'URL de redirection (historique navigateur, logs
+// serveur, en-tête Referrer) — ce jeton n'accorde qu'un aller simple, consommé une seule
+// fois (usedAt). Entropie déjà maximale (32 octets aléatoires) → hashé SHA-256 (pas
+// bcrypt, inutile pour un secret déjà à haute entropie), même motif que
+// UserInvite.activationTokenHash. Pas de organizationId : lookup global par hash, avant
+// que la session existe — même exception documentée que UserInvite/publicUserInvites.ts.
+model LoginHandoff {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 // Invitation d'activation par fichier : deux secrets indépendants — le fichier

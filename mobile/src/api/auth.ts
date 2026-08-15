@@ -24,3 +24,10 @@ export function signup(payload: SignupPayload): Promise<AuthResponse & { organiz
 export function me(): Promise<{ user: User }> {
   return apiFetch<{ user: User }>('/auth/me');
 }
+
+// Échange le jeton d'échange à usage unique posé par GET .../gmail/callback (intent
+// 'signin') contre une vraie session — voir (auth)/login.tsx & (auth)/signup.tsx
+// continueWithGoogle(). Même forme de réponse que signup() (organization à part).
+export function exchangeGoogleHandoff(handoff: string): Promise<AuthResponse & { organization: Organization }> {
+  return apiFetch<AuthResponse & { organization: Organization }>('/auth/google/exchange', { method: 'POST', body: { handoff } });
+}

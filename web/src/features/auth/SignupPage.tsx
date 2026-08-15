@@ -12,6 +12,7 @@ export function SignupPage() {
   const [form, setForm] = useState({ orgName: '', nom: '', username: '', email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, [key]: e.target.value }))
 
@@ -32,6 +33,26 @@ export function SignupPage() {
       setError(networkErrorMessage(err))
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Pour un nouveau compte perso, "se connecter avec Google" EST l'inscription — crée le
+  // compte à la volée et connecte le Gmail dans la foulée (voir GoogleCallbackPage).
+  const continueWithGoogle = async () => {
+    setError('')
+    setGoogleLoading(true)
+    try {
+      const returnTo = `${window.location.origin}/auth/google/callback`
+      const res = await apiFetch(`/mailbox-connections/gmail/start-signin?returnTo=${encodeURIComponent(returnTo)}`)
+      if (!res.ok) {
+        setError(await parseError(res, 'Connexion Google indisponible.'))
+        return
+      }
+      const { url } = await res.json()
+      window.location.href = url
+    } catch (err) {
+      setError(networkErrorMessage(err))
+      setGoogleLoading(false)
     }
   }
 
@@ -67,6 +88,14 @@ export function SignupPage() {
           {error && <p className="text-xs text-destructive">{error}</p>}
           <Button type="submit" loading={loading} className="w-full">Créer mon espace</Button>
         </form>
+        <div className="flex items-center gap-3 my-4">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">ou</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+        <Button variant="secondary" onClick={() => void continueWithGoogle()} loading={googleLoading} className="w-full">
+          Continuer avec Google
+        </Button>
         <p className="text-xs text-muted-foreground mt-6 text-center">
           Déjà un compte ? <Link to="/login" className="text-foreground font-medium hover:underline">Se connecter</Link>
         </p>

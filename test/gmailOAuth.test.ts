@@ -26,9 +26,25 @@ async function getSignedState(token: string, returnTo: string) {
   return authUrl.searchParams.get('state')!
 }
 
+async function getSignedSigninState(returnTo: string) {
+  const res = await request(app).get('/api/mailbox-connections/gmail/start-signin').query({ returnTo })
+  expect(res.status).toBe(200)
+  const authUrl = new URL(res.body.url)
+  return authUrl.searchParams.get('state')!
+}
+
+// Nettoie tout compte perso créé à la volée par le flux signin — les tests de cette
+// section réutilisent tous la même adresse mockée (moi@gmail.com) et doivent repartir
+// d'un état propre à chaque fois.
+async function cleanupSigninAccount() {
+  const leftover = await prisma.user.findUnique({ where: { email: 'moi@gmail.com' } })
+  if (leftover) await cleanupOrg(leftover.organizationId)
+}
+
 describe('Gmail OAuth', () => {
   let org: SeededOrg
   const returnTo = 'http://localhost:5173/mailboxes'
+  const signinReturnTo = 'http://localhost:5173/auth/google/callback'
   const originalFetch = global.fetch
 
   beforeAll(async () => {
@@ -82,6 +98,29 @@ describe('Gmail OAuth', () => {
     it('requires authentication', async () => {
       const res = await request(app).get('/api/mailbox-connections/gmail/start').query({ returnTo })
       expect(res.status).toBe(401)
+    })
+  })
+
+  describe('GET /gmail/start-signin', () => {
+    it('requires no authentication and returns a well-formed authorization URL for the signin returnTo', async () => {
+      const res = await request(app).get('/api/mailbox-connections/gmail/start-signin').query({ returnTo: signinReturnTo })
+      expect(res.status).toBe(200)
+      const url = new URL(res.body.url)
+      expect(url.origin + url.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth')
+      expect(url.searchParams.get('state')).toBeTruthy()
+    })
+
+    it('rejects a returnTo that is only allowed for the connect intent (e.g. /mailboxes)', async () => {
+      const res = await request(app).get('/api/mailbox-connections/gmail/start-signin').query({ returnTo })
+      expect(res.status).toBe(400)
+    })
+
+    it('rejects a missing/disallowed returnTo', async () => {
+      const res = await request(app).get('/api/mailbox-connections/gmail/start-signin')
+      expect(res.status).toBe(400)
+
+      const evil = await request(app).get('/api/mailbox-connections/gmail/start-signin').query({ returnTo: 'https://evil.example.com/steal' })
+      expect(evil.status).toBe(400)
     })
   })
 
@@ -210,6 +249,89 @@ describe('Gmail OAuth', () => {
 
       const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: org.organizationId, email: 'moi@gmail.com' } })
       expect(connection).toBeNull()
+    })
+
+    describe('intent: signin', () => {
+      afterEach(cleanupSigninAccount)
+
+      it('creates a new personal account, connects the mailbox, and redirects with ?handoff=', async () => {
+        const state = await getSignedSigninState(signinReturnTo)
+        const res = await request(app).get('/api/mailbox-connections/gmail/callback').query({ code: 'auth-code', state }).redirects(0)
+
+        expect(res.status).toBe(302)
+        expect(res.headers.location.startsWith(signinReturnTo)).toBe(true)
+        const location = new URL(res.headers.location)
+        expect(location.searchParams.get('handoff')).toBeTruthy()
+        expect(location.searchParams.get('error')).toBeNull()
+
+        const user = await prisma.user.findUnique({ where: { email: 'moi@gmail.com' }, include: { organization: true } })
+        expect(user).toBeTruthy()
+        expect(user?.orgRole).toBe('OWNER')
+        expect(user?.organization.isPersonal).toBe(true)
+
+        const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: user!.organizationId, email: 'moi@gmail.com' } })
+        expect(connection?.provider).toBe('gmail')
+        expect(connection?.userId).toBe(user!.id)
+      })
+
+      it('signs an existing personal-account user back in without creating a duplicate account, refreshing the mailbox connection', async () => {
+        // Pré-crée le compte perso "à la main" (hors flux OAuth) pour simuler un
+        // utilisateur qui s'est déjà connecté via Google une première fois.
+        const organization = await prisma.organization.create({
+          data: { name: 'Moi (perso)', slug: `moi-perso-${Date.now()}`, isPersonal: true },
+        })
+        const user = await prisma.user.create({
+          data: {
+            organizationId: organization.id,
+            username: `moi-${Date.now()}`,
+            email: 'moi@gmail.com',
+            password: 'unused-random-hash',
+            nom: 'Moi',
+            orgRole: 'OWNER',
+          },
+        })
+
+        const state = await getSignedSigninState(signinReturnTo)
+        const res = await request(app).get('/api/mailbox-connections/gmail/callback').query({ code: 'auth-code', state }).redirects(0)
+        expect(res.status).toBe(302)
+        const location = new URL(res.headers.location)
+        expect(location.searchParams.get('handoff')).toBeTruthy()
+
+        const usersWithEmail = await prisma.user.findMany({ where: { email: 'moi@gmail.com' } })
+        expect(usersWithEmail).toHaveLength(1)
+        expect(usersWithEmail[0].id).toBe(user.id) // même compte, pas un doublon
+
+        const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: organization.id, email: 'moi@gmail.com' } })
+        expect(connection?.userId).toBe(user.id)
+      })
+
+      it('rejects sign-in for an email already tied to a pro (team) account, without logging in or touching the mailbox', async () => {
+        const proOrg = await prisma.organization.create({
+          data: { name: 'Pro Co', slug: `pro-co-${Date.now()}`, isPersonal: false },
+        })
+        await prisma.user.create({
+          data: {
+            organizationId: proOrg.id,
+            username: `pro-owner-${Date.now()}`,
+            email: 'moi@gmail.com',
+            password: 'unused-random-hash',
+            nom: 'Pro Owner',
+            orgRole: 'OWNER',
+          },
+        })
+
+        const state = await getSignedSigninState(signinReturnTo)
+        const res = await request(app).get('/api/mailbox-connections/gmail/callback').query({ code: 'auth-code', state }).redirects(0)
+        expect(res.status).toBe(302)
+        expect(res.headers.location).toBe(`${signinReturnTo}?error=pro_account_use_password`)
+
+        const handoffCount = await prisma.loginHandoff.count({ where: { user: { email: 'moi@gmail.com' } } })
+        expect(handoffCount).toBe(0)
+        const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: proOrg.id, email: 'moi@gmail.com' } })
+        expect(connection).toBeNull()
+
+        await cleanupOrg(proOrg.id)
+      })
     })
   })
 })

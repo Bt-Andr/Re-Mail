@@ -5,6 +5,7 @@ import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useOrganization } from '../../hooks/useOrganization'
 import { usePolling } from '../../hooks/usePolling'
 import { useToast } from '../../context/ToastContext'
+import { useAccountSwitcher } from '../../context/AccountSwitcherContext'
 import { Button } from '../../components/ui/Button'
 import { FiltersBar } from './FiltersBar'
 import { ThreadListPane } from './ThreadListPane'
@@ -32,6 +33,7 @@ export function InboxPage({ folder }: { folder: Folder }) {
   const { threadId: selectedThreadId } = useParams<{ threadId?: string }>()
   const { organization } = useOrganization()
   const { showToast } = useToast()
+  const { selectedAccountId } = useAccountSwitcher()
   const [status, setStatus] = useState('all')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -59,11 +61,12 @@ export function InboxPage({ folder }: { folder: Folder }) {
       const params = new URLSearchParams({ folder, take: String(PAGE_SIZE), skip: String(skip) })
       if (status !== 'all') params.set('status', status)
       if (debouncedSearch) params.set('q', debouncedSearch)
+      if (selectedAccountId) params.set('account', selectedAccountId)
       const res = await apiFetch(`/threads?${params}`)
       if (res.ok) return { ok: true, data: await res.json() }
       return { ok: false, error: await parseError(res) }
     },
-    [folder, status, debouncedSearch]
+    [folder, status, debouncedSearch, selectedAccountId]
   )
 
   const loadFirstPage = useCallback(async () => {

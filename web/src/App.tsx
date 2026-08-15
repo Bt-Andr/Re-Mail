@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { SessionProvider } from './context/SessionContext'
+import { AccountSwitcherProvider } from './context/AccountSwitcherContext'
 import { ToastProvider } from './context/ToastContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { ThemeToggle } from './components/ui/ThemeToggle'
@@ -10,6 +11,7 @@ import { RoleGuard } from './components/layout/RoleGuard'
 import { AppShell } from './components/layout/AppShell'
 import { LoginPage } from './features/auth/LoginPage'
 import { SignupPage } from './features/auth/SignupPage'
+import { GoogleCallbackPage } from './features/auth/GoogleCallbackPage'
 import { ActivatePage } from './features/activate/ActivatePage'
 import { OnboardingWizard } from './features/onboarding/OnboardingWizard'
 import { MailRoutesPage } from './features/mailRoutes/MailRoutesPage'
@@ -31,8 +33,10 @@ export default function App() {
       <BrowserRouter>
         <ToastProvider>
           <SessionProvider>
+            <AccountSwitcherProvider>
             <Routes>
               <Route path="/activate" element={<ActivatePage />} />
+              <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
 
               <Route element={<GuestGuard />}>
                 <Route path="/login" element={<LoginPage />} />
@@ -73,6 +77,7 @@ export default function App() {
 
               <Route path="*" element={<Navigate to="/inbox" replace />} />
             </Routes>
+            </AccountSwitcherProvider>
           </SessionProvider>
         </ToastProvider>
       </BrowserRouter>

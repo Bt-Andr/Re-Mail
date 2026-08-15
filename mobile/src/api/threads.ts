@@ -6,6 +6,7 @@ export interface ThreadListParams {
   status?: ThreadStatus;
   canal?: string;
   q?: string;
+  account?: string; // ExternalMailboxConnection.id, ou le sentinel 'resend' — voir AccountSwitcherContext
   take?: number;
   skip?: number;
 }
@@ -16,6 +17,7 @@ export function listThreads(params: ThreadListParams): Promise<Thread[]> {
   if (params.status) query.set('status', params.status);
   if (params.canal) query.set('canal', params.canal);
   if (params.q) query.set('q', params.q);
+  if (params.account) query.set('account', params.account);
   if (params.take !== undefined) query.set('take', String(params.take));
   if (params.skip !== undefined) query.set('skip', String(params.skip));
   return apiFetch<Thread[]>(`/threads?${query.toString()}`);

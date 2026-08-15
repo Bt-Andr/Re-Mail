@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Image, Pressable, ScrollView, Text, View, KeyboardAvoidingView, Platform } from 'react-native';
 import { Link, router } from 'expo-router';
-import { signup as signupRequest } from '../../src/api/auth';
-import { describeError } from '../../src/api/client';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+import { signup as signupRequest, exchangeGoogleHandoff } from '../../src/api/auth';
+import { apiFetch, describeError } from '../../src/api/client';
 import { useSession } from '../../src/context/SessionContext';
 import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
@@ -20,6 +22,7 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const submit = async () => {
     setError('');
@@ -32,6 +35,37 @@ export default function SignupScreen() {
       setError(describeError(e));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Pour un nouveau compte perso, "se connecter avec Google" EST l'inscription — voir
+  // (auth)/login.tsx pour le détail de ce même flux (identique ici).
+  const continueWithGoogle = async () => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      const redirectUri = Linking.createURL('google-callback');
+      const { url } = await apiFetch<{ url: string }>(`/mailbox-connections/gmail/start-signin?returnTo=${encodeURIComponent(redirectUri)}`);
+      const result = await WebBrowser.openAuthSessionAsync(url, redirectUri);
+      if (result.type !== 'success' || !result.url) return;
+
+      const parsed = Linking.parse(result.url);
+      if (parsed.queryParams?.error) {
+        setError(String(parsed.queryParams.error));
+        return;
+      }
+      const handoff = parsed.queryParams?.handoff;
+      if (!handoff) {
+        setError('La connexion avec Google a échoué.');
+        return;
+      }
+      const data = await exchangeGoogleHandoff(String(handoff));
+      await login(data.token, { ...data.user, organization: data.organization });
+      router.replace('/(app)/(drawer)/inbox');
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -74,6 +108,15 @@ export default function SignupScreen() {
             disabled={!nom.trim() || !username.trim() || !email.trim() || !password || (accountType === 'pro' && !orgName.trim())}
           >
             Créer mon compte
+          </Button>
+
+          <View className="flex-row items-center gap-3">
+            <View className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800" />
+            <Text className="text-xs text-neutral-400 dark:text-neutral-500">ou</Text>
+            <View className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800" />
+          </View>
+          <Button variant="secondary" onPress={continueWithGoogle} loading={googleLoading}>
+            Continuer avec Google
           </Button>
 
           <Link href="/(auth)/login" asChild>

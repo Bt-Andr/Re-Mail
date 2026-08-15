@@ -23,6 +23,7 @@ import publicUserInviteRoutes from './routes/publicUserInvites'
 import contactRoutes from './routes/contacts'
 import mailboxConnectionRoutes from './routes/mailboxConnections'
 import gmailOAuthRoutes from './routes/gmailOAuth'
+import accountRoutes from './routes/accounts'
 
 const app = express()
 
@@ -61,6 +62,7 @@ app.use('/api/public/user-invites', publicUserInviteRoutes)
 app.use('/api/contacts', contactRoutes)
 app.use('/api/mailbox-connections', mailboxConnectionRoutes)
 app.use('/api/mailbox-connections', gmailOAuthRoutes)
+app.use('/api/accounts', accountRoutes)
 
 // Filet de sécurité final : toute erreur qui atteint ici (async, throw synchrone,
 // etc.) reçoit une réponse propre au lieu de laisser Express fermer la connexion en

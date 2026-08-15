@@ -37,6 +37,17 @@ export interface OrganizationStatus {
   memberCount: number
 }
 
+// Notion unifiée "compte" (voir src/routes/accounts.ts backend) — utilisée par le
+// switcher (filtre l'inbox) et par le compositeur (adresse d'expédition par défaut).
+export interface AccountSummary {
+  id: string // ExternalMailboxConnection.id, ou le sentinel 'resend'
+  kind: 'mailbox' | 'resend'
+  provider: 'gmail' | 'imap' | 'resend'
+  email: string
+  label: string
+  status: 'connected' | 'error' | null
+}
+
 export interface ExternalMailboxConnection {
   id: string
   provider: string

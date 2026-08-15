@@ -1,36 +1,60 @@
 import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
 import { ImapFlow } from 'imapflow'
 import config from '../config'
 import { authenticateToken } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
+import prisma from '../lib/prisma'
 import { encryptMailboxCredential } from '../lib/mailboxCredentialCrypto'
 import { signOAuthState, verifyOAuthState, OAuthState } from '../lib/oauthState'
 import { buildGoogleAuthUrl, exchangeCodeForTokens, getGoogleUserEmail } from '../lib/googleOAuth'
+import { createPersonalAccountFromGoogle } from '../lib/personalAccountFactory'
+import { issueLoginHandoff } from '../lib/loginHandoff'
 
 const router = Router()
 
 const GMAIL_IMAP_HOST = 'imap.gmail.com'
 const GMAIL_SMTP_HOST = 'smtp.gmail.com'
 
-// N'accepte que les destinations connues de l'app : la page /mailboxes du dashboard web,
-// ou le scheme mobile (natif re-mail://, ou son proxy exp:// sous Expo Go en dev) — sinon
-// /gmail/callback deviendrait une redirection ouverte (open redirect) vers n'importe où.
-function isAllowedReturnTo(returnTo: unknown): returnTo is string {
-  return (
-    typeof returnTo === 'string' &&
-    (returnTo === `${config.frontendUrl}/mailboxes` || returnTo.startsWith('re-mail://') || returnTo.startsWith('exp://'))
-  )
+// Ni /gmail/start-signin ni /gmail/callback n'ont de protection par compte (état signé
+// à la place) — limite par IP, même motif que loginLimiter (routes/auth.ts).
+const googleSignInStartLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives. Réessayez dans quelques minutes.' },
+})
+
+// Deux destinations web distinctes selon l'intent : un state 'signin' ne doit jamais
+// pouvoir rediriger vers /mailboxes (page authentifiée), ni un state 'connect' vers
+// /auth/google/callback (page publique) — surface d'attaque inutile sinon.
+const WEB_CONNECT_RETURN_TO = `${config.frontendUrl}/mailboxes`
+const WEB_SIGNIN_RETURN_TO = `${config.frontendUrl}/auth/google/callback`
+
+// N'accepte que les destinations connues de l'app : la page correspondant à l'intent
+// dans le dashboard web, ou le scheme mobile (natif re-mail://, ou son proxy exp:// sous
+// Expo Go en dev) — sinon /gmail/callback deviendrait une redirection ouverte (open
+// redirect) vers n'importe où.
+function isAllowedReturnTo(returnTo: unknown, intent: 'connect' | 'signin'): returnTo is string {
+  if (typeof returnTo !== 'string') return false
+  if (returnTo.startsWith('re-mail://') || returnTo.startsWith('exp://')) return true
+  return intent === 'connect' ? returnTo === WEB_CONNECT_RETURN_TO : returnTo === WEB_SIGNIN_RETURN_TO
 }
 
-function withError(returnTo: string, error: string): string {
+function appendQueryParam(returnTo: string, key: string, value: string): string {
   try {
     const url = new URL(returnTo)
-    url.searchParams.set('error', error)
+    url.searchParams.set(key, value)
     return url.toString()
   } catch {
     const sep = returnTo.includes('?') ? '&' : '?'
-    return `${returnTo}${sep}error=${encodeURIComponent(error)}`
+    return `${returnTo}${sep}${key}=${encodeURIComponent(value)}`
   }
+}
+
+function withError(returnTo: string, error: string): string {
+  return appendQueryParam(returnTo, 'error', error)
 }
 
 // GET /api/mailbox-connections/gmail/start — authentifié normalement (appelée via
@@ -41,17 +65,99 @@ router.get('/gmail/start', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Gmail OAuth non configuré sur ce serveur.' })
   }
   const returnTo = req.query.returnTo
-  if (!isAllowedReturnTo(returnTo)) {
+  if (!isAllowedReturnTo(returnTo, 'connect')) {
     return res.status(400).json({ error: 'returnTo invalide.' })
   }
-  const state = signOAuthState({ userId: req.user!.id, organizationId: req.user!.organizationId, returnTo })
+  const state = signOAuthState({ intent: 'connect', userId: req.user!.id, organizationId: req.user!.organizationId, returnTo })
   res.json({ url: buildGoogleAuthUrl(state) })
 })
+
+// GET /api/mailbox-connections/gmail/start-signin — PAS authenticateToken : c'est le
+// point d'entrée "se connecter avec Google" depuis l'écran de connexion, avant toute
+// session Re-Mail. Le callback (même route que /gmail/start, voir plus bas) résout
+// l'identité de l'utilisateur lui-même une fois l'email Google vérifié.
+router.get('/gmail/start-signin', googleSignInStartLimiter, (req, res) => {
+  if (!config.googleOAuthClientId || !config.googleOAuthClientSecret) {
+    return res.status(400).json({ error: 'Gmail OAuth non configuré sur ce serveur.' })
+  }
+  const returnTo = req.query.returnTo
+  if (!isAllowedReturnTo(returnTo, 'signin')) {
+    return res.status(400).json({ error: 'returnTo invalide.' })
+  }
+  const state = signOAuthState({ intent: 'signin', returnTo })
+  res.json({ url: buildGoogleAuthUrl(state) })
+})
+
+type ConnectResult = { ok: true } | { ok: false; error: 'already_connected_by_another_user' | 'token_exchange_failed' }
+
+// Partagée par les deux intents du callback : vérifie qu'aucun AUTRE utilisateur de
+// l'org n'a déjà connecté cette adresse, sonde IMAP en XOAUTH2 pour capturer
+// uidValidity/uidNext (démarre le polling à partir de maintenant, pas un rapatriement
+// complet), puis crée ou met à jour la ExternalMailboxConnection. Écrase aussi
+// provider/hosts/ports au update, pas seulement l'identifiant : une adresse reconnectée
+// ici a pu exister avant en tant que connexion IMAP générique (provider: 'imap').
+async function connectGmailMailbox(
+  organizationId: string,
+  userId: string,
+  email: string,
+  refreshToken: string,
+  accessToken: string
+): Promise<ConnectResult> {
+  const db = forOrg(organizationId)
+  const existing = await db.externalMailboxConnection.findFirst({ where: { email } })
+  if (existing && existing.userId !== userId) {
+    return { ok: false, error: 'already_connected_by_another_user' }
+  }
+
+  let uidValidity: bigint
+  let uidNext: number
+  const client = new ImapFlow({ host: GMAIL_IMAP_HOST, port: 993, secure: true, auth: { user: email, accessToken }, logger: false })
+  try {
+    await client.connect()
+    const box = await client.mailboxOpen('INBOX')
+    uidValidity = box.uidValidity
+    uidNext = box.uidNext
+  } catch (e) {
+    console.error('[GMAIL-OAUTH] sonde IMAP', (e as Error).message)
+    return { ok: false, error: 'token_exchange_failed' }
+  } finally {
+    client.logout().catch(() => client.close())
+  }
+
+  try {
+    const connectionData = {
+      provider: 'gmail',
+      imapHost: GMAIL_IMAP_HOST,
+      imapPort: 993,
+      imapSecure: true,
+      smtpHost: GMAIL_SMTP_HOST,
+      smtpPort: 465,
+      smtpSecure: true,
+      credentialEnc: encryptMailboxCredential(refreshToken),
+      status: 'connected',
+      lastError: null,
+      uidValidity,
+      lastSeenUid: Math.max(uidNext - 1, 0),
+    }
+    if (existing) {
+      await db.externalMailboxConnection.update({ where: { id: existing.id }, data: connectionData })
+    } else {
+      await db.externalMailboxConnection.create({ data: { ...connectionData, organizationId, userId, email } })
+    }
+  } catch (e) {
+    console.error('[GMAIL-OAUTH] enregistrement connexion', (e as Error).message)
+    return { ok: false, error: 'token_exchange_failed' }
+  }
+
+  return { ok: true }
+}
 
 // GET /api/mailbox-connections/gmail/callback — PAS authenticateToken : c'est une
 // navigation GET déclenchée par Google, jamais d'en-tête Authorization possible (cette
 // app authentifie tout le reste par JWT en header, jamais par cookie). Le state signé
-// (voir oauthState.ts) fait office d'authentification pour cette route précise.
+// (voir oauthState.ts) fait office d'authentification pour cette route précise. Reçoit
+// indifféremment les deux intents ('connect' et 'signin') : un seul callback, une seule
+// redirect URI enregistrée côté Google Cloud Console, comportement branché sur le state.
 router.get('/gmail/callback', async (req, res) => {
   const fallbackReturnTo = `${config.frontendUrl}/mailboxes`
 
@@ -63,14 +169,14 @@ router.get('/gmail/callback', async (req, res) => {
   }
 
   if (req.query.error) {
-    const returnTo = state && isAllowedReturnTo(state.returnTo) ? state.returnTo : fallbackReturnTo
+    const returnTo = state && isAllowedReturnTo(state.returnTo, state.intent) ? state.returnTo : fallbackReturnTo
     return res.redirect(withError(returnTo, 'oauth_denied'))
   }
 
-  if (!state || !isAllowedReturnTo(state.returnTo)) {
+  if (!state || !isAllowedReturnTo(state.returnTo, state.intent)) {
     return res.redirect(withError(fallbackReturnTo, 'state_invalid'))
   }
-  const { returnTo, userId, organizationId } = state
+  const { returnTo, intent } = state
 
   const code = typeof req.query.code === 'string' ? req.query.code : ''
   if (!code) return res.redirect(withError(returnTo, 'state_invalid'))
@@ -88,75 +194,53 @@ router.get('/gmail/callback', async (req, res) => {
 
   let email: string
   try {
-    email = await getGoogleUserEmail(accessToken)
+    email = (await getGoogleUserEmail(accessToken)).toLowerCase().trim()
   } catch (e) {
     console.error('[GMAIL-OAUTH] getGoogleUserEmail', (e as Error).message)
     return res.redirect(withError(returnTo, 'token_exchange_failed'))
   }
 
-  // Vérifié avant la sonde IMAP (pas seulement avant l'écriture finale) : évite un appel
-  // Gmail inutile quand l'adresse est déjà connectée par un AUTRE utilisateur de l'org —
-  // refuser plutôt que de réassigner silencieusement la connexion (comportement cohérent
-  // avec le 409 du flux IMAP générique, voir POST /mailbox-connections).
-  const db = forOrg(organizationId)
-  const existing = await db.externalMailboxConnection.findFirst({ where: { email } })
-  if (existing && existing.userId !== userId) {
-    return res.redirect(withError(returnTo, 'already_connected_by_another_user'))
+  if (intent === 'connect') {
+    const { userId, organizationId } = state
+    const result = await connectGmailMailbox(organizationId, userId, email, refreshToken, accessToken)
+    if (!result.ok) return res.redirect(withError(returnTo, result.error))
+    return res.redirect(returnTo)
   }
 
-  // Sonde IMAP en XOAUTH2 avec l'accessToken fraîchement obtenu — même logique que
-  // POST /mailbox-connections générique : capture uidValidity/uidNext pour démarrer le
-  // polling à partir de maintenant, pas un rapatriement complet de la boîte.
-  let uidValidity: bigint
-  let uidNext: number
-  const client = new ImapFlow({ host: GMAIL_IMAP_HOST, port: 993, secure: true, auth: { user: email, accessToken }, logger: false })
+  // intent === 'signin' : aucune session préalable — résout un compte perso existant par
+  // email (lookup global raw prisma, avant que l'org soit connue — même exception
+  // documentée que auth.ts /login et publicUserInvites.ts), ou en crée un à la volée.
+  let userId: string
+  let organizationId: string
   try {
-    await client.connect()
-    const box = await client.mailboxOpen('INBOX')
-    uidValidity = box.uidValidity
-    uidNext = box.uidNext
-  } catch (e) {
-    console.error('[GMAIL-OAUTH] sonde IMAP', (e as Error).message)
-    return res.redirect(withError(returnTo, 'token_exchange_failed'))
-  } finally {
-    client.logout().catch(() => client.close())
-  }
-
-  try {
-    // Unicité composite avec organizationId ([organizationId, email]) — findFirst (déjà
-    // fait ci-dessus) + create/update manuel plutôt que upsert/findUnique, convention de
-    // ce codebase (voir src/routes/routingRules.ts) : reconnecter un Gmail déjà en erreur
-    // doit rafraîchir credentialEnc, pas planter en 409.
-    const connectionData = {
-      provider: 'gmail',
-      imapHost: GMAIL_IMAP_HOST,
-      imapPort: 993,
-      imapSecure: true,
-      smtpHost: GMAIL_SMTP_HOST,
-      smtpPort: 465,
-      smtpSecure: true,
-      credentialEnc: encryptMailboxCredential(refreshToken),
-      status: 'connected',
-      lastError: null,
-      uidValidity,
-      lastSeenUid: Math.max(uidNext - 1, 0),
+    const existingUser = await prisma.user.findUnique({ where: { email }, include: { organization: true } })
+    if (existingUser && !existingUser.organization.isPersonal) {
+      // Compte d'équipe existant avec cet email — on refuse plutôt que de connecter
+      // silencieusement sur un compte pro via ce mécanisme pensé pour le perso (portée
+      // validée avec l'utilisateur) : redirige vers le login classique.
+      return res.redirect(withError(returnTo, 'pro_account_use_password'))
     }
-    if (existing) {
-      // Écrase aussi provider/hosts/ports, pas seulement l'identifiant : une adresse
-      // reconnectée ici a pu exister avant en tant que connexion IMAP générique
-      // (provider: 'imap') — sans ça, credentialEnc contiendrait un refresh token OAuth
-      // tout en gardant provider: 'imap', et getMailboxAuth le traiterait comme un mot
-      // de passe classique au prochain poll/envoi.
-      await db.externalMailboxConnection.update({ where: { id: existing.id }, data: connectionData })
+    if (existingUser) {
+      userId = existingUser.id
+      organizationId = existingUser.organizationId
     } else {
-      await db.externalMailboxConnection.create({ data: { ...connectionData, organizationId, userId, email } })
+      const created = await createPersonalAccountFromGoogle(email)
+      userId = created.user.id
+      organizationId = created.organization.id
     }
   } catch (e) {
-    console.error('[GMAIL-OAUTH] enregistrement connexion', (e as Error).message)
-    return res.redirect(withError(returnTo, 'token_exchange_failed'))
+    console.error('[GMAIL-OAUTH] provisionnement compte', (e as Error).message)
+    return res.redirect(withError(returnTo, 'account_provisioning_failed'))
   }
 
-  res.redirect(returnTo)
+  const result = await connectGmailMailbox(organizationId, userId, email, refreshToken, accessToken)
+  if (!result.ok) return res.redirect(withError(returnTo, result.error))
+
+  // Jamais le vrai JWT de session dans cette URL de redirection (historique navigateur,
+  // logs serveur, referrer) — un jeton d'échange à usage unique et très court (60s) à la
+  // place, consommé par POST /auth/google/exchange qui renvoie la vraie session.
+  const handoff = await issueLoginHandoff(userId)
+  res.redirect(appendQueryParam(returnTo, 'handoff', handoff))
 })
 
 export default router

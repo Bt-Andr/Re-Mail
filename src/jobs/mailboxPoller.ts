@@ -144,7 +144,7 @@ async function processMessage(
     externalEmail: fromAddr,
     bodyHtml,
     toEmail: connection.email,
-    sourceType: 'imap',
+    sourceType: connection.provider,
     sourceId: connection.id,
   })
   await db.thread.update({ where: { id: thread.id }, data: { assignedToId: connection.userId } })

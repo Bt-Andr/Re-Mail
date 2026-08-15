@@ -3,13 +3,15 @@ import { useSearchParams } from 'react-router-dom'
 import { Mail, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useToast } from '../../context/ToastContext'
+import { useAccountSwitcher } from '../../context/AccountSwitcherContext'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Spinner } from '../../components/ui/Spinner'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
-import { MailboxConnectionFormModal } from './MailboxConnectionFormModal'
+import { MailboxConnectionFormModal, MAILBOX_PRESETS } from './MailboxConnectionFormModal'
+import { ProviderPickerModal, type MailboxProvider } from './ProviderPickerModal'
 import type { ExternalMailboxConnection } from '../../types/api'
 
 const GMAIL_ERROR_MESSAGES: Record<string, string> = {
@@ -25,11 +27,14 @@ const GMAIL_ERROR_MESSAGES: Record<string, string> = {
 // managers d'une org pro (RoleGuard exclut aussi les comptes perso, voir App.tsx).
 export function ExternalMailboxesPage() {
   const { showToast } = useToast()
+  const { refetch: refetchAccounts } = useAccountSwitcher()
   const [searchParams, setSearchParams] = useSearchParams()
   const [connections, setConnections] = useState<ExternalMailboxConnection[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
+  const [formPreset, setFormPreset] = useState<Partial<(typeof MAILBOX_PRESETS)[string]> | undefined>(undefined)
   const [toDelete, setToDelete] = useState<ExternalMailboxConnection | null>(null)
   const [retryingId, setRetryingId] = useState<string | null>(null)
   const [connectingGmail, setConnectingGmail] = useState(false)
@@ -67,6 +72,16 @@ export function ExternalMailboxesPage() {
     }
   }
 
+  const selectProvider = (provider: MailboxProvider) => {
+    setPickerOpen(false)
+    if (provider === 'google') {
+      void connectGmail()
+      return
+    }
+    setFormPreset(provider === 'other' ? undefined : MAILBOX_PRESETS[provider])
+    setFormOpen(true)
+  }
+
   const load = useCallback(async () => {
     setLoading(true)
     setLoadError('')
@@ -95,6 +110,7 @@ export function ExternalMailboxesPage() {
       if (res.ok) {
         showToast('success', 'Nouvelle tentative programmée.')
         void load()
+        refetchAccounts()
       } else {
         showToast('error', await parseError(res))
       }
@@ -112,6 +128,7 @@ export function ExternalMailboxesPage() {
       if (res.ok) {
         setConnections(prev => prev.filter(c => c.id !== toDelete.id))
         showToast('success', 'Boîte déconnectée.')
+        refetchAccounts()
       } else {
         showToast('error', await parseError(res, 'Suppression impossible.'))
       }
@@ -129,15 +146,10 @@ export function ExternalMailboxesPage() {
             <h1 className="text-lg font-semibold">Boîtes externes</h1>
             <p className="text-sm text-muted-foreground">Connectez un Gmail, Outlook ou toute autre boîte mail existante.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => void connectGmail()} loading={connectingGmail}>
-              Connecter Gmail
-            </Button>
-            <Button onClick={() => setFormOpen(true)}>
-              <Plus size={15} />
-              Connecter
-            </Button>
-          </div>
+          <Button onClick={() => setPickerOpen(true)} loading={connectingGmail}>
+            <Plus size={15} />
+            Connecter
+          </Button>
         </div>
 
         {loading && <Spinner />}
@@ -190,13 +202,16 @@ export function ExternalMailboxesPage() {
           ))}
         </div>
 
+        <ProviderPickerModal open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={selectProvider} />
         <MailboxConnectionFormModal
           open={formOpen}
+          preset={formPreset}
           onClose={() => setFormOpen(false)}
           onSaved={() => {
             setFormOpen(false)
             showToast('success', 'Boîte connectée.')
             void load()
+            refetchAccounts()
           }}
         />
         <ConfirmDialog

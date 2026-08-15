@@ -12,6 +12,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -33,6 +34,27 @@ export function LoginPage() {
     }
   }
 
+  // Se connecter directement via Google (comptes perso uniquement) : crée le compte à la
+  // volée s'il n'existe pas encore et connecte le Gmail dans la foulée — voir
+  // GoogleCallbackPage pour la suite du flux après le retour de Google.
+  const continueWithGoogle = async () => {
+    setError('')
+    setGoogleLoading(true)
+    try {
+      const returnTo = `${window.location.origin}/auth/google/callback`
+      const res = await apiFetch(`/mailbox-connections/gmail/start-signin?returnTo=${encodeURIComponent(returnTo)}`)
+      if (!res.ok) {
+        setError(await parseError(res, 'Connexion Google indisponible.'))
+        return
+      }
+      const { url } = await res.json()
+      window.location.href = url
+    } catch (err) {
+      setError(networkErrorMessage(err))
+      setGoogleLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm bg-card rounded-lg shadow-sm border border-border p-8">
@@ -46,6 +68,14 @@ export function LoginPage() {
           {error && <p className="text-xs text-destructive">{error}</p>}
           <Button type="submit" loading={loading} className="w-full">Se connecter</Button>
         </form>
+        <div className="flex items-center gap-3 my-4">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">ou</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+        <Button variant="secondary" onClick={() => void continueWithGoogle()} loading={googleLoading} className="w-full">
+          Continuer avec Google
+        </Button>
         <p className="text-xs text-muted-foreground mt-6 text-center">
           Pas encore d'organisation ? <Link to="/signup" className="text-foreground font-medium hover:underline">Créer un espace</Link>
         </p>

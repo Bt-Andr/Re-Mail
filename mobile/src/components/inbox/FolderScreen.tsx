@@ -7,6 +7,7 @@ import { Check, ListFilter, Plus } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import { useThreads } from '../../hooks/useThreads';
 import { useInboxSearch } from '../../context/InboxSearchContext';
+import { useAccountSwitcher } from '../../context/AccountSwitcherContext';
 import { bulkUpdateThreads, type BulkPatch } from '../../api/threads';
 import { describeError } from '../../api/client';
 import { ThreadListItem } from './ThreadListItem';
@@ -33,6 +34,7 @@ export function FolderScreen({ folder }: { folder: ThreadFolder }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { debouncedSearch } = useInboxSearch();
+  const { selectedAccountId } = useAccountSwitcher();
   const activeFilter = STATUS_FILTERS.find(f => f.id === status) ?? STATUS_FILTERS[0];
   const queryClient = useQueryClient();
 
@@ -70,6 +72,7 @@ export function FolderScreen({ folder }: { folder: ThreadFolder }) {
     folder,
     status: status === 'all' ? undefined : status,
     q: debouncedSearch || undefined,
+    account: selectedAccountId ?? undefined,
   });
 
   return (

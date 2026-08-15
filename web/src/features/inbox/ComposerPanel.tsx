@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch, parseError } from '../../lib/apiClient'
 import { useSenders } from '../../hooks/useSenders'
 import { useToast } from '../../context/ToastContext'
+import { useAccountSwitcher } from '../../context/AccountSwitcherContext'
 import { Modal } from '../../components/ui/Modal'
 import { Input } from '../../components/ui/Input'
 import { Textarea } from '../../components/ui/Textarea'
@@ -24,6 +25,7 @@ export interface ComposerRequest {
 export function ComposerPanel({ request, onClose, onSent }: { request: ComposerRequest | null; onClose: () => void; onSent: (threadId: string) => void }) {
   const { senders, loading: sendersLoading } = useSenders()
   const { showToast } = useToast()
+  const { accounts, selectedAccountId } = useAccountSwitcher()
 
   const [fromEmail, setFromEmail] = useState('')
   const [to, setTo] = useState('')
@@ -51,10 +53,16 @@ export function ComposerPanel({ request, onClose, onSent }: { request: ComposerR
     setSubject(subj)
   }, [request])
 
+  // Le compte actif dans le switcher (voir AccountSwitcherContext) devient l'expéditeur
+  // par défaut d'un nouveau message — n'a d'effet que si cette adresse fait bien partie
+  // des senders autorisés ; sinon repli sur l'isDefault habituel. Pour une réponse/
+  // transfert, la valeur ici n'est qu'un point de départ : SenderSelect est désactivé
+  // dans ces modes (voir plus bas), le "De" réel suit le fil d'origine.
   useEffect(() => {
-    const def = senders.find(s => s.isDefault) ?? senders[0]
+    const preferredEmail = selectedAccountId && selectedAccountId !== 'resend' ? accounts.find(a => a.id === selectedAccountId)?.email : undefined
+    const def = senders.find(s => s.email === preferredEmail) ?? senders.find(s => s.isDefault) ?? senders[0]
     if (def) setFromEmail(def.email)
-  }, [senders])
+  }, [senders, accounts, selectedAccountId])
 
   if (!request) return null
 

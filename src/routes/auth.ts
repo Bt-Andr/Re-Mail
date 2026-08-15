@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs'
 import prisma from '../lib/prisma'
 import { authenticateToken } from '../middleware/auth'
 import { signToken } from '../lib/jwt'
+import { createOrgAndOwner } from '../lib/personalAccountFactory'
+import { consumeLoginHandoff } from '../lib/loginHandoff'
 
 const router = Router()
 
@@ -25,31 +27,13 @@ const signupLimiter = rateLimit({
   message: { error: 'Trop de tentatives. Réessayez plus tard.' },
 })
 
-// Supprime les diacritiques (accents) après normalisation NFD, ex. "é" -> "e"
-const COMBINING_DIACRITICS = new RegExp("[\\u0300-\\u036f]", 'g')
-
-function slugify(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(COMBINING_DIACRITICS, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 40) || 'org'
-  )
-}
-
-async function uniqueSlug(base: string): Promise<string> {
-  let slug = base
-  let attempt = 0
-  while (await prisma.organization.findUnique({ where: { slug } })) {
-    attempt += 1
-    slug = `${base}-${Math.random().toString(36).slice(2, 6)}`
-    if (attempt > 10) throw new Error('Impossible de générer un identifiant unique.')
-  }
-  return slug
-}
+const googleExchangeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives. Réessayez dans quelques minutes.' },
+})
 
 // Crée une organisation + son premier utilisateur (OWNER) en une seule étape —
 // pattern "créez votre espace" volontairement simple pour la v1 (un utilisateur
@@ -70,24 +54,15 @@ router.post('/signup', signupLimiter, async (req, res) => {
 
   try {
     const orgNameToUse = isPersonal ? nom || email.split('@')[0] : orgName
-    const slug = await uniqueSlug(slugify(orgNameToUse))
-    const hash = await bcrypt.hash(password, 12)
+    const passwordHash = await bcrypt.hash(password, 12)
 
-    const result = await prisma.$transaction(async tx => {
-      const organization = await tx.organization.create({
-        data: { name: orgNameToUse.trim(), slug, isPersonal },
-      })
-      const user = await tx.user.create({
-        data: {
-          organizationId: organization.id,
-          username: username.toLowerCase().trim(),
-          email: email.toLowerCase().trim(),
-          password: hash,
-          nom,
-          orgRole: 'OWNER',
-        },
-      })
-      return { organization, user }
+    const result = await createOrgAndOwner({
+      orgName: orgNameToUse,
+      isPersonal,
+      username: username.toLowerCase().trim(),
+      email: email.toLowerCase().trim(),
+      passwordHash,
+      nom,
     })
 
     const token = signToken({
@@ -132,6 +107,46 @@ router.post('/login', loginLimiter, async (req, res) => {
     res.json({ token, user: userWithoutPassword })
   } catch (e) {
     console.error('[POST /api/auth/login]', e)
+    res.status(500).json({ error: 'Erreur serveur.' })
+  }
+})
+
+// Étape finale du flux "se connecter avec Google" (routes/gmailOAuth.ts, intent
+// 'signin') : échange le jeton d'échange à usage unique posé par la redirection OAuth
+// (jamais le vrai JWT dans une URL) contre une vraie session — même mécanisme que
+// /login, juste une preuve d'identité différente (jeton signé par le callback plutôt
+// qu'un mot de passe). Réponse alignée sur /signup (avec `organization`), PAS sur /login
+// (qui l'omet) : cet endpoint sert aussi bien un compte tout juste créé qu'un compte
+// existant, donc doit toujours renvoyer une organisation à jour (sinon
+// useSession().organization resterait périmé jusqu'au prochain /auth/me).
+router.post('/google/exchange', googleExchangeLimiter, async (req, res) => {
+  const { handoff } = req.body
+  if (!handoff || typeof handoff !== 'string') return res.status(400).json({ error: 'Jeton manquant.' })
+
+  try {
+    const userId = await consumeLoginHandoff(handoff)
+    if (!userId) return res.status(401).json({ error: 'Cette session de connexion a expiré, réessayez.' })
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { organization: { select: { id: true, name: true, slug: true, isPersonal: true, _count: { select: { users: true } } } } },
+    })
+    if (!user) return res.status(401).json({ error: 'Compte introuvable.' })
+
+    const token = signToken(user)
+    res.json({
+      token,
+      user: { id: user.id, username: user.username, nom: user.nom, email: user.email, orgRole: user.orgRole },
+      organization: {
+        id: user.organization.id,
+        name: user.organization.name,
+        slug: user.organization.slug,
+        isPersonal: user.organization.isPersonal,
+        memberCount: user.organization._count.users,
+      },
+    })
+  } catch (e) {
+    console.error('[POST /api/auth/google/exchange]', e)
     res.status(500).json({ error: 'Erreur serveur.' })
   }
 })

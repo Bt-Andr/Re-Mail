@@ -16,10 +16,16 @@ function isManager(orgRole: string): boolean {
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const db = forOrg(req.user!.organizationId)
-    const { canal, status, folder, q, take, skip } = req.query
+    const { canal, status, folder, q, take, skip, account } = req.query
     const where: Record<string, unknown> = {}
     if (canal) where.canal = canal
     if (status) where.status = status
+    // Switcher de compte (voir routes/accounts.ts) : 'resend' = fils sans boîte externe
+    // d'origine (sourceId null, webhook Resend/compose sortant) ; sinon un
+    // ExternalMailboxConnection.id précis. Absent = tous les fils, "Toutes les boîtes".
+    if (typeof account === 'string' && account) {
+      where.sourceId = account === 'resend' ? null : account
+    }
 
     // Dossiers : inbox (reçus), sent (envoyés), archive, trash (corbeille).
     // Archive et trash sont mutuellement exclusifs (voir /:id/trash qui efface

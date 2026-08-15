@@ -109,3 +109,46 @@ describe('GET /api/threads — recherche, pagination, non-lu', () => {
     await cleanupOrg(otherOrg.organizationId)
   })
 })
+
+describe('GET /api/threads — filtre par compte (?account=)', () => {
+  let org: SeededOrg
+
+  beforeAll(async () => {
+    org = await seedOrg('threads-account-filter')
+  })
+
+  afterAll(async () => {
+    await cleanupOrg(org.organizationId)
+  })
+
+  it('isole les fils par ExternalMailboxConnection.id, un sentinel "resend" pour sourceId:null, et renvoie tout sans le paramètre', async () => {
+    const connection = await prisma.externalMailboxConnection.create({
+      data: {
+        organizationId: org.organizationId,
+        userId: org.userId,
+        provider: 'gmail',
+        email: 'compte-gmail@example.com',
+        imapHost: 'imap.gmail.com',
+        smtpHost: 'smtp.gmail.com',
+        credentialEnc: 'irrelevant',
+      },
+    })
+    const fromMailbox = await createThread(org, { sujet: 'Depuis Gmail', sourceId: connection.id, sourceType: 'gmail' })
+    const fromResend = await createThread(org, { sujet: 'Depuis Resend', sourceId: null })
+
+    const byMailbox = await request(app).get(`/api/threads?folder=inbox&account=${connection.id}`).set('Authorization', `Bearer ${org.token}`)
+    const mailboxIds = byMailbox.body.map((t: { id: string }) => t.id)
+    expect(mailboxIds).toContain(fromMailbox.id)
+    expect(mailboxIds).not.toContain(fromResend.id)
+
+    const byResend = await request(app).get('/api/threads?folder=inbox&account=resend').set('Authorization', `Bearer ${org.token}`)
+    const resendIds = byResend.body.map((t: { id: string }) => t.id)
+    expect(resendIds).toContain(fromResend.id)
+    expect(resendIds).not.toContain(fromMailbox.id)
+
+    const unfiltered = await request(app).get('/api/threads?folder=inbox').set('Authorization', `Bearer ${org.token}`)
+    const unfilteredIds = unfiltered.body.map((t: { id: string }) => t.id)
+    expect(unfilteredIds).toContain(fromMailbox.id)
+    expect(unfilteredIds).toContain(fromResend.id)
+  })
+})

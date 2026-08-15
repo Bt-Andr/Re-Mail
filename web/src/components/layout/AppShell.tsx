@@ -3,7 +3,7 @@ import { Archive, Inbox, Mail, Send, Trash2, Settings, LogOut, AlertTriangle } f
 import { useSession } from '../../context/SessionContext'
 import { useOrganization } from '../../hooks/useOrganization'
 import { useAccountContext } from '../../hooks/useAccountContext'
-import { displayName } from '../../lib/session'
+import { AccountSwitcher } from './AccountSwitcher'
 
 // Sidebar = uniquement la messagerie (comme Gmail : les dossiers sont la nav, pas
 // une page "Boîte de réception" avec des onglets internes). L'administration
@@ -17,7 +17,7 @@ const MAIL_ITEMS = [
 ]
 
 export function AppShell() {
-  const { user, organization, logout } = useSession()
+  const { logout } = useSession()
   const { organization: orgStatus, error: orgError, refetch: refetchOrgStatus } = useOrganization()
   const { isManager, isPersonal } = useAccountContext()
 
@@ -30,10 +30,7 @@ export function AppShell() {
           <img src="/web-app-manifest-192x192.png" alt="Re-Mail" className="w-8 h-8 rounded-md flex-shrink-0" />
           <span className="hidden lg:inline font-bold text-base tracking-tight">Re-Mail</span>
         </div>
-        <div className="hidden lg:block px-5 py-3 border-b border-border">
-          <p className="font-medium text-foreground text-sm truncate">{organization?.name ?? '...'}</p>
-          <p className="text-xs text-muted-foreground truncate">{user ? displayName(user) : ''}</p>
-        </div>
+        <AccountSwitcher />
         <nav className="flex-1 px-2 lg:px-3 py-4 space-y-1">
           {MAIL_ITEMS.map(item => (
             <NavLink

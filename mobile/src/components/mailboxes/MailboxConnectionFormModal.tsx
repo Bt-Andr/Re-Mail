@@ -8,25 +8,36 @@ import { Button } from '../ui/Button';
 
 const EMPTY = { email: '', imapHost: '', imapPort: '993', imapSecure: true, smtpHost: '', smtpPort: '465', smtpSecure: true, password: '' };
 
+// Préréglages hôte/port par fournisseur — réduit la friction de saisie pour l'écran
+// "ajouter un compte" (voir ProviderPickerSheet). Pas d'OAuth pour ces fournisseurs
+// (seul Google en a un, voir connectGmail dans mailboxes.tsx) : ça reste le connecteur
+// IMAP générique, juste avec les champs serveur déjà remplis.
+export const MAILBOX_PRESETS: Record<string, Partial<typeof EMPTY>> = {
+  outlook: { imapHost: 'outlook.office365.com', imapPort: '993', smtpHost: 'smtp.office365.com', smtpPort: '587' },
+  yahoo: { imapHost: 'imap.mail.yahoo.com', imapPort: '993', smtpHost: 'smtp.mail.yahoo.com', smtpPort: '465' },
+  exchange: { imapHost: 'outlook.office365.com', imapPort: '993', smtpHost: 'smtp.office365.com', smtpPort: '587' },
+};
+
 interface MailboxConnectionFormModalProps {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
+  preset?: Partial<typeof EMPTY>;
 }
 
 // Pas d'edit ici (contrairement à MailRouteFormModal) : changer les identifiants d'une
 // boîte externe, c'est en reconnecter une — plus simple de supprimer et recréer.
-export function MailboxConnectionFormModal({ open, onClose, onSaved }: MailboxConnectionFormModalProps) {
+export function MailboxConnectionFormModal({ open, onClose, onSaved, preset }: MailboxConnectionFormModalProps) {
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setForm(EMPTY);
+      setForm({ ...EMPTY, ...preset });
       setError('');
     }
-  }, [open]);
+  }, [open, preset]);
 
   const canSubmit = form.email.trim() && form.imapHost.trim() && form.smtpHost.trim() && form.password;
 

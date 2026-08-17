@@ -3,6 +3,7 @@ import { apiFetch, parseError } from '../../../lib/apiClient'
 import { Input } from '../../../components/ui/Input'
 import { Select } from '../../../components/ui/Select'
 import { Button } from '../../../components/ui/Button'
+import { Callout } from '../../../components/ui/Callout'
 
 export function SelectDomainStep({ verifiedDomains, onDone }: { verifiedDomains: string[] | null; onDone: () => void }) {
   const [domain, setDomain] = useState(verifiedDomains?.[0] ?? '')
@@ -32,9 +33,9 @@ export function SelectDomainStep({ verifiedDomains, onDone }: { verifiedDomains:
         <p className="text-xs text-muted-foreground">Le domaine déjà vérifié dans votre compte Resend, utilisé pour envoyer/recevoir vos emails.</p>
       </div>
 
-      <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+      <Callout icon={false}>
         Si ce domaine a déjà des emails ailleurs (Gmail, Outlook, un autre hébergeur...), la réception Resend entrera en conflit avec les enregistrements MX existants — un domaine ne peut avoir qu'un seul jeu de MX actif. Utilisez plutôt un sous-domaine dédié (ex. mail.votredomaine.com) pour ne pas perturber vos boîtes actuelles.
-      </p>
+      </Callout>
 
       {verifiedDomains && verifiedDomains.length > 0 ? (
         <Select label="Domaine vérifié" value={domain} onChange={e => setDomain(e.target.value)} required>
@@ -45,9 +46,9 @@ export function SelectDomainStep({ verifiedDomains, onDone }: { verifiedDomains:
       ) : (
         <>
           {verifiedDomains && verifiedDomains.length === 0 && (
-            <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+            <Callout icon={false}>
               Aucun domaine vérifié trouvé dans votre compte Resend. Vérifiez-en un dans votre dashboard Resend, puis revenez ici.
-            </p>
+            </Callout>
           )}
           <Input
             label="Nom de domaine"

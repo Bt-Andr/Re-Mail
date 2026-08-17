@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { AtSign, Pencil, Trash2, Plus, Upload } from 'lucide-react'
 import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useToast } from '../../context/ToastContext'
+import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Spinner } from '../../components/ui/Spinner'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -120,12 +121,8 @@ export function MailRoutesPage() {
                 )}
                 {route.displayName && <span className="text-xs text-muted-foreground/80">({route.displayName})</span>}
               </div>
-              <button
-                type="button"
-                onClick={() => toggleActive(route)}
-                className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs ${route.active ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}
-              >
-                {route.active ? 'Active' : 'Inactive'}
+              <button type="button" onClick={() => toggleActive(route)} className="mt-1 block">
+                <Badge color={route.active ? 'green' : 'gray'}>{route.active ? 'Active' : 'Inactive'}</Badge>
               </button>
             </div>
             <button type="button" title="Modifier" onClick={() => setModal({ open: true, editing: route })} className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors">

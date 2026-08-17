@@ -4,6 +4,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { useColorScheme } from 'nativewind';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Archive, ArchiveRestore, Check, Star, Trash2, Undo2 } from 'lucide-react-native';
+import { icons, statusClassName } from '@re-mail/design-tokens';
 import { avatarColor, formatRelativeTime, initials, stripHtml } from '../../lib/format';
 import { archiveThread, restoreThread, setThreadStarred, trashThread, unarchiveThread } from '../../api/threads';
 import type { Thread, ThreadFolder } from '../../types/api';
@@ -16,12 +17,6 @@ const STATUS_LABEL: Record<Thread['status'], string> = {
   nouveau: 'Nouveau',
   en_cours: 'En cours',
   resolu: 'Résolu',
-};
-
-const STATUS_CLASS: Record<Thread['status'], string> = {
-  nouveau: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
-  en_cours: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
-  resolu: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
 };
 
 // Actions révélées au swipe, par dossier — même convention que web (bouton dans le
@@ -99,7 +94,7 @@ export function ThreadListItem({
           style={{ backgroundColor: config.bg }}
           className="h-full w-full items-center justify-center gap-1 rounded-lg"
         >
-          <config.icon size={18} color="#fff" />
+          <config.icon size={icons.swipeAction.sm} color="#fff" />
           <Text className="text-[10px] font-medium text-white">{config.label}</Text>
         </Pressable>
       </Animated.View>
@@ -146,7 +141,7 @@ export function ThreadListItem({
               {formatRelativeTime(thread.updatedAt)}
             </Text>
             <Pressable hitSlop={8} onPress={() => starMutation.mutate(!thread.starred)}>
-              <Star size={16} color={thread.starred ? '#f59e0b' : '#9ca3af'} fill={thread.starred ? '#f59e0b' : 'none'} />
+              <Star size={icons.inlineStatus.sm} color={thread.starred ? '#f59e0b' : '#9ca3af'} fill={thread.starred ? '#f59e0b' : 'none'} />
             </Pressable>
           </View>
           <Text numberOfLines={1} className={`text-sm ${unread ? 'text-neutral-900 dark:text-neutral-100' : 'text-neutral-500 dark:text-neutral-400'}`}>
@@ -158,8 +153,8 @@ export function ThreadListItem({
             </Text>
           )}
           <View className="mt-1 flex-row items-center gap-2">
-            <View className={`rounded-full px-2 py-0.5 ${STATUS_CLASS[thread.status]}`}>
-              <Text className={`text-[10px] font-medium ${STATUS_CLASS[thread.status]}`}>{STATUS_LABEL[thread.status]}</Text>
+            <View className={`rounded-full px-2 py-0.5 ${statusClassName[thread.status]}`}>
+              <Text className={`text-[10px] font-medium ${statusClassName[thread.status]}`}>{STATUS_LABEL[thread.status]}</Text>
             </View>
             {thread.assignedTo && (
               <Text className="text-[11px] text-neutral-400 dark:text-neutral-500">→ {thread.assignedTo.nom}</Text>

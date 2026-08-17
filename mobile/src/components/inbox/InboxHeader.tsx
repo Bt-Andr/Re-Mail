@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import type { DrawerHeaderProps } from 'expo-router/drawer';
 import { Menu, Search, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
+import { colors, icons } from '@re-mail/design-tokens';
 import { useSession } from '../../context/SessionContext';
 import { useInboxSearch } from '../../context/InboxSearchContext';
 import { useAccountSwitcher } from '../../context/AccountSwitcherContext';
@@ -30,12 +31,12 @@ export function InboxHeader({ navigation }: DrawerHeaderProps) {
       className="flex-row items-center gap-2.5 border-b border-neutral-200 bg-white px-3.5 pb-4 dark:border-neutral-800 dark:bg-neutral-950"
     >
       <Pressable onPress={() => navigation.toggleDrawer()} hitSlop={8} className="p-2">
-        <Menu size={24} color={isDark ? '#f5f5f5' : '#111827'} />
+        <Menu size={icons.nav} color={isDark ? colors.dark.foreground : colors.light.foreground} />
       </Pressable>
 
       <View className="relative flex-1">
         <View className="pointer-events-none absolute left-3.5 top-0 h-full justify-center">
-          <Search size={16} color={isDark ? '#8b93a1' : '#6b7280'} />
+          <Search size={icons.inlineStatus.sm} color={isDark ? colors.dark.mutedForeground : colors.light.mutedForeground} />
         </View>
         <TextInput
           value={search}
@@ -46,7 +47,7 @@ export function InboxHeader({ navigation }: DrawerHeaderProps) {
         />
         {search.length > 0 && (
           <Pressable onPress={() => setSearch('')} className="absolute right-3.5 top-0 h-full justify-center">
-            <X size={15} color={isDark ? '#8b93a1' : '#6b7280'} />
+            <X size={icons.inlineStatus.sm} color={isDark ? colors.dark.mutedForeground : colors.light.mutedForeground} />
           </Pressable>
         )}
       </View>

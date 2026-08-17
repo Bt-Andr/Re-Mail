@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useColorScheme } from 'nativewind';
 import { Archive, ArchiveRestore, Tag, Trash2, Undo2, X } from 'lucide-react-native';
+import { colors, icons } from '@re-mail/design-tokens';
 import { useAccountContext } from '../../hooks/useAccountContext';
 import { Modal } from '../ui/Modal';
 import type { BulkPatch } from '../../api/threads';
@@ -29,33 +30,33 @@ export function SelectionBar({
   onAction: (patch: BulkPatch) => void;
 }) {
   const { colorScheme } = useColorScheme();
-  const iconColor = colorScheme === 'dark' ? '#f5f5f5' : '#111827';
+  const iconColor = colorScheme === 'dark' ? colors.dark.foreground : colors.light.foreground;
   const [statusOpen, setStatusOpen] = useState(false);
   const { isSoloTeam } = useAccountContext();
 
   return (
     <View className="flex-row items-center gap-3 border-b border-neutral-200 px-4 pb-3 pt-3 dark:border-neutral-800">
       <Pressable onPress={onClear} hitSlop={8}>
-        <X size={20} color={iconColor} />
+        <X size={icons.swipeAction.sm} color={iconColor} />
       </Pressable>
       <Text className="flex-1 text-sm font-medium text-neutral-900 dark:text-neutral-100">{count} sélectionné{count > 1 ? 's' : ''}</Text>
 
       {folder === 'trash' ? (
         <Pressable onPress={() => onAction({ deletedAt: false })} hitSlop={8}>
-          <Undo2 size={19} color={iconColor} />
+          <Undo2 size={icons.swipeAction.sm} color={iconColor} />
         </Pressable>
       ) : (
         <>
           {!isSoloTeam && (
             <Pressable onPress={() => setStatusOpen(true)} hitSlop={8}>
-              <Tag size={19} color={iconColor} />
+              <Tag size={icons.swipeAction.sm} color={iconColor} />
             </Pressable>
           )}
           <Pressable onPress={() => onAction({ archivedAt: folder !== 'archive' })} hitSlop={8}>
-            {folder === 'archive' ? <ArchiveRestore size={19} color={iconColor} /> : <Archive size={19} color={iconColor} />}
+            {folder === 'archive' ? <ArchiveRestore size={icons.swipeAction.sm} color={iconColor} /> : <Archive size={icons.swipeAction.sm} color={iconColor} />}
           </Pressable>
           <Pressable onPress={() => onAction({ deletedAt: true })} hitSlop={8}>
-            <Trash2 size={19} color="#ef4444" />
+            <Trash2 size={icons.swipeAction.sm} color="#ef4444" />
           </Pressable>
         </>
       )}

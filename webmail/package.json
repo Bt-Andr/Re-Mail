@@ -10,6 +10,7 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
+    "@re-mail/design-tokens": "*",
     "dompurify": "^3.4.13",
     "geist": "^1.7.2",
     "lucide-react": "^0.451.0",

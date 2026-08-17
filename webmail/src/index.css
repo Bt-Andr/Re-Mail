@@ -1,3 +1,5 @@
+@import "../../packages/design-tokens/css-vars.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -27,62 +29,6 @@
 }
 
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
-
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 9%;
-
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
-
-    --accent: 0 0% 94%;
-    --accent-foreground: 0 0% 9%;
-
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 0 0% 89%;
-    --input: 0 0% 87%;
-    --ring: 0 0% 9%;
-
-    --radius: 0.625rem;
-  }
-
-  .dark {
-    --background: 0 0% 5%;
-    --foreground: 0 0% 95%;
-
-    --card: 0 0% 7%;
-    --card-foreground: 0 0% 95%;
-
-    --primary: 0 0% 95%;
-    --primary-foreground: 0 0% 9%;
-
-    --secondary: 0 0% 13%;
-    --secondary-foreground: 0 0% 95%;
-
-    --muted: 0 0% 13%;
-    --muted-foreground: 0 0% 60%;
-
-    --accent: 0 0% 16%;
-    --accent-foreground: 0 0% 95%;
-
-    --destructive: 0 63% 55%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 0 0% 17%;
-    --input: 0 0% 20%;
-    --ring: 0 0% 83%;
-  }
-
   * {
     @apply border-border;
   }

@@ -19,16 +19,42 @@ router.post('/auth/login', async (req, res) => {
 
 router.use(authenticatePlatformAdmin)
 
-router.get('/organizations', async (_req, res) => {
-  const organizations = await prisma.organization.findMany({
+router.get('/summary', async (_req, res) => {
+  const [organizations, users, threads, connectedResend, externalMailboxes] = await prisma.$transaction([
+    prisma.organization.count(), prisma.user.count(), prisma.thread.count(),
+    prisma.organization.count({ where: { resendConnectedAt: { not: null } } }),
+    prisma.externalMailboxConnection.count(),
+  ])
+  res.json({ organizations, users, threads, connectedResend, externalMailboxes })
+})
+
+router.get('/organizations', async (req, res) => {
+  const page = Math.max(1, Number(req.query.page) || 1)
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20))
+  const search = String(req.query.search || '').trim()
+  const where = search ? { OR: [{ name: { contains: search, mode: 'insensitive' as const } }, { companyName: { contains: search, mode: 'insensitive' as const } }, { slug: { contains: search, mode: 'insensitive' as const } }] } : {}
+  const [items, total] = await prisma.$transaction([prisma.organization.findMany({
+    where, skip: (page - 1) * pageSize, take: pageSize,
     orderBy: { createdAt: 'desc' },
     select: {
       id: true, name: true, companyName: true, slug: true, isPersonal: true,
       resendVerifiedDomain: true, resendConnectedAt: true, createdAt: true,
       _count: { select: { users: true, threads: true, mailRoutes: true, externalMailboxConnections: true } },
     },
-  })
-  res.json(organizations)
+  }), prisma.organization.count({ where })])
+  res.json({ items, total, page, pageSize })
+})
+
+router.get('/organizations/:id', async (req, res) => {
+  const organization = await prisma.organization.findUnique({ where: { id: req.params.id }, select: {
+    id:true,name:true,companyName:true,emailContact:true,slug:true,isPersonal:true,resendVerifiedDomain:true,resendConnectedAt:true,createdAt:true,updatedAt:true,
+    users:{orderBy:{createdAt:'desc'},select:{id:true,email:true,username:true,nom:true,orgRole:true,createdAt:true}},
+    mailRoutes:{orderBy:{createdAt:'desc'},select:{id:true,alias:true,personalEmail:true,displayName:true,active:true,createdAt:true}},
+    externalMailboxConnections:{orderBy:{createdAt:'desc'},select:{id:true,email:true,provider:true,status:true,lastError:true,lastPolledAt:true,createdAt:true}},
+    _count:{select:{threads:true,threadMessages:true,userInvites:true}},
+  } })
+  if (!organization) return res.status(404).json({ error: 'Organisation introuvable.' })
+  res.json(organization)
 })
 
 router.get('/users', async (_req, res) => {

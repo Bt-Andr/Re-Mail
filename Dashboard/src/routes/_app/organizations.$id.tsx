@@ -1,0 +1,14 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { Mail, MessageSquare, Route as MailRoute, Users } from "lucide-react";
+import { PageHeader } from "@/components/app/page-header";
+import { KpiCard } from "@/components/app/kpi-card";
+import { SectionCard } from "@/components/app/section-card";
+import { platformRequest, type PlatformOrganizationDetail } from "@/lib/platform-api";
+export const Route=createFileRoute("/_app/organizations/$id")({component:OrganizationDetail});
+function OrganizationDetail(){
+ const {id}=Route.useParams(); const [org,setOrg]=useState<PlatformOrganizationDetail|null>(null); const [error,setError]=useState("");
+ useEffect(()=>{platformRequest<PlatformOrganizationDetail>(`/platform/organizations/${id}`).then(setOrg).catch(e=>setError(e.message))},[id]);
+ if(error)return <p className="p-6 text-destructive">{error}</p>; if(!org)return <p className="p-6 text-muted-foreground">Chargement…</p>;
+ return <div className="mx-auto max-w-[1480px]"><PageHeader title={org.companyName||org.name} description={`${org.slug} · ${org.isPersonal?"Compte personnel":"Organisation d'équipe"}`} actions={<Link to="/organizations" className="text-sm underline">Retour</Link>}/><div className="grid grid-cols-2 gap-4 lg:grid-cols-4"><KpiCard label="Utilisateurs" value={String(org.users.length)} icon={Users}/><KpiCard label="Conversations" value={String(org._count.threads)} icon={MessageSquare}/><KpiCard label="Routes mail" value={String(org.mailRoutes.length)} icon={MailRoute}/><KpiCard label="Boîtes externes" value={String(org.externalMailboxConnections.length)} icon={Mail}/></div><div className="mt-6 grid gap-6 lg:grid-cols-2"><SectionCard title="Utilisateurs" bodyClassName="p-0"><table className="w-full text-sm"><tbody>{org.users.map(u=><tr key={u.id} className="border-b"><td className="px-5 py-3"><b>{u.nom}</b><div className="text-xs text-muted-foreground">{u.email}</div></td><td className="px-5 py-3">{u.orgRole}</td></tr>)}</tbody></table></SectionCard><SectionCard title="Messagerie" bodyClassName="p-5"><p className="text-sm"><b>Resend :</b> {org.resendConnectedAt?(org.resendVerifiedDomain||"connecté"):"non connecté"}</p><div className="mt-4 space-y-2">{org.externalMailboxConnections.map(m=><div key={m.id} className="rounded border p-3 text-sm"><b>{m.email}</b> · {m.provider} · {m.status}{m.lastError&&<div className="text-xs text-destructive">{m.lastError}</div>}</div>)}</div></SectionCard><SectionCard title="Routes mail" bodyClassName="p-0"><table className="w-full text-sm"><tbody>{org.mailRoutes.map(r=><tr key={r.id} className="border-b"><td className="px-5 py-3"><b>{r.alias}</b><div className="text-xs text-muted-foreground">{r.personalEmail}</div></td><td className="px-5 py-3">{r.active?"Active":"Inactive"}</td></tr>)}</tbody></table></SectionCard></div></div>;
+}

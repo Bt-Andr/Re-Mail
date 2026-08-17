@@ -40,10 +40,21 @@ describe('Platform administration', () => {
   it('returns read-only cross-tenant organization metrics', async () => {
     const response = await request(app).get('/api/platform/organizations').set('Authorization', `Bearer ${token}`)
     expect(response.status).toBe(200)
-    const item = response.body.find((candidate: { id: string }) => candidate.id === org.organizationId)
+    const item = response.body.items.find((candidate: { id: string }) => candidate.id === org.organizationId)
     expect(item).toMatchObject({ id: org.organizationId, _count: { users: 1 } })
     expect(item.resendApiKeyEnc).toBeUndefined()
     expect(item.webhookSecretEnc).toBeUndefined()
+  })
+
+  it('returns global metrics and an organization detail without secrets', async () => {
+    const headers = { Authorization: `Bearer ${token}` }
+    const summary = await request(app).get('/api/platform/summary').set(headers)
+    expect(summary.status).toBe(200)
+    expect(summary.body.organizations).toBeGreaterThan(0)
+    const detail = await request(app).get(`/api/platform/organizations/${org.organizationId}`).set(headers)
+    expect(detail.status).toBe(200)
+    expect(detail.body.id).toBe(org.organizationId)
+    expect(detail.body.resendApiKeyEnc).toBeUndefined()
   })
 
   it('returns users without password hashes', async () => {

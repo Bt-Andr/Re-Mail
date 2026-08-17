@@ -30,6 +30,7 @@ import { Route as AppTreasuryRouteImport } from './routes/_app/treasury'
 import { Route as AppUsersRouteImport } from './routes/_app/users'
 import { Route as AppAccountsIdRouteImport } from './routes/_app/accounts.$id'
 import { Route as AppCustomersIdRouteImport } from './routes/_app/customers.$id'
+import { Route as AppOrganizationsIdRouteImport } from './routes/_app/organizations.$id'
 import { Route as AppTransactionsIdRouteImport } from './routes/_app/transactions.$id'
 
 const AppRoute = AppRouteImport.update({
@@ -136,6 +137,11 @@ const AppCustomersIdRoute = AppCustomersIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppCustomersRoute,
 } as any)
+const AppOrganizationsIdRoute = AppOrganizationsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppOrganizationsRoute,
+} as any)
 const AppTransactionsIdRoute = AppTransactionsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -151,7 +157,7 @@ export interface FileRoutesByFullPath {
   '/compliance': typeof AppComplianceRoute
   '/customers': typeof AppCustomersRouteWithChildren
   '/notifications': typeof AppNotificationsRoute
-  '/organizations': typeof AppOrganizationsRoute
+  '/organizations': typeof AppOrganizationsRouteWithChildren
   '/reports': typeof AppReportsRoute
   '/risk': typeof AppRiskRoute
   '/roles': typeof AppRolesRoute
@@ -163,6 +169,7 @@ export interface FileRoutesByFullPath {
   '/users': typeof AppUsersRoute
   '/accounts/$id': typeof AppAccountsIdRoute
   '/customers/$id': typeof AppCustomersIdRoute
+  '/organizations/$id': typeof AppOrganizationsIdRoute
   '/transactions/$id': typeof AppTransactionsIdRoute
 }
 export interface FileRoutesByTo {
@@ -173,7 +180,7 @@ export interface FileRoutesByTo {
   '/compliance': typeof AppComplianceRoute
   '/customers': typeof AppCustomersRouteWithChildren
   '/notifications': typeof AppNotificationsRoute
-  '/organizations': typeof AppOrganizationsRoute
+  '/organizations': typeof AppOrganizationsRouteWithChildren
   '/reports': typeof AppReportsRoute
   '/risk': typeof AppRiskRoute
   '/roles': typeof AppRolesRoute
@@ -186,6 +193,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/accounts/$id': typeof AppAccountsIdRoute
   '/customers/$id': typeof AppCustomersIdRoute
+  '/organizations/$id': typeof AppOrganizationsIdRoute
   '/transactions/$id': typeof AppTransactionsIdRoute
 }
 export interface FileRoutesById {
@@ -198,7 +206,7 @@ export interface FileRoutesById {
   '/_app/compliance': typeof AppComplianceRoute
   '/_app/customers': typeof AppCustomersRouteWithChildren
   '/_app/notifications': typeof AppNotificationsRoute
-  '/_app/organizations': typeof AppOrganizationsRoute
+  '/_app/organizations': typeof AppOrganizationsRouteWithChildren
   '/_app/reports': typeof AppReportsRoute
   '/_app/risk': typeof AppRiskRoute
   '/_app/roles': typeof AppRolesRoute
@@ -211,6 +219,7 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/accounts/$id': typeof AppAccountsIdRoute
   '/_app/customers/$id': typeof AppCustomersIdRoute
+  '/_app/organizations/$id': typeof AppOrganizationsIdRoute
   '/_app/transactions/$id': typeof AppTransactionsIdRoute
 }
 export interface FileRouteTypes {
@@ -236,6 +245,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/accounts/$id'
     | '/customers/$id'
+    | '/organizations/$id'
     | '/transactions/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -259,6 +269,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accounts/$id'
     | '/customers/$id'
+    | '/organizations/$id'
     | '/transactions/$id'
   id:
     | '__root__'
@@ -283,6 +294,7 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/accounts/$id'
     | '/_app/customers/$id'
+    | '/_app/organizations/$id'
     | '/_app/transactions/$id'
   fileRoutesById: FileRoutesById
 }
@@ -440,6 +452,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCustomersIdRouteImport
       parentRoute: typeof AppCustomersRoute
     }
+    '/_app/organizations/$id': {
+      id: '/_app/organizations/$id'
+      path: '/$id'
+      fullPath: '/organizations/$id'
+      preLoaderRoute: typeof AppOrganizationsIdRouteImport
+      parentRoute: typeof AppOrganizationsRoute
+    }
     '/_app/transactions/$id': {
       id: '/_app/transactions/$id'
       path: '/$id'
@@ -474,6 +493,17 @@ const AppCustomersRouteWithChildren = AppCustomersRoute._addFileChildren(
   AppCustomersRouteChildren,
 )
 
+interface AppOrganizationsRouteChildren {
+  AppOrganizationsIdRoute: typeof AppOrganizationsIdRoute
+}
+
+const AppOrganizationsRouteChildren: AppOrganizationsRouteChildren = {
+  AppOrganizationsIdRoute: AppOrganizationsIdRoute,
+}
+
+const AppOrganizationsRouteWithChildren =
+  AppOrganizationsRoute._addFileChildren(AppOrganizationsRouteChildren)
+
 interface AppTransactionsRouteChildren {
   AppTransactionsIdRoute: typeof AppTransactionsIdRoute
 }
@@ -493,7 +523,7 @@ interface AppRouteChildren {
   AppComplianceRoute: typeof AppComplianceRoute
   AppCustomersRoute: typeof AppCustomersRouteWithChildren
   AppNotificationsRoute: typeof AppNotificationsRoute
-  AppOrganizationsRoute: typeof AppOrganizationsRoute
+  AppOrganizationsRoute: typeof AppOrganizationsRouteWithChildren
   AppReportsRoute: typeof AppReportsRoute
   AppRiskRoute: typeof AppRiskRoute
   AppRolesRoute: typeof AppRolesRoute
@@ -513,7 +543,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppComplianceRoute: AppComplianceRoute,
   AppCustomersRoute: AppCustomersRouteWithChildren,
   AppNotificationsRoute: AppNotificationsRoute,
-  AppOrganizationsRoute: AppOrganizationsRoute,
+  AppOrganizationsRoute: AppOrganizationsRouteWithChildren,
   AppReportsRoute: AppReportsRoute,
   AppRiskRoute: AppRiskRoute,
   AppRolesRoute: AppRolesRoute,

@@ -16,6 +16,7 @@ import {
   KeyRound,
   Settings,
   Bell,
+  Building2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -38,7 +39,10 @@ type Group = { label: string; items: Item[] };
 const GROUPS: Group[] = [
   {
     label: "Vue d'ensemble",
-    items: [{ title: "Tableau de bord", url: "/", icon: LayoutDashboard, area: "overview" }],
+    items: [
+      { title: "Tableau de bord", url: "/", icon: LayoutDashboard, area: "overview" },
+      { title: "Organisations", url: "/organizations", icon: Building2, area: "users" },
+    ],
   },
   {
     label: "Opérations",
@@ -97,7 +101,7 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold text-sidebar-foreground">Northwind Bank</span>
+              <span className="text-sm font-semibold text-sidebar-foreground">Re-Mail</span>
               <span className="text-[11px] text-sidebar-foreground/60">Back-office · v2.4</span>
             </div>
           )}

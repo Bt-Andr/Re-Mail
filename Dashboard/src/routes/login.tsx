@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Lock, Mail, ShieldCheck, Eye, EyeOff } from "lucide-react";
+import { platformRequest, savePlatformToken } from "@/lib/platform-api";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -18,13 +19,13 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("amina.m@northwind-bank.io");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!email || !password) {
@@ -32,10 +33,15 @@ function LoginPage() {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const result = await platformRequest<{ token: string }>("/platform/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+      savePlatformToken(result.token);
       setLoading(false);
       navigate({ to: "/" });
-    }, 600);
+    } catch (cause) {
+      setLoading(false);
+      setError(cause instanceof Error ? cause.message : "Connexion impossible.");
+    }
   };
 
   return (

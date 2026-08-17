@@ -18,6 +18,7 @@ import { Route as AppCardsRouteImport } from './routes/_app/cards'
 import { Route as AppComplianceRouteImport } from './routes/_app/compliance'
 import { Route as AppCustomersRouteImport } from './routes/_app/customers'
 import { Route as AppNotificationsRouteImport } from './routes/_app/notifications'
+import { Route as AppOrganizationsRouteImport } from './routes/_app/organizations'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppRiskRouteImport } from './routes/_app/risk'
 import { Route as AppRolesRouteImport } from './routes/_app/roles'
@@ -73,6 +74,11 @@ const AppCustomersRoute = AppCustomersRouteImport.update({
 const AppNotificationsRoute = AppNotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrganizationsRoute = AppOrganizationsRouteImport.update({
+  id: '/organizations',
+  path: '/organizations',
   getParentRoute: () => AppRoute,
 } as any)
 const AppReportsRoute = AppReportsRouteImport.update({
@@ -145,6 +151,7 @@ export interface FileRoutesByFullPath {
   '/compliance': typeof AppComplianceRoute
   '/customers': typeof AppCustomersRouteWithChildren
   '/notifications': typeof AppNotificationsRoute
+  '/organizations': typeof AppOrganizationsRoute
   '/reports': typeof AppReportsRoute
   '/risk': typeof AppRiskRoute
   '/roles': typeof AppRolesRoute
@@ -166,6 +173,7 @@ export interface FileRoutesByTo {
   '/compliance': typeof AppComplianceRoute
   '/customers': typeof AppCustomersRouteWithChildren
   '/notifications': typeof AppNotificationsRoute
+  '/organizations': typeof AppOrganizationsRoute
   '/reports': typeof AppReportsRoute
   '/risk': typeof AppRiskRoute
   '/roles': typeof AppRolesRoute
@@ -190,6 +198,7 @@ export interface FileRoutesById {
   '/_app/compliance': typeof AppComplianceRoute
   '/_app/customers': typeof AppCustomersRouteWithChildren
   '/_app/notifications': typeof AppNotificationsRoute
+  '/_app/organizations': typeof AppOrganizationsRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/risk': typeof AppRiskRoute
   '/_app/roles': typeof AppRolesRoute
@@ -215,6 +224,7 @@ export interface FileRouteTypes {
     | '/compliance'
     | '/customers'
     | '/notifications'
+    | '/organizations'
     | '/reports'
     | '/risk'
     | '/roles'
@@ -236,6 +246,7 @@ export interface FileRouteTypes {
     | '/compliance'
     | '/customers'
     | '/notifications'
+    | '/organizations'
     | '/reports'
     | '/risk'
     | '/roles'
@@ -259,6 +270,7 @@ export interface FileRouteTypes {
     | '/_app/compliance'
     | '/_app/customers'
     | '/_app/notifications'
+    | '/_app/organizations'
     | '/_app/reports'
     | '/_app/risk'
     | '/_app/roles'
@@ -342,6 +354,13 @@ declare module '@tanstack/react-router' {
       path: '/notifications'
       fullPath: '/notifications'
       preLoaderRoute: typeof AppNotificationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/organizations': {
+      id: '/_app/organizations'
+      path: '/organizations'
+      fullPath: '/organizations'
+      preLoaderRoute: typeof AppOrganizationsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/reports': {
@@ -474,6 +493,7 @@ interface AppRouteChildren {
   AppComplianceRoute: typeof AppComplianceRoute
   AppCustomersRoute: typeof AppCustomersRouteWithChildren
   AppNotificationsRoute: typeof AppNotificationsRoute
+  AppOrganizationsRoute: typeof AppOrganizationsRoute
   AppReportsRoute: typeof AppReportsRoute
   AppRiskRoute: typeof AppRiskRoute
   AppRolesRoute: typeof AppRolesRoute
@@ -493,6 +513,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppComplianceRoute: AppComplianceRoute,
   AppCustomersRoute: AppCustomersRouteWithChildren,
   AppNotificationsRoute: AppNotificationsRoute,
+  AppOrganizationsRoute: AppOrganizationsRoute,
   AppReportsRoute: AppReportsRoute,
   AppRiskRoute: AppRiskRoute,
   AppRolesRoute: AppRolesRoute,

@@ -1,15 +1,19 @@
-import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app/app-sidebar";
 import { AppHeader } from "@/components/app/app-header";
 import { RoleProvider } from "@/lib/role-context";
 import { RouteTransitionBar } from "@/components/app/route-transition";
+import { hasPlatformToken } from "@/lib/platform-api";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
 });
 
 function AppLayout() {
+  const navigate = useNavigate();
+  useEffect(() => { if (!hasPlatformToken()) navigate({ to: "/login" }); }, [navigate]);
   const key = useRouterState({ select: (s) => s.location.pathname });
 
   return (

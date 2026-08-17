@@ -10,6 +10,7 @@ declare global {
         orgRole: 'OWNER' | 'ADMIN' | 'MEMBER'
         nom?: string
       }
+      platformAdmin?: { id: string; email: string; name: string }
       rawBody?: Buffer
     }
   }

@@ -13,6 +13,7 @@ const config = {
   databaseUrl: process.env.DATABASE_URL,
 
   jwtSecret: required('JWT_SECRET'),
+  platformAdminJwtSecret: process.env.PLATFORM_ADMIN_JWT_SECRET || required('JWT_SECRET'),
   masterEncryptionKey: required('MASTER_ENCRYPTION_KEY'),
   // Clé dédiée aux fichiers d'invitation d'activation (voir src/lib/inviteFileCrypto.ts) —
   // volontairement distincte de MASTER_ENCRYPTION_KEY.

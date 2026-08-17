@@ -5,10 +5,18 @@ de `web/`, qui est le dashboard *par organisation*). Il n'existait jusqu'ici
 aucun outil pour opérer la plateforme au-delà d'une organisation — c'est le rôle
 de cette app une fois branchée.
 
-**État actuel : scaffold nettoyé, pas encore branché.** Le contenu (transactions,
-comptes, KYC, "Northwind Bank"...) est un placeholder de démo généré à l'origine
-avec Lovable — à remplacer page par page par de vraies données plateforme
-(organisations, utilisateurs, mail routes, etc.) lors du branchement.
+**État actuel : branchement progressif.** L'authentification plateforme et les pages
+Organisations / Utilisateurs utilisent les API réelles en lecture seule. Les autres
+pages bancaires restent des placeholders à remplacer progressivement.
+
+Créer ou réinitialiser le premier administrateur sans mettre son mot de passe dans Git :
+
+```bash
+PLATFORM_ADMIN_EMAIL=admin@example.com \
+PLATFORM_ADMIN_PASSWORD='mot-de-passe-long' \
+PLATFORM_ADMIN_NAME='Admin Re-Mail' \
+npm run platform-admin:create
+```
 
 ## Stack
 

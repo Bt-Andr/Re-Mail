@@ -13,8 +13,8 @@ export function NoSendersNotice() {
         {isManager ? (
           <>
             Aucune adresse d'expédition disponible.{' '}
-            <Link to="/onboarding" className="underline font-medium">Connectez Resend</Link> et{' '}
-            <Link to="/settings/mail-routes" className="underline font-medium">créez une adresse</Link> pour pouvoir écrire.
+            <Link to="/mailboxes" className="underline font-medium">Connectez Resend</Link> et{' '}
+            <a href={`${import.meta.env.VITE_ADMIN_URL}/settings/mail-routes`} className="underline font-medium">créez une adresse</a> pour pouvoir écrire.
           </>
         ) : (
           "Aucune adresse d'expédition ne vous est attribuée. Demandez à un administrateur de vous en accorder une."

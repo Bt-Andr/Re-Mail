@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.jeprogroup.remail",
+      "sha256_cert_fingerprints": [
+        "AD:4A:08:33:B8:DA:89:B8:2E:78:33:8D:A9:7A:BA:0E:BD:14:58:C2:EF:1C:85:F4:CC:1C:80:AA:E4:84:57:4C"
+      ]
+    }
+  }
+]

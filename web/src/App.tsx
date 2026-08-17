@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { SessionProvider } from './context/SessionContext'
-import { AccountSwitcherProvider } from './context/AccountSwitcherContext'
 import { ToastProvider } from './context/ToastContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { ThemeToggle } from './components/ui/ThemeToggle'
@@ -8,21 +7,16 @@ import { useGlobalScrollFade } from './hooks/useGlobalScrollFade'
 import { AuthGuard } from './components/layout/AuthGuard'
 import { GuestGuard } from './components/layout/GuestGuard'
 import { RoleGuard } from './components/layout/RoleGuard'
-import { AppShell } from './components/layout/AppShell'
 import { LoginPage } from './features/auth/LoginPage'
-import { SignupPage } from './features/auth/SignupPage'
-import { GoogleCallbackPage } from './features/auth/GoogleCallbackPage'
-import { ActivatePage } from './features/activate/ActivatePage'
 import { MailRoutesPage } from './features/mailRoutes/MailRoutesPage'
-import { ExternalMailboxesPage } from './features/mailboxes/ExternalMailboxesPage'
-import { InboxPage } from './features/inbox/InboxPage'
-import { InboxPlaceholder } from './features/inbox/InboxPlaceholder'
-import { ThreadDetailPane } from './features/inbox/ThreadDetailPane'
 import { InvitesPage } from './features/invites/InvitesPage'
 import { UsersPage } from './features/users/UsersPage'
 import { SettingsLayout } from './features/settings/SettingsLayout'
 import { OrgSettingsPage } from './features/settings/OrgSettingsPage'
 
+// App admin : réservée aux OWNER/ADMIN d'une organisation d'équipe existante — la
+// messagerie (inbox/mailboxes/activate/signup) vit désormais dans webmail/, une SPA
+// déployée séparément (voir RoleGuard pour le renvoi cross-app d'un MEMBER refusé ici).
 export default function App() {
   useGlobalScrollFade()
 
@@ -32,50 +26,25 @@ export default function App() {
       <BrowserRouter>
         <ToastProvider>
           <SessionProvider>
-            <AccountSwitcherProvider>
             <Routes>
-              <Route path="/activate" element={<ActivatePage />} />
-              <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
-
               <Route element={<GuestGuard />}>
                 <Route path="/login" element={<LoginPage />} />
-                <Route path="/signup" element={<SignupPage />} />
               </Route>
 
               <Route element={<AuthGuard />}>
-                <Route element={<AppShell />}>
-                  <Route path="/inbox" element={<InboxPage folder="inbox" />}>
-                    <Route index element={<InboxPlaceholder />} />
-                    <Route path=":threadId" element={<ThreadDetailPane />} />
-                  </Route>
-                  <Route path="/sent" element={<InboxPage folder="sent" />}>
-                    <Route index element={<InboxPlaceholder />} />
-                    <Route path=":threadId" element={<ThreadDetailPane />} />
-                  </Route>
-                  <Route path="/archive" element={<InboxPage folder="archive" />}>
-                    <Route index element={<InboxPlaceholder />} />
-                    <Route path=":threadId" element={<ThreadDetailPane />} />
-                  </Route>
-                  <Route path="/trash" element={<InboxPage folder="trash" />}>
-                    <Route index element={<InboxPlaceholder />} />
-                    <Route path=":threadId" element={<ThreadDetailPane />} />
-                  </Route>
-                  <Route path="/mailboxes" element={<ExternalMailboxesPage />} />
-                  <Route element={<RoleGuard allow={['OWNER', 'ADMIN']} />}>
-                    <Route path="/settings" element={<SettingsLayout />}>
-                      <Route index element={<Navigate to="organization" replace />} />
-                      <Route path="organization" element={<OrgSettingsPage />} />
-                      <Route path="mail-routes" element={<MailRoutesPage />} />
-                      <Route path="invites" element={<InvitesPage />} />
-                      <Route path="users" element={<UsersPage />} />
-                    </Route>
+                <Route element={<RoleGuard allow={['OWNER', 'ADMIN']} />}>
+                  <Route path="/settings" element={<SettingsLayout />}>
+                    <Route index element={<Navigate to="organization" replace />} />
+                    <Route path="organization" element={<OrgSettingsPage />} />
+                    <Route path="mail-routes" element={<MailRoutesPage />} />
+                    <Route path="invites" element={<InvitesPage />} />
+                    <Route path="users" element={<UsersPage />} />
                   </Route>
                 </Route>
               </Route>
 
-              <Route path="*" element={<Navigate to="/inbox" replace />} />
+              <Route path="*" element={<Navigate to="/settings/organization" replace />} />
             </Routes>
-            </AccountSwitcherProvider>
           </SessionProvider>
         </ToastProvider>
       </BrowserRouter>

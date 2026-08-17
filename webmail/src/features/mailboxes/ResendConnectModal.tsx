@@ -7,9 +7,9 @@ import { Spinner } from '../../components/ui/Spinner'
 import { apiFetch, parseError } from '../../lib/apiClient'
 import { useSession } from '../../context/SessionContext'
 import { useOrganization } from '../../hooks/useOrganization'
-import { ConnectResendStep } from '../onboarding/steps/ConnectResendStep'
-import { SelectDomainStep } from '../onboarding/steps/SelectDomainStep'
-import { WebhookSecretStep } from '../onboarding/steps/WebhookSecretStep'
+import { ConnectResendStep } from './resendSteps/ConnectResendStep'
+import { SelectDomainStep } from './resendSteps/SelectDomainStep'
+import { WebhookSecretStep } from './resendSteps/WebhookSecretStep'
 
 // Réutilise telles quelles les étapes de l'onboarding (déjà autonomes : juste
 // organization + onDone, aucune extraction nécessaire) dans un flux indépendant

@@ -1,5 +1,74 @@
 /*
- * Placeholder — will hold the canonical HSL :root / .dark CSS variable block
- * currently hand-duplicated in web/src/index.css (lines ~30-84).
- * Stub pending a follow-up track that consolidates the real values here.
+ * Canonical HSL :root / .dark CSS variable block.
+ *
+ * Ported verbatim from web/src/index.css's `@layer base` rule (lines ~30-84 as of
+ * this writing) — that file is NOT modified by this track (a parallel track is
+ * actively working in web/ and webmail/). This is the values' new canonical home;
+ * a later track points web/'s and webmail/'s stylesheets at this file instead of
+ * their own hand-authored copy.
+ *
+ * Values here MUST match src/colors.ts's `colorTokens` exactly — colors.ts documents
+ * the same triplets as plain JS/TS for consumers without a CSS-var mechanism (React
+ * Native). If you change a value here, change it there too.
+ *
+ * Deliberately NOT wrapped in `@layer base` here: this file doesn't know which
+ * `@tailwind base` / cascade layer setup the consuming app uses. The app that
+ * imports this file is responsible for placing it appropriately (e.g. inside its
+ * own `@layer base` block, or importing it before Tailwind's own layers).
  */
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 9%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 9%;
+
+  --primary: 0 0% 9%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 9%;
+
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 45%;
+
+  --accent: 0 0% 94%;
+  --accent-foreground: 0 0% 9%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 0 0% 89%;
+  --input: 0 0% 87%;
+  --ring: 0 0% 9%;
+
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: 0 0% 5%;
+  --foreground: 0 0% 95%;
+
+  --card: 0 0% 7%;
+  --card-foreground: 0 0% 95%;
+
+  --primary: 0 0% 95%;
+  --primary-foreground: 0 0% 9%;
+
+  --secondary: 0 0% 13%;
+  --secondary-foreground: 0 0% 95%;
+
+  --muted: 0 0% 13%;
+  --muted-foreground: 0 0% 60%;
+
+  --accent: 0 0% 16%;
+  --accent-foreground: 0 0% 95%;
+
+  --destructive: 0 63% 55%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 0 0% 17%;
+  --input: 0 0% 20%;
+  --ring: 0 0% 83%;
+}

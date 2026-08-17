@@ -7,8 +7,10 @@ import { AccountSwitcher } from './AccountSwitcher'
 
 // Sidebar = uniquement la messagerie (comme Gmail : les dossiers sont la nav, pas
 // une page "Boîte de réception" avec des onglets internes). L'administration
-// (Adresses mail/Invitations/Utilisateurs/Organisation) est regroupée derrière
-// l'icône Paramètres tout en bas, visible seulement OWNER/ADMIN — voir SettingsLayout.
+// (Adresses mail/Invitations/Utilisateurs/Organisation) vit dans web/, une SPA admin
+// déployée séparément depuis la scission en deux apps — le lien "Paramètres" ci-dessous
+// est donc une navigation cross-app (VITE_ADMIN_URL), pas une route interne, visible
+// seulement OWNER/ADMIN d'une org d'équipe.
 const MAIL_ITEMS = [
   { to: '/inbox', label: 'Réception', icon: Inbox },
   { to: '/sent', label: 'Envoyés', icon: Send },
@@ -62,18 +64,14 @@ export function AppShell() {
             <span className="hidden lg:inline">Boîtes externes</span>
           </NavLink>
           {isManager && !isPersonal && (
-            <NavLink
-              to="/settings"
+            <a
+              href={`${import.meta.env.VITE_ADMIN_URL}/settings/organization`}
               title="Paramètres"
-              className={({ isActive }) =>
-                `flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-base rounded-md transition-colors ${
-                  isActive ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground hover:bg-accent hover:text-foreground font-medium'
-                }`
-              }
+              className="flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-base rounded-md transition-colors text-muted-foreground hover:bg-accent hover:text-foreground font-medium"
             >
               <Settings size={20} />
               <span className="hidden lg:inline">Paramètres</span>
-            </NavLink>
+            </a>
           )}
           <button
             type="button"
@@ -100,7 +98,7 @@ export function AppShell() {
         )}
         {setupIncomplete && (
           <Link
-            to="/onboarding"
+            to="/mailboxes"
             className="flex items-center gap-2 px-5 py-2 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-500/15 transition-colors"
           >
             <AlertTriangle size={14} className="flex-shrink-0" />

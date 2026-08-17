@@ -8,7 +8,7 @@ SaaS multi-tenant : chaque organisation connecte son propre compte Resend (sa cl
 
 1. **Backend "module Resend" multi-tenant** — ✅ fait, testé (40 tests)
 2. **Activation par fichier + code** (onboarding utilisateur non-technique) — ✅ fait, testé
-3. **Dashboard web minimal** (`web/`) — ✅ fait, vérifié manuellement de bout en bout
+3. **Frontends web séparés** — ✅ `web/` pour l'administration d'une organisation (OWNER/ADMIN), `webmail/` pour la messagerie et les comptes personnels
 4. **App mobile React Native/Expo** (`mobile/`) — 🚧 en cours.
 5. **Dashboard admin plateforme** (`Dashboard/`) — 🚧 scaffold (TanStack Start + shadcn/ui) nettoyé de ses dépendances Lovable, pas encore branché aux vraies données. Contenu actuel = placeholder de démo bancaire (voir `Dashboard/README.md`) à remplacer par de la gestion cross-tenant (organisations, utilisateurs, mail routes...) — aucun outil de ce type n'existait avant.
 
@@ -29,8 +29,12 @@ Processus séparés, un terminal chacun :
 cd resend-mail-module
 npm run dev
 
-# Dashboard web par organisation (port 5173)
+# Administration d'une organisation (port 5173)
 cd resend-mail-module/web
+npm run dev
+
+# Messagerie utilisateur (port 5174)
+cd resend-mail-module/webmail
 npm run dev
 
 # Dashboard admin plateforme (port 8080) — scaffold, pas encore branché
@@ -42,15 +46,17 @@ Base de données de test/dev : conteneur Postgres jetable Docker.
 ```bash
 docker start resend-mail-test-db   # ou le recréer si besoin, voir DATABASE_URL dans .env
 ```
-`.env` (backend) et `web/.env` doivent exister — voir `.env.example` / `web/.env.example`.
+`.env` (backend), `web/.env` et `webmail/.env` doivent exister — voir les fichiers
+`.env.example` correspondants. Le backend doit définir `FRONTEND_URL` pour `web/`,
+`WEBMAIL_URL` pour `webmail/`, et autoriser les deux dans `ALLOWED_ORIGINS`.
 
 ## Tests
 
 ```bash
-cd resend-mail-module && npm test   # 40 tests, nécessite le conteneur Postgres démarré
+cd resend-mail-module && npm test   # 135 tests, nécessite le conteneur Postgres démarré
 ```
-Le frontend n'a pas de suite automatisée (UI greenfield, validation manuelle privilégiée — voir `npm run typecheck` / `npm run build` dans `web/`).
+Le frontend n'a pas de suite automatisée (UI greenfield, validation manuelle privilégiée — voir `npm run typecheck` / `npm run build` dans `web/` et `webmail/`).
 
 ## État du dépôt
 
-Rien n'est encore commité (fichiers `git add`-stagés au fil du build, jamais de commit créé). À faire dès que l'utilisateur le demande explicitement.
+Historique git actif sur `main` depuis la refonte multi-frontends (monorepo npm workspaces, scission `web/`+`webmail/`, `packages/design-tokens`). Commits créés au fil de l'eau par Claude/Codex ; à ne créer que sur demande explicite de l'utilisateur, comme pour tout le reste du dépôt.

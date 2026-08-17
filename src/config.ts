@@ -26,8 +26,13 @@ const config = {
 
   allowedOrigins: process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',')
-    : ['http://localhost:5173'],
+    : ['http://localhost:5173', 'http://localhost:5174'],
+  // Application d'administration d'une organisation.
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  // Application utilisateur (messagerie, activation et retours OAuth).
+  // FRONTEND_URL reste un fallback pour ne pas casser un déploiement existant
+  // pendant la migration vers les deux applications séparées.
+  webmailUrl: process.env.WEBMAIL_URL || process.env.FRONTEND_URL || 'http://localhost:5174',
   // Base publique de CETTE API — sert à construire l'URL de webhook unique par
   // organisation (voir routes/organizations.ts) à coller dans le dashboard Resend.
   backendUrl: process.env.BACKEND_URL || `http://localhost:${process.env.PORT || '3001'}`,

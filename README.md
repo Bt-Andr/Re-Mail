@@ -2,8 +2,8 @@
 
 Backend multi-tenant : chaque organisation connecte son propre compte Resend
 (sa clé API, son domaine déjà vérifié) pour transformer les emails entrants en
-conversations (threads) consultables via API — destiné à un dashboard web puis,
-en phase 2, une app mobile React Native/Expo.
+conversations (threads) consultables via API, une administration web, une messagerie
+web et une app mobile React Native/Expo.
 
 Ce projet est une évolution multi-tenant du système de messagerie mono-tenant
 de `jeprogroup-website` (relais Resend → threads → dashboard).
@@ -16,6 +16,18 @@ cp .env.example .env   # renseigner DATABASE_URL, JWT_SECRET, MASTER_ENCRYPTION_
 npm run prisma:migrate
 npm run dev
 ```
+
+Les interfaces sont des processus séparés :
+
+```bash
+npm run dev --workspace=web       # administration d'organisation, port 5173
+npm run dev --workspace=webmail   # messagerie utilisateur, port 5174
+```
+
+Dans le backend, `FRONTEND_URL` désigne l'administration, `WEBMAIL_URL` la
+messagerie, et `ALLOWED_ORIGINS` doit contenir les deux origines séparées par une
+virgule. Chaque frontend possède aussi son propre `.env.example` pour les liens
+croisés (`VITE_WEBMAIL_URL` et `VITE_ADMIN_URL`).
 
 `MASTER_ENCRYPTION_KEY` : `openssl rand -base64 32` — chiffre les clés API Resend
 et secrets de webhook de chaque organisation au repos (voir `src/lib/crypto.ts`).
@@ -52,5 +64,4 @@ deux organisations, chiffrement/déchiffrement, notifications push, CC/BCC/trans
 
 ## Hors périmètre (v1)
 
-App mobile (écrans), billing, infra multi-instance, autres fournisseurs mail
-que Resend, 2FA.
+Billing, infra multi-instance et 2FA.

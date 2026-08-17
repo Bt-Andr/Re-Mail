@@ -57,7 +57,7 @@ async function sendInviteEmail(
 
   try {
     const resend = buildResendClient(getDecryptedResendKey(org))
-    const activationUrl = `${config.frontendUrl}/activate?token=${invite.fileToken}`
+    const activationUrl = `${config.webmailUrl}/activate?token=${invite.fileToken}`
     const companyName = org.companyName || org.name
     await sendNotificationEmail(
       resend,

@@ -29,8 +29,8 @@ const googleSignInStartLimiter = rateLimit({
 // Deux destinations web distinctes selon l'intent : un state 'signin' ne doit jamais
 // pouvoir rediriger vers /mailboxes (page authentifiée), ni un state 'connect' vers
 // /auth/google/callback (page publique) — surface d'attaque inutile sinon.
-const WEB_CONNECT_RETURN_TO = `${config.frontendUrl}/mailboxes`
-const WEB_SIGNIN_RETURN_TO = `${config.frontendUrl}/auth/google/callback`
+const WEB_CONNECT_RETURN_TO = `${config.webmailUrl}/mailboxes`
+const WEB_SIGNIN_RETURN_TO = `${config.webmailUrl}/auth/google/callback`
 
 // N'accepte que les destinations connues de l'app : la page correspondant à l'intent
 // dans le dashboard web, ou le scheme mobile (natif re-mail://, ou son proxy exp:// sous
@@ -159,7 +159,7 @@ async function connectGmailMailbox(
 // indifféremment les deux intents ('connect' et 'signin') : un seul callback, une seule
 // redirect URI enregistrée côté Google Cloud Console, comportement branché sur le state.
 router.get('/gmail/callback', async (req, res) => {
-  const fallbackReturnTo = `${config.frontendUrl}/mailboxes`
+  const fallbackReturnTo = `${config.webmailUrl}/mailboxes`
 
   let state: OAuthState | null = null
   try {

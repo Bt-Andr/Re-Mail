@@ -43,8 +43,8 @@ async function cleanupSigninAccount() {
 
 describe('Gmail OAuth', () => {
   let org: SeededOrg
-  const returnTo = 'http://localhost:5173/mailboxes'
-  const signinReturnTo = 'http://localhost:5173/auth/google/callback'
+  const returnTo = 'http://localhost:5174/mailboxes'
+  const signinReturnTo = 'http://localhost:5174/auth/google/callback'
   const originalFetch = global.fetch
 
   beforeAll(async () => {

@@ -71,7 +71,7 @@ describe('User invite activation flow', () => {
     expect(created.body.fileToken).toBeUndefined()
     expect(resendSendCalls).toHaveLength(1)
     expect(resendSendCalls[0].body.to).toBe(created.body.email)
-    expect(String(resendSendCalls[0].body.html)).toContain('/activate?token=')
+    expect(String(resendSendCalls[0].body.html)).toContain('http://localhost:5174/activate?token=')
 
     const fileBytes = await downloadFile(org, created.body.id)
     const code = await generateCode(org, created.body.id)

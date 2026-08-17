@@ -17,7 +17,10 @@ const MAX_CODE_ATTEMPTS = 5
 // publiques n'avaient aucune protection par IP — même limite que loginLimiter (routes/auth.ts).
 const publicInviteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 20,
+  // La suite d'intégration enchaîne volontairement tous les scénarios depuis la
+  // même IP Supertest. Garder la limite de production sans laisser l'état global
+  // du limiter rendre les tests suivants dépendants de leur ordre d'exécution.
+  limit: process.env.NODE_ENV === 'test' ? 1_000 : 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Trop de tentatives. Réessayez dans quelques minutes.' },

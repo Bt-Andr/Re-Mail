@@ -4,6 +4,11 @@
   "description": "Backend multi-tenant qui relie un compte Resend (par organisation) à une boîte mail partagée consultable via API/dashboard/app mobile.",
   "private": true,
   "main": "dist/server.js",
+  "workspaces": [
+    "packages/*",
+    "web",
+    "mobile"
+  ],
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",

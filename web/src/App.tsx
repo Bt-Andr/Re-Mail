@@ -13,7 +13,6 @@ import { LoginPage } from './features/auth/LoginPage'
 import { SignupPage } from './features/auth/SignupPage'
 import { GoogleCallbackPage } from './features/auth/GoogleCallbackPage'
 import { ActivatePage } from './features/activate/ActivatePage'
-import { OnboardingWizard } from './features/onboarding/OnboardingWizard'
 import { MailRoutesPage } from './features/mailRoutes/MailRoutesPage'
 import { ExternalMailboxesPage } from './features/mailboxes/ExternalMailboxesPage'
 import { InboxPage } from './features/inbox/InboxPage'
@@ -44,7 +43,6 @@ export default function App() {
               </Route>
 
               <Route element={<AuthGuard />}>
-                <Route path="/onboarding" element={<OnboardingWizard />} />
                 <Route element={<AppShell />}>
                   <Route path="/inbox" element={<InboxPage folder="inbox" />}>
                     <Route index element={<InboxPlaceholder />} />

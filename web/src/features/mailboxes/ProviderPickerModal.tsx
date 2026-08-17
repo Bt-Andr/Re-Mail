@@ -9,7 +9,7 @@ const PROVIDERS: { id: MailboxProvider; label: string; icon: JSX.Element }[] = [
   { id: 'outlook', label: 'Outlook, Hotmail et Live', icon: <OutlookIcon /> },
   { id: 'yahoo', label: 'Yahoo', icon: <YahooIcon /> },
   { id: 'exchange', label: 'Exchange et Office 365', icon: <ExchangeIcon /> },
-  { id: 'resend', label: 'Domaine professionnel (Resend)', icon: <ResendIcon /> },
+  { id: 'resend', label: 'Compte Entreprise (Resend)', icon: <ResendIcon /> },
   { id: 'other', label: 'Autre', icon: <Mail size={20} className="text-muted-foreground" /> },
 ]
 

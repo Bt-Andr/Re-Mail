@@ -28,7 +28,7 @@ export function SignupPage() {
       }
       const data = await res.json()
       login(data.token, data.user, data.organization)
-      navigate('/onboarding')
+      navigate('/inbox')
     } catch (err) {
       setError(networkErrorMessage(err))
     } finally {

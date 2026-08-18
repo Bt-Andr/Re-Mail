@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
 import request from 'supertest'
 
 const mockConnect = vi.fn()
@@ -137,5 +137,120 @@ describe('POST /api/mailbox-connections', () => {
     const del = await request(app).delete(`/api/mailbox-connections/${create.body.id}`).set('Authorization', `Bearer ${org.token}`)
     expect(del.status).toBe(204)
     expect(await prisma.externalMailboxConnection.findUnique({ where: { id: create.body.id } })).toBeNull()
+  })
+})
+
+describe('POST /api/mailbox-connections/imap/signin', () => {
+  const signinBody = {
+    email: 'moi@imap-signin-test.example',
+    imapHost: 'imap.example.com',
+    imapPort: 993,
+    smtpHost: 'smtp.example.com',
+    smtpPort: 465,
+    password: 'super-secret',
+  }
+
+  beforeEach(() => {
+    mockConnect.mockReset().mockResolvedValue(undefined)
+    mockMailboxOpen.mockReset().mockResolvedValue({ uidValidity: 1000n, uidNext: 50 })
+    mockLogout.mockReset().mockResolvedValue(undefined)
+    mockClose.mockReset()
+    mockVerify.mockReset().mockResolvedValue(true)
+  })
+
+  async function cleanupSigninAccount(email: string) {
+    const leftover = await prisma.user.findUnique({ where: { email } })
+    if (leftover) await cleanupOrg(leftover.organizationId)
+  }
+
+  afterEach(() => cleanupSigninAccount(signinBody.email))
+
+  it('rejects missing or invalid fields without attempting any connection', async () => {
+    const res = await request(app).post('/api/mailbox-connections/imap/signin').send({ email: 'not-an-email' })
+    expect(res.status).toBe(400)
+    expect(mockConnect).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 without creating an account when the IMAP connection fails', async () => {
+    mockConnect.mockRejectedValueOnce(new Error('Invalid credentials'))
+    const res = await request(app).post('/api/mailbox-connections/imap/signin').send(signinBody)
+    expect(res.status).toBe(400)
+    expect(await prisma.user.findUnique({ where: { email: signinBody.email } })).toBeNull()
+  })
+
+  it('creates a new personal account, connects the mailbox, and issues a real session', async () => {
+    const res = await request(app).post('/api/mailbox-connections/imap/signin').send(signinBody)
+    expect(res.status).toBe(200)
+    expect(res.body.token).toBeTruthy()
+    expect(res.body.user.email).toBe(signinBody.email)
+    expect(res.body.organization.isPersonal).toBe(true)
+
+    const user = await prisma.user.findUnique({ where: { email: signinBody.email }, include: { organization: true } })
+    expect(user).toBeTruthy()
+    expect(user?.orgRole).toBe('OWNER')
+    expect(user?.organization.isPersonal).toBe(true)
+
+    const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: user!.organizationId, email: signinBody.email } })
+    expect(connection?.provider).toBe('imap')
+    expect(connection?.userId).toBe(user!.id)
+
+    // Un jeton issu de ce endpoint doit fonctionner comme n'importe quelle session.
+    const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${res.body.token}`)
+    expect(me.status).toBe(200)
+  })
+
+  it('signs an existing personal-account user back in without creating a duplicate account', async () => {
+    const organization = await prisma.organization.create({
+      data: { name: 'Moi (perso imap)', slug: `moi-perso-imap-${Date.now()}`, isPersonal: true },
+    })
+    const user = await prisma.user.create({
+      data: {
+        organizationId: organization.id,
+        username: `moi-imap-${Date.now()}`,
+        email: signinBody.email,
+        password: 'unused-random-hash',
+        nom: 'Moi',
+        orgRole: 'OWNER',
+      },
+    })
+
+    const res = await request(app).post('/api/mailbox-connections/imap/signin').send(signinBody)
+    expect(res.status).toBe(200)
+    expect(res.body.token).toBeTruthy()
+
+    const usersWithEmail = await prisma.user.findMany({ where: { email: signinBody.email } })
+    expect(usersWithEmail).toHaveLength(1)
+    expect(usersWithEmail[0].id).toBe(user.id)
+
+    const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: organization.id, email: signinBody.email } })
+    expect(connection?.userId).toBe(user.id)
+  })
+
+  it('connects the mailbox to an existing pro (team) account but issues no session — password still required', async () => {
+    const proOrg = await prisma.organization.create({
+      data: { name: 'Pro Co Imap', slug: `pro-co-imap-${Date.now()}`, isPersonal: false },
+    })
+    const proUser = await prisma.user.create({
+      data: {
+        organizationId: proOrg.id,
+        username: `pro-owner-imap-${Date.now()}`,
+        email: signinBody.email,
+        password: 'unused-random-hash',
+        nom: 'Pro Owner',
+        orgRole: 'OWNER',
+      },
+    })
+
+    const res = await request(app).post('/api/mailbox-connections/imap/signin').send(signinBody)
+    // Erreur générique et volontairement partagée avec les échecs de sonde — un code
+    // dédié laisserait deviner qu'une adresse donnée est un compte d'équipe.
+    expect(res.status).toBe(400)
+    expect(res.body.token).toBeUndefined()
+
+    const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: proOrg.id, email: signinBody.email } })
+    expect(connection?.userId).toBe(proUser.id)
+    expect(connection?.status).toBe('connected')
+
+    await cleanupOrg(proOrg.id)
   })
 })

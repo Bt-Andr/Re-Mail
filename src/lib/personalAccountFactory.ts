@@ -86,3 +86,16 @@ export async function createPersonalAccountFromGoogle(email: string): Promise<{ 
   const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12)
   return createOrgAndOwner({ orgName: nom, isPersonal: true, username, email, passwordHash, nom })
 }
+
+// Même principe que createPersonalAccountFromGoogle, pour le flux "se connecter via
+// IMAP" (routes/mailboxConnections.ts, POST /imap/signin) : la preuve de possession de
+// l'adresse est la connexion IMAP réussie elle-même, pas un flux OAuth, mais le niveau
+// de confiance est le même (il faut connaître le mot de passe réel de cette boîte) — même
+// hash de mot de passe aléatoire inutilisable, ce compte s'authentifie via cette boîte
+// mail, jamais par mot de passe classique.
+export async function createPersonalAccountFromMailbox(email: string): Promise<{ organization: Organization; user: User }> {
+  const nom = email.split('@')[0]
+  const username = await uniqueUsername(nom)
+  const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12)
+  return createOrgAndOwner({ orgName: nom, isPersonal: true, username, email, passwordHash, nom })
+}

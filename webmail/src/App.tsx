@@ -8,6 +8,7 @@ import { useGlobalScrollFade } from './hooks/useGlobalScrollFade'
 import { AuthGuard } from './components/layout/AuthGuard'
 import { GuestGuard } from './components/layout/GuestGuard'
 import { AppShell } from './components/layout/AppShell'
+import { WelcomePage } from './features/auth/WelcomePage'
 import { LoginPage } from './features/auth/LoginPage'
 import { SignupPage } from './features/auth/SignupPage'
 import { GoogleCallbackPage } from './features/auth/GoogleCallbackPage'
@@ -36,6 +37,7 @@ export default function App() {
               <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
 
               <Route element={<GuestGuard />}>
+                <Route path="/welcome" element={<WelcomePage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/signup" element={<SignupPage />} />
               </Route>

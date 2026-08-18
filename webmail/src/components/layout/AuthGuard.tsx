@@ -5,6 +5,6 @@ import { Spinner } from '../ui/Spinner'
 export function AuthGuard() {
   const { user, loading } = useSession()
   if (loading) return <Spinner label="Vérification de la session…" />
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/welcome" replace />
   return <Outlet />
 }

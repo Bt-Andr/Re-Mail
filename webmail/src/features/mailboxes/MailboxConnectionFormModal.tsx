@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiFetch, parseError } from '../../lib/apiClient'
+import { useSession } from '../../context/SessionContext'
 import { Modal } from '../../components/ui/Modal'
 import { Input } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
@@ -30,11 +32,18 @@ interface MailboxConnectionFormModalProps {
   onClose: () => void
   onSaved: () => void
   preset?: Partial<typeof EMPTY>
+  // 'connect' (défaut) : ajoute une boîte à la session existante, comportement
+  // inchangé. 'signin' : aucune session requise — POST vers /imap/signin (voir
+  // src/routes/mailboxConnections.ts), qui crée un compte perso à la volée si l'email
+  // est inconnu et renvoie directement une session, comme "Continuer avec Google".
+  mode?: 'connect' | 'signin'
 }
 
 // Pas d'edit ici (contrairement à MailRouteFormModal) : changer les identifiants d'une
 // boîte externe, c'est en reconnecter une — plus simple de supprimer et recréer.
-export function MailboxConnectionFormModal({ open, onClose, onSaved, preset }: MailboxConnectionFormModalProps) {
+export function MailboxConnectionFormModal({ open, onClose, onSaved, preset, mode = 'connect' }: MailboxConnectionFormModalProps) {
+  const { login } = useSession()
+  const navigate = useNavigate()
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -56,12 +65,18 @@ export function MailboxConnectionFormModal({ open, onClose, onSaved, preset }: M
     setError('')
     setLoading(true)
     try {
-      const res = await apiFetch('/mailbox-connections', {
+      const res = await apiFetch(mode === 'signin' ? '/mailbox-connections/imap/signin' : '/mailbox-connections', {
         method: 'POST',
         body: JSON.stringify({ ...form, imapPort: Number(form.imapPort), smtpPort: Number(form.smtpPort) }),
       })
       if (!res.ok) {
         setError(await parseError(res, 'Connexion impossible.'))
+        return
+      }
+      if (mode === 'signin') {
+        const data = await res.json()
+        login(data.token, data.user, data.organization)
+        navigate('/inbox')
         return
       }
       onSaved()

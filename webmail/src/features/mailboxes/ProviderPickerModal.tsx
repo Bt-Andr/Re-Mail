@@ -1,16 +1,15 @@
-import { Mail, ChevronRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { Modal } from '../../components/ui/Modal'
-import { GoogleIcon, OutlookIcon, YahooIcon, ExchangeIcon, ResendIcon } from '../../components/icons/ProviderIcons'
+import { ResendIcon } from '../../components/icons/ProviderIcons'
+import { BASE_PROVIDERS, type BaseMailboxProvider } from './providerList'
 
-export type MailboxProvider = 'google' | 'outlook' | 'yahoo' | 'exchange' | 'resend' | 'other'
+export type MailboxProvider = BaseMailboxProvider | 'resend'
 
+// Insère "resend" avant "other" — garde l'ordre visuel historique (autre en dernier).
 const PROVIDERS: { id: MailboxProvider; label: string; icon: JSX.Element }[] = [
-  { id: 'google', label: 'Google', icon: <GoogleIcon /> },
-  { id: 'outlook', label: 'Outlook, Hotmail et Live', icon: <OutlookIcon /> },
-  { id: 'yahoo', label: 'Yahoo', icon: <YahooIcon /> },
-  { id: 'exchange', label: 'Exchange et Office 365', icon: <ExchangeIcon /> },
+  ...BASE_PROVIDERS.filter(p => p.id !== 'other'),
   { id: 'resend', label: 'Compte Entreprise (Resend)', icon: <ResendIcon /> },
-  { id: 'other', label: 'Autre', icon: <Mail size={20} className="text-muted-foreground" /> },
+  ...BASE_PROVIDERS.filter(p => p.id === 'other'),
 ]
 
 // "Google" passe par OAuth (connectGmail), "Resend" ouvre ResendConnectModal (domaine

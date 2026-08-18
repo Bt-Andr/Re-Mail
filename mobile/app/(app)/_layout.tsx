@@ -18,7 +18,7 @@ export default function AppGroupLayout() {
     );
   }
 
-  if (!user) return <Redirect href="/(auth)/login" />;
+  if (!user) return <Redirect href="/(auth)/welcome" />;
 
   return (
     <BiometricGate>

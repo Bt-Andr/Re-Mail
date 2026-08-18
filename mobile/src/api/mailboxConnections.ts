@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { ExternalMailboxConnection } from '../types/api';
+import type { AuthResponse, ExternalMailboxConnection, Organization } from '../types/api';
 
 export interface MailboxConnectionFormValues {
   email: string;
@@ -18,6 +18,13 @@ export function listMailboxConnections(): Promise<ExternalMailboxConnection[]> {
 
 export function createMailboxConnection(values: MailboxConnectionFormValues): Promise<ExternalMailboxConnection> {
   return apiFetch<ExternalMailboxConnection>('/mailbox-connections', { method: 'POST', body: values });
+}
+
+// Pas de session requise — crée un compte perso à la volée si l'email est inconnu et
+// renvoie directement une session, comme signup()/exchangeGoogleHandoff() (voir
+// src/routes/mailboxConnections.ts POST /imap/signin côté backend).
+export function signinMailbox(values: MailboxConnectionFormValues): Promise<AuthResponse & { organization: Organization }> {
+  return apiFetch<AuthResponse & { organization: Organization }>('/mailbox-connections/imap/signin', { method: 'POST', body: values });
 }
 
 export function deleteMailboxConnection(id: string): Promise<void> {

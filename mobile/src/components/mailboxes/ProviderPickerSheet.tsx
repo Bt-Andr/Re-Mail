@@ -1,17 +1,16 @@
 import { Pressable, Text } from 'react-native';
-import { Mail, ChevronRight } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { Modal } from '../ui/Modal';
-import { GoogleIcon, OutlookIcon, YahooIcon, ExchangeIcon, ResendIcon } from '../icons/ProviderIcons';
+import { ResendIcon } from '../icons/ProviderIcons';
+import { BASE_PROVIDERS, type BaseMailboxProvider } from './providerList';
 
-export type MailboxProvider = 'google' | 'outlook' | 'yahoo' | 'exchange' | 'resend' | 'other';
+export type MailboxProvider = BaseMailboxProvider | 'resend';
 
+// Insère "resend" avant "other" — garde l'ordre visuel historique (autre en dernier).
 const PROVIDERS: { id: MailboxProvider; label: string; icon: React.ReactElement }[] = [
-  { id: 'google', label: 'Google', icon: <GoogleIcon /> },
-  { id: 'outlook', label: 'Outlook, Hotmail et Live', icon: <OutlookIcon /> },
-  { id: 'yahoo', label: 'Yahoo', icon: <YahooIcon /> },
-  { id: 'exchange', label: 'Exchange et Office 365', icon: <ExchangeIcon /> },
+  ...BASE_PROVIDERS.filter(p => p.id !== 'other'),
   { id: 'resend', label: 'Domaine professionnel (Resend)', icon: <ResendIcon /> },
-  { id: 'other', label: 'Autre', icon: <Mail size={20} color="#9ca3af" /> },
+  ...BASE_PROVIDERS.filter(p => p.id === 'other'),
 ];
 
 // "Google" passe par OAuth (connectGmail), "Resend" ouvre ResendConnectSheet (domaine

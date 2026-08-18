@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Switch, Text, View } from 'react-native';
-import { createMailboxConnection } from '../../api/mailboxConnections';
+import { router } from 'expo-router';
+import { createMailboxConnection, signinMailbox } from '../../api/mailboxConnections';
 import { describeError } from '../../api/client';
+import { useSession } from '../../context/SessionContext';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
@@ -23,11 +25,17 @@ interface MailboxConnectionFormModalProps {
   onClose: () => void;
   onSaved: () => void;
   preset?: Partial<typeof EMPTY>;
+  // 'connect' (défaut) : ajoute une boîte à la session existante, comportement
+  // inchangé. 'signin' : aucune session requise — signinMailbox() crée un compte
+  // perso à la volée si l'email est inconnu et renvoie directement une session,
+  // comme "Continuer avec Google".
+  mode?: 'connect' | 'signin';
 }
 
 // Pas d'edit ici (contrairement à MailRouteFormModal) : changer les identifiants d'une
 // boîte externe, c'est en reconnecter une — plus simple de supprimer et recréer.
-export function MailboxConnectionFormModal({ open, onClose, onSaved, preset }: MailboxConnectionFormModalProps) {
+export function MailboxConnectionFormModal({ open, onClose, onSaved, preset, mode = 'connect' }: MailboxConnectionFormModalProps) {
+  const { login } = useSession();
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,7 +54,7 @@ export function MailboxConnectionFormModal({ open, onClose, onSaved, preset }: M
     setError('');
     setLoading(true);
     try {
-      await createMailboxConnection({
+      const values = {
         email: form.email.trim(),
         imapHost: form.imapHost.trim(),
         imapPort: Number(form.imapPort),
@@ -55,7 +63,14 @@ export function MailboxConnectionFormModal({ open, onClose, onSaved, preset }: M
         smtpPort: Number(form.smtpPort),
         smtpSecure: form.smtpSecure,
         password: form.password,
-      });
+      };
+      if (mode === 'signin') {
+        const data = await signinMailbox(values);
+        await login(data.token, { ...data.user, organization: data.organization });
+        router.replace('/(app)/(drawer)/inbox');
+        return;
+      }
+      await createMailboxConnection(values);
       onSaved();
     } catch (e) {
       setError(describeError(e));

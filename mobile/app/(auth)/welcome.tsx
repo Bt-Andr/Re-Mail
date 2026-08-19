@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Image, Pressable, ScrollView, Text, View } from 'react-native';
-import { Link, router } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { ChevronRight, Building2, Users } from 'lucide-react-native';
@@ -26,8 +26,12 @@ const ENTRIES: { id: WelcomeProvider; label: string; icon: React.ReactElement }[
 
 export default function WelcomeScreen() {
   const { login } = useSession();
+  const params = useLocalSearchParams<{ error?: string }>();
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [error, setError] = useState('');
+  // Peut arriver déjà rempli si on revient ici depuis le filet de sécurité
+  // google-callback.tsx (deep link qui a "fui" hors de l'interception normale de
+  // openAuthSessionAsync — voir ce fichier pour le détail).
+  const [error, setError] = useState(params.error ?? '');
   const [formOpen, setFormOpen] = useState(false);
   const [formPreset, setFormPreset] = useState<Partial<(typeof MAILBOX_PRESETS)[string]> | undefined>(undefined);
   const [createOpen, setCreateOpen] = useState(false);

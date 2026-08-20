@@ -414,6 +414,14 @@ model ThreadRoutingRule {
   assignTo   User    @relation("RoutingRuleAssignee", fields: [assignToId], references: [id])
   active     Boolean @default(true)
 
+  // Rempli quand la personne assignée "connecte" son adresse pro depuis son picker
+  // (POST /api/pro-addresses/:id/claim) — le routage lui-même (assignedToId sur les
+  // threads) fonctionne dès la création de la règle, indépendamment de claimedAt : ce
+  // champ ne conditionne que la visibilité dans "boîtes externes" et l'éligibilité
+  // comme adresse d'envoi (voir helpers/senders.ts). Nullable, jamais backfillé : les
+  // règles existantes se lisent comme "pas encore connectées".
+  claimedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

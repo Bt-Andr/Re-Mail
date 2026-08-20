@@ -515,20 +515,15 @@ async function processInboundEmail(org: Organization, payload: unknown): Promise
     console.log(`[INBOUND] Org ${org.id} : nouveau thread créé ${threadId}`)
   }
 
-  // Forwarding via MailRoute (optionnel, en parallèle du thread dans le dashboard)
+  // Forwarding via MailRoute (optionnel, en parallèle du thread dans le dashboard) — pur
+  // transfert, aucun effet de bord sur l'assignation du thread : ThreadRoutingRule (déjà
+  // appliquée dans createThread()) est la seule source d'assignation. Une règle de
+  // transfert et une adresse pro connectée directement peuvent coexister sans conflit,
+  // les deux reçoivent le mail (décision produit actée — voir plan de refonte).
   const route = await db.mailRoute.findFirst({ where: { alias: toAddr, active: true } })
   if (!route) {
     console.log(`[INBOUND] Org ${org.id} : pas de MailRoute pour ${toAddr} — thread créé, pas de transfert`)
     return
-  }
-
-  const thread = await db.thread.findUnique({ where: { id: threadId }, select: { assignedToId: true } })
-  if (!thread?.assignedToId) {
-    const owner = await db.user.findFirst({ where: { email: route.personalEmail } })
-    if (owner) {
-      await db.thread.update({ where: { id: threadId }, data: { assignedToId: owner.id } })
-      await createActivity(db, org.id, threadId, null, 'assigned', { to: owner.nom })
-    }
   }
 
   const inboundToken = await db.mailReplyToken.create({

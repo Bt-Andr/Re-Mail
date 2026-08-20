@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import prisma from '../src/lib/prisma'
 import { forOrg } from '../src/middleware/scopedPrisma'
 import { getAllowedSenders } from '../src/helpers/senders'
 import { encryptMailboxCredential } from '../src/lib/mailboxCredentialCrypto'
@@ -56,5 +57,27 @@ describe('getAllowedSenders — boîtes externes connectées', () => {
 
     const senders = await getAllowedSenders(db, org.userId)
     expect(senders.some(s => s.email === 'broken@example.com')).toBe(false)
+  })
+
+  it('includes a claimed pro address (ThreadRoutingRule) as an allowed sender', async () => {
+    await prisma.organization.update({ where: { id: org.organizationId }, data: { resendVerifiedDomain: 'senders-test.example' } })
+
+    const db = forOrg(org.organizationId)
+    await db.threadRoutingRule.create({
+      data: { organizationId: org.organizationId, canal: 'contact', assignToId: org.userId, active: true, claimedAt: new Date() },
+    })
+
+    const senders = await getAllowedSenders(db, org.userId)
+    expect(senders.some(s => s.email === 'contact@senders-test.example')).toBe(true)
+  })
+
+  it('does not include a pro address that has been attributed but not yet claimed', async () => {
+    const db = forOrg(org.organizationId)
+    await db.threadRoutingRule.create({
+      data: { organizationId: org.organizationId, canal: 'nonclaimed', assignToId: org.userId, active: true },
+    })
+
+    const senders = await getAllowedSenders(db, org.userId)
+    expect(senders.some(s => s.email === 'nonclaimed@senders-test.example')).toBe(false)
   })
 })

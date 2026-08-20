@@ -22,7 +22,7 @@ export async function getAllowedSenders(db: PrismaClient, userId: string): Promi
       nom: true,
       proEmail: true,
       orgRole: true,
-      organization: { select: { companyName: true } },
+      organization: { select: { companyName: true, resendVerifiedDomain: true } },
       senderGrants: { select: { email: true } },
     },
   })
@@ -56,6 +56,17 @@ export async function getAllowedSenders(db: PrismaClient, userId: string): Promi
     select: { email: true },
   })
   for (const mailbox of mailboxes) add(mailbox.email, mailbox.email)
+
+  // Adresses pro attribuées ET connectées (claimedAt) — le gate sur claimedAt évite
+  // qu'une adresse attribuée mais pas encore "connectée" par la personne n'apparaisse
+  // comme expéditeur possible, même logique que les boîtes externes ci-dessus qui
+  // exigent status: 'connected'.
+  if (user.organization?.resendVerifiedDomain) {
+    const proRules = await db.threadRoutingRule.findMany({
+      where: { assignToId: userId, active: true, claimedAt: { not: null } },
+    })
+    for (const rule of proRules) add(`${rule.canal}@${user.organization.resendVerifiedDomain}`, rule.canal)
+  }
 
   if (senders.length > 0 && !senders.some(s => s.isDefault)) senders[0].isDefault = true
   return senders

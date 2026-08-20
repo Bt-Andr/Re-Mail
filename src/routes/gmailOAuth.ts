@@ -221,13 +221,14 @@ router.get('/gmail/callback', async (req, res) => {
       // ce compte : réussir l'OAuth Google prouve la possession de l'adresse aussi
       // fiablement qu'un mot de passe, et ça évite une manipulation manuelle redondante
       // dans Boîtes externes une fois connecté normalement.
-      // Erreur volontairement réutilisée telle quelle (pas de code dédié type
-      // 'pro_account_use_password') : un code distinct confirmerait à quiconque complète
-      // l'OAuth Google pour une adresse donnée que cette adresse est un compte d'équipe —
-      // même principe que GENERIC_INVITE_ERROR dans publicUserInvites.ts, ne jamais laisser
-      // un appelant non authentifié distinguer les cas d'échec.
+      // Code dédié (account_exists_use_password), PAS le générique account_provisioning_failed
+      // réutilisé ailleurs : ici l'appelant a déjà prouvé la possession de la boîte (OAuth
+      // Google réussi) avant d'atteindre cette branche, donc lui révéler "cette adresse est
+      // déjà un compte d'équipe" ne fuite rien à un tiers nonauthentifié — seulement à
+      // quelqu'un qui contrôle déjà cette boîte mail. Un message clair et actionnable vaut
+      // mieux qu'une erreur générique incompréhensible pour ce cas précis.
       const result = await connectGmailMailbox(existingUser.organizationId, existingUser.id, email, refreshToken, accessToken)
-      return res.redirect(withError(returnTo, result.ok ? 'account_provisioning_failed' : result.error))
+      return res.redirect(withError(returnTo, result.ok ? 'account_exists_use_password' : result.error))
     }
     if (existingUser) {
       userId = existingUser.id

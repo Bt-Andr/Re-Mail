@@ -242,9 +242,12 @@ describe('POST /api/mailbox-connections/imap/signin', () => {
     })
 
     const res = await request(app).post('/api/mailbox-connections/imap/signin').send(signinBody)
-    // Erreur générique et volontairement partagée avec les échecs de sonde — un code
-    // dédié laisserait deviner qu'une adresse donnée est un compte d'équipe.
+    // Message dédié et actionnable (pas un générique) : la connexion IMAP réussie a déjà
+    // prouvé la possession de l'adresse, donc révéler "c'est un compte d'équipe" ici ne
+    // fuite rien à un tiers non authentifié — seulement à quelqu'un qui contrôle déjà
+    // cette boîte mail.
     expect(res.status).toBe(400)
+    expect(res.body.code).toBe('account_exists_use_password')
     expect(res.body.token).toBeUndefined()
 
     const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: proOrg.id, email: signinBody.email } })

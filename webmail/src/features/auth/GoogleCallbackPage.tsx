@@ -8,10 +8,12 @@ const GOOGLE_SIGNIN_ERROR_MESSAGES: Record<string, string> = {
   oauth_denied: 'Consentement Google annulé.',
   state_invalid: 'La demande de connexion a expiré, réessayez.',
   token_exchange_failed: 'La connexion à Google a échoué.',
-  // Message volontairement générique (ne distingue pas "erreur serveur" de "cette adresse
-  // est déjà un compte d'équipe") — voir le commentaire dans gmailOAuth.ts sur pourquoi ce
-  // code est réutilisé tel quel plutôt qu'un code dédié qui laisserait deviner l'un ou l'autre.
-  account_provisioning_failed: "Connexion impossible avec ce compte Google. Si vous avez déjà un compte Re-Mail, connectez-vous avec votre mot de passe habituel.",
+  account_provisioning_failed: 'Connexion impossible avec ce compte Google. Réessayez dans quelques instants.',
+  // L'appelant a déjà prouvé la possession de cette boîte (OAuth Google réussi) avant
+  // que ce code n'apparaisse — révéler qu'un compte d'équipe existe déjà ne fuite rien à
+  // un tiers non authentifié (voir gmailOAuth.ts). La boîte est déjà rattachée à ce
+  // compte, prête dès la connexion par mot de passe.
+  account_exists_use_password: 'Un compte d’équipe existe déjà avec cette adresse. Connectez-vous avec le nom d’utilisateur et le mot de passe de ce compte — votre boîte y est déjà rattachée.',
 }
 
 // Point d'atterrissage public (hors GuestGuard/AuthGuard, comme /activate) de la

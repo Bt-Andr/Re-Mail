@@ -323,10 +323,10 @@ describe('Gmail OAuth', () => {
         const state = await getSignedSigninState(signinReturnTo)
         const res = await request(app).get('/api/mailbox-connections/gmail/callback').query({ code: 'auth-code', state }).redirects(0)
         expect(res.status).toBe(302)
-        // Code d'erreur générique et volontairement partagé avec les échecs internes
-        // (voir gmailOAuth.ts) : un code dédié laisserait deviner qu'une adresse donnée
-        // est un compte d'équipe à quiconque complète l'OAuth Google pour cette adresse.
-        expect(res.headers.location).toBe(`${signinReturnTo}?error=account_provisioning_failed`)
+        // Code dédié (pas le account_provisioning_failed générique) : l'appelant a déjà
+        // prouvé la possession de la boîte via l'OAuth Google réussi, donc lui révéler
+        // que cette adresse est un compte d'équipe ne fuite rien à un tiers.
+        expect(res.headers.location).toBe(`${signinReturnTo}?error=account_exists_use_password`)
 
         // Aucune session émise — réussir l'OAuth Google ne doit jamais, à lui seul,
         // déverrouiller un compte pro (portée du raccourci "signin" limitée au perso).

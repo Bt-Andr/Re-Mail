@@ -5,6 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { login as loginRequest, exchangeGoogleHandoff } from '../../src/api/auth';
 import { apiFetch, describeError } from '../../src/api/client';
+import { describeGoogleSigninError } from '../../src/lib/googleSigninErrors';
 import { useSession } from '../../src/context/SessionContext';
 import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
@@ -47,7 +48,7 @@ export default function LoginScreen() {
 
       const parsed = Linking.parse(result.url);
       if (parsed.queryParams?.error) {
-        setError(String(parsed.queryParams.error));
+        setError(describeGoogleSigninError(String(parsed.queryParams.error)));
         return;
       }
       const handoff = parsed.queryParams?.handoff;

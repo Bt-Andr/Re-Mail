@@ -238,12 +238,19 @@ router.post('/imap/signin', imapSigninLimiter, async (req, res) => {
   }
 
   if (existingUser && !existingUser.organization.isPersonal) {
+    // Compte d'équipe existant — pas de session délivrée via ce raccourci (le mot de
+    // passe reste requis pour un compte pro), mais la boîte est quand même attachée : la
+    // connexion IMAP réussie prouve la possession de l'adresse aussi fiablement qu'un mot
+    // de passe. Messages dédiés (pas de générique réutilisé) : l'appelant a déjà prouvé
+    // cette possession avant d'atteindre cette branche, donc lui révéler l'un ou l'autre
+    // cas ne fuite rien à un tiers non authentifié — seulement à quelqu'un qui contrôle
+    // déjà cette boîte mail.
     const attached = await attachMailbox(existingUser.organizationId, existingUser.id)
-    // Erreur volontairement identique, que la boîte ait pu être attachée ou non — un
-    // code distinct confirmerait à quiconque tente cette adresse qu'elle appartient à un
-    // compte d'équipe (même principe que GENERIC_INVITE_ERROR dans publicUserInvites.ts).
-    if (!attached) console.error('[POST /imap/signin] boîte déjà rattachée à un autre membre', existingUser.organizationId)
-    return res.status(400).json({ error: 'Connexion impossible.' })
+    if (!attached) return res.status(400).json({ error: 'Cette adresse est déjà connectée par un autre membre de cette organisation.' })
+    return res.status(400).json({
+      error: 'Un compte d’équipe existe déjà avec cette adresse. Connectez-vous avec le nom d’utilisateur et le mot de passe de ce compte — votre boîte y est déjà rattachée.',
+      code: 'account_exists_use_password',
+    })
   }
 
   let userId: string

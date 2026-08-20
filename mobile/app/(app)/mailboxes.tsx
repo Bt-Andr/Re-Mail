@@ -4,8 +4,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Mail, Plus, RefreshCw, Trash2 } from 'lucide-react-native';
-import { deleteMailboxConnection, listMailboxConnections, retryMailboxConnection } from '../../src/api/mailboxConnections';
+import { AtSign, CheckCircle2, Mail, Plus, RefreshCw, Trash2 } from 'lucide-react-native';
+import {
+  claimProAddress,
+  deleteMailboxConnection,
+  listMailboxConnections,
+  listProAddresses,
+  retryMailboxConnection,
+} from '../../src/api/mailboxConnections';
 import { apiFetch, describeError } from '../../src/api/client';
 import { MailboxConnectionFormModal, MAILBOX_PRESETS } from '../../src/components/mailboxes/MailboxConnectionFormModal';
 import { ProviderPickerSheet, type MailboxProvider } from '../../src/components/mailboxes/ProviderPickerSheet';
@@ -14,7 +20,7 @@ import { useAccountSwitcher } from '../../src/context/AccountSwitcherContext';
 import { useAccountContext } from '../../src/hooks/useAccountContext';
 import { Button } from '../../src/components/ui/Button';
 import { ErrorState } from '../../src/components/ui/EmptyState';
-import type { ExternalMailboxConnection } from '../../src/types/api';
+import type { ExternalMailboxConnection, ProAddress } from '../../src/types/api';
 
 // Accessible à TOUT utilisateur authentifié (pas seulement OWNER/ADMIN) — c'est un
 // identifiant personnel, pas une ressource d'équipe comme les adresses mail de l'org
@@ -24,6 +30,7 @@ export default function MailboxesScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { data: connections = [], isLoading, isError, refetch } = useQuery({ queryKey: ['mailbox-connections'], queryFn: listMailboxConnections });
+  const { data: proAddresses = [] } = useQuery({ queryKey: ['pro-addresses'], queryFn: listProAddresses });
   const { refetch: refetchAccounts } = useAccountSwitcher();
   const { isManager } = useAccountContext();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -39,6 +46,14 @@ export default function MailboxesScreen() {
 
   const retryMutation = useMutation({ mutationFn: (id: string) => retryMailboxConnection(id), onSuccess: invalidate });
   const deleteMutation = useMutation({ mutationFn: (id: string) => deleteMailboxConnection(id), onSuccess: invalidate });
+  const claimMutation = useMutation({
+    mutationFn: (id: string) => claimProAddress(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pro-addresses'] });
+      refetchAccounts();
+    },
+    onError: e => Alert.alert('Erreur', describeError(e)),
+  });
 
   const connectGmail = async () => {
     setConnectingGmail(true);
@@ -99,6 +114,41 @@ export default function MailboxesScreen() {
           </>
         </Button>
       </View>
+
+      {proAddresses.length > 0 && (
+        <View className="gap-2 border-b border-neutral-200 p-4 dark:border-neutral-800">
+          <Text className="text-xs font-semibold text-neutral-900 dark:text-neutral-100">Adresses pro</Text>
+          <Text className="text-xs text-neutral-500 dark:text-neutral-400">
+            Attribuées par un administrateur — connectez-les pour les voir dans votre boîte.
+          </Text>
+          {proAddresses.map((address: ProAddress) => (
+            <View
+              key={address.id}
+              className="flex-row items-center gap-3 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900"
+            >
+              <View className="h-9 w-9 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800">
+                <AtSign size={16} color="#6b7280" />
+              </View>
+              <Text className="flex-1 font-mono text-sm font-semibold text-neutral-900 dark:text-neutral-100">{address.email}</Text>
+              {address.claimedAt ? (
+                <View className="flex-row items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5">
+                  <CheckCircle2 size={12} color="#059669" />
+                  <Text className="text-xs text-emerald-700 dark:text-emerald-400">Connectée</Text>
+                </View>
+              ) : (
+                <Button
+                  variant="secondary"
+                  className="px-3 py-1.5"
+                  loading={claimMutation.isPending && claimMutation.variables === address.id}
+                  onPress={() => claimMutation.mutate(address.id)}
+                >
+                  <Text className="text-xs font-medium text-neutral-900 dark:text-neutral-100">Connecter</Text>
+                </Button>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">

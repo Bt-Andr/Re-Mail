@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Mail, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { AtSign, CheckCircle2, Mail, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useToast } from '../../context/ToastContext'
 import { useAccountSwitcher } from '../../context/AccountSwitcherContext'
@@ -14,7 +14,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { MailboxConnectionFormModal, MAILBOX_PRESETS } from './MailboxConnectionFormModal'
 import { ProviderPickerModal, type MailboxProvider } from './ProviderPickerModal'
 import { ResendConnectModal } from './ResendConnectModal'
-import type { ExternalMailboxConnection } from '../../types/api'
+import type { ExternalMailboxConnection, ProAddress } from '../../types/api'
 
 const GMAIL_ERROR_MESSAGES: Record<string, string> = {
   oauth_denied: 'Consentement Google annulé.',
@@ -33,6 +33,8 @@ export function ExternalMailboxesPage() {
   const { isManager } = useAccountContext()
   const [searchParams, setSearchParams] = useSearchParams()
   const [connections, setConnections] = useState<ExternalMailboxConnection[]>([])
+  const [proAddresses, setProAddresses] = useState<ProAddress[]>([])
+  const [claimingId, setClaimingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -94,12 +96,15 @@ export function ExternalMailboxesPage() {
     setLoading(true)
     setLoadError('')
     try {
-      const res = await apiFetch('/mailbox-connections')
-      if (res.ok) {
-        setConnections(await res.json())
+      const [connRes, proRes] = await Promise.all([apiFetch('/mailbox-connections'), apiFetch('/pro-addresses/mine')])
+      if (connRes.ok) {
+        setConnections(await connRes.json())
       } else {
-        setLoadError(await parseError(res))
+        setLoadError(await parseError(connRes))
       }
+      // Silencieux si /pro-addresses/mine échoue (ex. org sans domaine vérifié renvoie
+      // déjà []) : ne bloque jamais l'affichage des vraies boîtes connectées pour ça.
+      if (proRes.ok) setProAddresses(await proRes.json())
     } catch (err) {
       setLoadError(networkErrorMessage(err))
     } finally {
@@ -110,6 +115,24 @@ export function ExternalMailboxesPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const claim = async (address: ProAddress) => {
+    setClaimingId(address.id)
+    try {
+      const res = await apiFetch(`/pro-addresses/${address.id}/claim`, { method: 'POST' })
+      if (res.ok) {
+        setProAddresses(prev => prev.map(a => (a.id === address.id ? { ...a, claimedAt: new Date().toISOString() } : a)))
+        showToast('success', `${address.email} connectée.`)
+        refetchAccounts()
+      } else {
+        showToast('error', await parseError(res, 'Connexion impossible.'))
+      }
+    } catch (err) {
+      showToast('error', networkErrorMessage(err))
+    } finally {
+      setClaimingId(null)
+    }
+  }
 
   const retry = async (connection: ExternalMailboxConnection) => {
     setRetryingId(connection.id)
@@ -149,6 +172,34 @@ export function ExternalMailboxesPage() {
   return (
     <div className="min-h-screen bg-background px-4 py-10">
       <div className="max-w-2xl mx-auto">
+        {!loading && proAddresses.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-sm font-semibold text-foreground mb-1">Adresses pro</h2>
+            <p className="text-xs text-muted-foreground mb-3">Attribuées par un administrateur — connectez-les pour les voir dans votre boîte.</p>
+            <div className="space-y-3">
+              {proAddresses.map(address => (
+                <div key={address.id} className="bg-card rounded-lg border border-border p-4 flex items-center gap-4">
+                  <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center flex-shrink-0">
+                    <AtSign className="text-foreground" size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-mono text-sm font-semibold text-foreground">{address.email}</span>
+                  </div>
+                  {address.claimedAt ? (
+                    <Badge color="green">
+                      <span className="inline-flex items-center gap-1"><CheckCircle2 size={12} /> Connectée</span>
+                    </Badge>
+                  ) : (
+                    <Button variant="secondary" onClick={() => void claim(address)} loading={claimingId === address.id}>
+                      Connecter
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-lg font-semibold">Boîtes externes</h1>

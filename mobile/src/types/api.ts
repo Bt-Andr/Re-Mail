@@ -200,6 +200,15 @@ export interface ExternalMailboxConnection {
   createdAt: string;
 }
 
+// Adresse pro attribuée par un admin (GET /api/pro-addresses/mine) — claimedAt distingue
+// "attribuée" de "connectée" (POST .../claim), voir app/(app)/mailboxes.tsx.
+export interface ProAddress {
+  id: string;
+  canal: string;
+  email: string;
+  claimedAt: string | null;
+}
+
 export type InviteStatus = 'PENDING' | 'ACTIVATED' | 'REVOKED';
 
 export interface UserInvite {

@@ -64,6 +64,15 @@ export interface ExternalMailboxConnection {
   createdAt: string
 }
 
+// Adresse pro attribuée par un admin (GET /api/pro-addresses/mine) — claimedAt distingue
+// "attribuée" de "connectée" (POST .../claim), voir ExternalMailboxesPage.tsx.
+export interface ProAddress {
+  id: string
+  canal: string
+  email: string
+  claimedAt: string | null
+}
+
 export interface MailRoute {
   id: string
   alias: string

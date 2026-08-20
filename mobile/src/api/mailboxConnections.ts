@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { AuthResponse, ExternalMailboxConnection, Organization } from '../types/api';
+import type { AuthResponse, ExternalMailboxConnection, Organization, ProAddress } from '../types/api';
 
 export interface MailboxConnectionFormValues {
   email: string;
@@ -33,4 +33,12 @@ export function deleteMailboxConnection(id: string): Promise<void> {
 
 export function retryMailboxConnection(id: string): Promise<{ success: boolean }> {
   return apiFetch<{ success: boolean }>(`/mailbox-connections/${id}/retry`, { method: 'PATCH' });
+}
+
+export function listProAddresses(): Promise<ProAddress[]> {
+  return apiFetch<ProAddress[]>('/pro-addresses/mine');
+}
+
+export function claimProAddress(id: string): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>(`/pro-addresses/${id}/claim`, { method: 'POST' });
 }

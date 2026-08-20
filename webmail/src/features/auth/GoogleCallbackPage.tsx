@@ -39,7 +39,7 @@ export function GoogleCallbackPage() {
 
     void (async () => {
       try {
-        const res = await apiFetch('/auth/google/exchange', { method: 'POST', body: JSON.stringify({ handoff }) })
+        const res = await apiFetch('/auth/google/exchange', { method: 'POST', body: JSON.stringify({ handoff }), skipAuthRedirect: true })
         if (!res.ok) {
           setError(await parseError(res, 'Cette session de connexion a expiré, réessayez.'))
           return

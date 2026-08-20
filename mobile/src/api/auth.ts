@@ -26,8 +26,15 @@ export function me(): Promise<{ user: User }> {
 }
 
 // Échange le jeton d'échange à usage unique posé par GET .../gmail/callback (intent
-// 'signin') contre une vraie session — voir (auth)/login.tsx & (auth)/signup.tsx
-// continueWithGoogle(). Même forme de réponse que signup() (organization à part).
+// 'signin') contre une vraie session — voir (auth)/login.tsx, (auth)/signup.tsx,
+// (auth)/welcome.tsx et google-callback.tsx. Même forme de réponse que signup()
+// (organization à part). skipAuthRedirect : endpoint public, un 401 ici signifie un
+// jeton d'échange expiré/déjà consommé (ex. double interception concurrente du même
+// retour Google sur Android), jamais une session ambiante à invalider.
 export function exchangeGoogleHandoff(handoff: string): Promise<AuthResponse & { organization: Organization }> {
-  return apiFetch<AuthResponse & { organization: Organization }>('/auth/google/exchange', { method: 'POST', body: { handoff } });
+  return apiFetch<AuthResponse & { organization: Organization }>('/auth/google/exchange', {
+    method: 'POST',
+    body: { handoff },
+    skipAuthRedirect: true,
+  });
 }

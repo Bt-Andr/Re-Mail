@@ -19,6 +19,13 @@ export class ApiError extends Error {
 
 interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
   body?: BodyInit | object | null;
+  // Pour les endpoints publics dont un 401 est un échec métier (ex. jeton d'échange
+  // expiré/déjà consommé sur /auth/google/exchange), pas une session rejetée — un token
+  // ambiant peut être présent en storage sans rapport avec cet appel précis (ex. deux
+  // interceptions concurrentes du même retour OAuth sur Android, voir google-callback.tsx :
+  // le perdant de la course reçoit un 401 sur un jeton déjà consommé, et sans ce flag
+  // effacerait la session que le gagnant vient tout juste d'établir).
+  skipAuthRedirect?: boolean;
 }
 
 // Miroir de web/src/lib/apiClient.ts : fetch brut, bearer token, jamais de
@@ -26,7 +33,7 @@ interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
 // une déconnexion — un 403 peut être une simple restriction de rôle/accès sur
 // une ressource et doit rester une erreur affichée en ligne, pas un logout.
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const { headers, body, ...rest } = options;
+  const { headers, body, skipAuthRedirect, ...rest } = options;
   const token = await getToken();
   const isFormData = body instanceof FormData;
 
@@ -53,12 +60,12 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   // avec un token déjà présent signifie une vraie session à invalider (ex.
   // GET /auth/me quand l'utilisateur a été supprimé côté serveur).
   if (res.status === 401) {
-    if (token) {
+    if (token && !skipAuthRedirect) {
       console.error(`[api] 401 — ${method} ${path} → déconnexion forcée (token présent mais rejeté)`);
       await clearToken();
       unauthorizedHandler?.();
     } else {
-      console.error(`[api] 401 — ${method} ${path} (pas de session en cours)`);
+      console.error(`[api] 401 — ${method} ${path} (${skipAuthRedirect ? 'endpoint public, pas une session à invalider' : 'pas de session en cours'})`);
     }
   }
 

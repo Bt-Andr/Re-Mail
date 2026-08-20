@@ -19,21 +19,30 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY)
 }
 
+interface ApiFetchOptions extends RequestInit {
+  // Pour les endpoints publics dont un 401 est un échec métier (ex. jeton d'échange
+  // expiré/déjà consommé sur /auth/google/exchange), pas une session rejetée — un token
+  // ambiant peut être présent en storage sans rapport avec cet appel précis. Sans ce
+  // flag, ce 401 effacerait à tort une session valide déjà en place.
+  skipAuthRedirect?: boolean
+}
+
 // Porte le pattern de jeprogroup-website/web/services/authService.ts (fetch brut,
 // bearer token en localStorage, intercepteur 401), avec une différence : ne jamais
 // fixer Content-Type quand le corps est du FormData (composeur + upload de fichier
 // d'invitation envoient du multipart) — laisser le navigateur poser le boundary.
-export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
+export async function apiFetch(path: string, options: ApiFetchOptions = {}): Promise<Response> {
+  const { skipAuthRedirect, ...rest } = options
   const token = getToken()
-  const isFormData = options.body instanceof FormData
+  const isFormData = rest.body instanceof FormData
   const headers: Record<string, string> = {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-    ...((options.headers as Record<string, string>) || {}),
+    ...((rest.headers as Record<string, string>) || {}),
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const method = options.method || 'GET'
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers })
+  const method = rest.method || 'GET'
+  const res = await fetch(`${API_URL}${path}`, { ...rest, headers })
 
   // Un 401 sans token (login/signup/activation — endpoints publics, jamais de
   // session en cours) est un échec d'identifiants normal, pas une session
@@ -41,14 +50,18 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
   // mauvais moment et effaçait le message d'erreur avant qu'il s'affiche (le
   // bug "toujours renvoyé sur la connexion, sans erreur visible"). Seul un 401
   // avec un token déjà présent signifie une vraie session à invalider (ex.
-  // GET /auth/me quand l'utilisateur a été supprimé côté serveur).
+  // GET /auth/me quand l'utilisateur a été supprimé côté serveur) — sauf pour
+  // les endpoints marqués skipAuthRedirect, dont le 401 n'a jamais rapport à un
+  // token ambiant (voir mobile/src/api/client.ts pour le même correctif, motivé
+  // par une vraie régression : double interception du retour Google effaçant une
+  // session tout juste établie).
   if (res.status === 401) {
-    if (token) {
+    if (token && !skipAuthRedirect) {
       console.error(`[api] 401 — ${method} ${path} → déconnexion forcée (token présent mais rejeté)`)
       clearToken()
       unauthorizedHandler?.()
     } else {
-      console.error(`[api] 401 — ${method} ${path} (pas de session en cours)`)
+      console.error(`[api] 401 — ${method} ${path} (${skipAuthRedirect ? 'endpoint public, pas une session à invalider' : 'pas de session en cours'})`)
     }
   } else if (!res.ok) {
     console.error(`[api] échec ${res.status} — ${method} ${path}`)

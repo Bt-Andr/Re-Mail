@@ -14,13 +14,23 @@ import { useSession } from '../src/context/SessionContext';
 // tombait sur "Unmatched Route" (aucun exchange tenté, l'utilisateur ne sait jamais
 // pourquoi). Reprend ici la même logique d'échange que les écrans d'auth.
 export default function GoogleCallbackScreen() {
-  const { login } = useSession();
+  const { login, user } = useSession();
   const params = useLocalSearchParams<{ error?: string; handoff?: string }>();
   const handled = useRef(false);
 
   useEffect(() => {
     if (handled.current) return;
     handled.current = true;
+
+    // Une session existe déjà : l'interception normale (openAuthSessionAsync dans
+    // welcome.tsx/login.tsx/signup.tsx) a déjà gagné la course et consommé le jeton
+    // d'échange avant que ce filet de sécurité ne s'exécute. Retenter l'échange ici
+    // échouerait à coup sûr (jeton à usage unique déjà utilisé) pour rien — direction
+    // l'inbox plutôt que de solliciter le backend inutilement.
+    if (user) {
+      router.replace('/(app)/(drawer)/inbox');
+      return;
+    }
 
     if (params.error) {
       router.replace({ pathname: '/(auth)/welcome', params: { error: String(params.error) } });

@@ -76,11 +76,15 @@ export function MailRoutesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-lg font-semibold">Adresses mail</h1>
-          <p className="text-sm text-muted-foreground">Alias @votredomaine.com et notification personnelle associée.</p>
+          <h1 className="text-lg font-semibold">Transferts</h1>
+          <p className="text-sm text-muted-foreground">
+            Pur transfert : une copie de chaque email reçu part vers l'adresse personnelle indiquée — sans rapport
+            avec qui est propriétaire du thread dans Re-Mail. Pour attribuer une adresse à quelqu'un (et qu'il la
+            connecte lui-même), voir <Link to="/settings/pro-addresses" className="underline font-medium">Adresses pro</Link>.
+          </p>
           <p className="text-xs text-muted-foreground/80 mt-1">
-            Créer une adresse ne suffit pas à l'assigner : les rôles Propriétaire/Admin y ont accès automatiquement,
-            mais chaque Membre doit recevoir la permission d'envoi individuellement depuis{' '}
+            Créer une adresse ne suffit pas à autoriser l'envoi depuis celle-ci : les rôles Propriétaire/Admin y ont
+            accès automatiquement, mais chaque Membre doit recevoir la permission individuellement depuis{' '}
             <Link to="/settings/users" className="underline font-medium">Utilisateurs</Link>.
           </p>
         </div>

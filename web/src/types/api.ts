@@ -74,6 +74,27 @@ export interface MailRoute {
   updatedAt: string
 }
 
+// Une "adresse pro" côté produit EST une ThreadRoutingRule (canal → assignTo) — pas un
+// modèle séparé. claimedAt distingue "attribuée par l'admin" de "connectée par la
+// personne assignée depuis son picker" (voir routes/proAddresses.ts backend).
+export interface ThreadRoutingRule {
+  id: string
+  canal: string
+  active: boolean
+  claimedAt: string | null
+  assignTo: { id: string; nom: string; username: string; orgRole: OrgRole }
+  createdAt: string
+  updatedAt: string
+}
+
+// Réponse de PUT /thread-routing-rules/:canal quand assignToEmail ne correspond à aucun
+// User existant mais à une UserInvite PENDING : aucune règle créée, juste mise en attente.
+export interface StagedRoutingRule {
+  staged: true
+  canal: string
+  invite: { id: string; email: string; nom: string }
+}
+
 export interface MailRouteBulkResult {
   created: MailRoute[]
   skipped: { alias: string; reason: string }[]

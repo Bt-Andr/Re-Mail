@@ -2,7 +2,8 @@ import { NavLink, Outlet } from 'react-router-dom'
 
 const TABS = [
   { to: '/settings/organization', label: 'Organisation' },
-  { to: '/settings/mail-routes', label: 'Adresses mail' },
+  { to: '/settings/pro-addresses', label: 'Adresses pro' },
+  { to: '/settings/mail-routes', label: 'Transferts' },
   { to: '/settings/invites', label: 'Invitations' },
   { to: '/settings/users', label: 'Utilisateurs' },
 ]

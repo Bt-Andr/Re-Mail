@@ -8,6 +8,7 @@ import { AuthGuard } from './components/layout/AuthGuard'
 import { GuestGuard } from './components/layout/GuestGuard'
 import { RoleGuard } from './components/layout/RoleGuard'
 import { LoginPage } from './features/auth/LoginPage'
+import { ProAddressesPage } from './features/proAddresses/ProAddressesPage'
 import { MailRoutesPage } from './features/mailRoutes/MailRoutesPage'
 import { InvitesPage } from './features/invites/InvitesPage'
 import { UsersPage } from './features/users/UsersPage'
@@ -36,6 +37,7 @@ export default function App() {
                   <Route path="/settings" element={<SettingsLayout />}>
                     <Route index element={<Navigate to="organization" replace />} />
                     <Route path="organization" element={<OrgSettingsPage />} />
+                    <Route path="pro-addresses" element={<ProAddressesPage />} />
                     <Route path="mail-routes" element={<MailRoutesPage />} />
                     <Route path="invites" element={<InvitesPage />} />
                     <Route path="users" element={<UsersPage />} />

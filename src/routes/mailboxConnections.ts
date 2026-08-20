@@ -179,12 +179,10 @@ const imapSigninLimiter = rateLimit({
 // pas besoin du mécanisme de jeton d'échange à usage unique (voir lib/loginHandoff.ts,
 // qui existe uniquement pour ne jamais mettre le vrai JWT dans une URL de redirection).
 //
-// Réplique exactement les trois branches de gmailOAuth.ts (intent 'signin') : email
+// Réplique exactement les deux branches de gmailOAuth.ts (intent 'signin') : email
 // inconnu -> compte perso créé à la volée (createPersonalAccountFromMailbox) ; email déjà
-// perso -> reconnexion, vraie session ; email déjà d'équipe -> boîte attachée mais AUCUNE
-// session émise (le mot de passe du compte reste requis), erreur générique — jamais
-// laisser un appelant non authentifié distinguer "cet email est un compte d'équipe" d'un
-// autre échec (même principe que gmailOAuth.ts:223-230).
+// existant (perso OU d'équipe) -> reconnexion, vraie session directement — voir la note
+// plus bas sur la décision produit qui a supprimé la distinction perso/équipe ici.
 router.post('/imap/signin', imapSigninLimiter, async (req, res) => {
   const { imapHost, smtpHost, password } = req.body
   const email = typeof req.body.email === 'string' ? req.body.email.toLowerCase().trim() : req.body.email

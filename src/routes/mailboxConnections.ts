@@ -237,22 +237,12 @@ router.post('/imap/signin', imapSigninLimiter, async (req, res) => {
     return true
   }
 
-  if (existingUser && !existingUser.organization.isPersonal) {
-    // Compte d'équipe existant — pas de session délivrée via ce raccourci (le mot de
-    // passe reste requis pour un compte pro), mais la boîte est quand même attachée : la
-    // connexion IMAP réussie prouve la possession de l'adresse aussi fiablement qu'un mot
-    // de passe. Messages dédiés (pas de générique réutilisé) : l'appelant a déjà prouvé
-    // cette possession avant d'atteindre cette branche, donc lui révéler l'un ou l'autre
-    // cas ne fuite rien à un tiers non authentifié — seulement à quelqu'un qui contrôle
-    // déjà cette boîte mail.
-    const attached = await attachMailbox(existingUser.organizationId, existingUser.id)
-    if (!attached) return res.status(400).json({ error: 'Cette adresse est déjà connectée par un autre membre de cette organisation.' })
-    return res.status(400).json({
-      error: 'Un compte d’équipe existe déjà avec cette adresse. Connectez-vous avec le nom d’utilisateur et le mot de passe de ce compte — votre boîte y est déjà rattachée.',
-      code: 'account_exists_use_password',
-    })
-  }
-
+  // Un compte d'équipe (organization.isPersonal === false) suit exactement le même chemin
+  // qu'un compte perso : l'email n'identifie plus "un compte entreprise" par nature
+  // (décision produit actée — voir plan de refonte). La connexion IMAP réussie prouve la
+  // possession de l'adresse aussi fiablement qu'un mot de passe, quel que soit le type de
+  // compte qu'elle atteint. Changement de posture volontaire : avant cette décision, un
+  // compte pro exigeait toujours le mot de passe, jamais ce raccourci — ce n'est plus le cas.
   let userId: string
   let organizationId: string
   if (existingUser) {
@@ -265,10 +255,7 @@ router.post('/imap/signin', imapSigninLimiter, async (req, res) => {
   }
 
   const attached = await attachMailbox(organizationId, userId)
-  if (!attached) {
-    console.error('[POST /imap/signin] échec inattendu de rattachement', organizationId, userId)
-    return res.status(500).json({ error: 'Erreur serveur.' })
-  }
+  if (!attached) return res.status(400).json({ error: 'Cette adresse est déjà connectée par un autre membre de cette organisation.' })
 
   const user = await prisma.user.findUnique({
     where: { id: userId },

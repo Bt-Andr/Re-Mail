@@ -305,7 +305,7 @@ describe('Gmail OAuth', () => {
         expect(connection?.userId).toBe(user.id)
       })
 
-      it('connects the mailbox to an existing pro (team) account but issues no session — password still required', async () => {
+      it('signs an existing pro (team) account owner back in and connects the mailbox — email no longer gates enterprise access', async () => {
         const proOrg = await prisma.organization.create({
           data: { name: 'Pro Co', slug: `pro-co-${Date.now()}`, isPersonal: false },
         })
@@ -323,18 +323,18 @@ describe('Gmail OAuth', () => {
         const state = await getSignedSigninState(signinReturnTo)
         const res = await request(app).get('/api/mailbox-connections/gmail/callback').query({ code: 'auth-code', state }).redirects(0)
         expect(res.status).toBe(302)
-        // Code dédié (pas le account_provisioning_failed générique) : l'appelant a déjà
-        // prouvé la possession de la boîte via l'OAuth Google réussi, donc lui révéler
-        // que cette adresse est un compte d'équipe ne fuite rien à un tiers.
-        expect(res.headers.location).toBe(`${signinReturnTo}?error=account_exists_use_password`)
+        const location = new URL(res.headers.location)
+        // Une session est désormais délivrée pour ce compte pro — décision produit actée :
+        // une adresse personnelle n'identifie plus "un compte entreprise", réussir l'OAuth
+        // Google prouve la possession aussi fiablement qu'un mot de passe, quel que soit le
+        // type de compte atteint (voir plan de refonte, section "correctif isolé").
+        expect(location.searchParams.get('handoff')).toBeTruthy()
+        expect(location.searchParams.get('error')).toBeNull()
 
-        // Aucune session émise — réussir l'OAuth Google ne doit jamais, à lui seul,
-        // déverrouiller un compte pro (portée du raccourci "signin" limitée au perso).
-        const handoffCount = await prisma.loginHandoff.count({ where: { user: { email: 'moi@gmail.com' } } })
-        expect(handoffCount).toBe(0)
+        const usersWithEmail = await prisma.user.findMany({ where: { email: 'moi@gmail.com' } })
+        expect(usersWithEmail).toHaveLength(1)
+        expect(usersWithEmail[0].id).toBe(proUser.id) // même compte, pas un doublon
 
-        // Mais le Gmail est bien rattaché à ce compte pro, prêt dès la connexion par mot
-        // de passe — évite une manipulation manuelle redondante dans Boîtes externes.
         const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: proOrg.id, email: 'moi@gmail.com' } })
         expect(connection?.userId).toBe(proUser.id)
         expect(connection?.status).toBe('connected')

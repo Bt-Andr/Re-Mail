@@ -226,7 +226,7 @@ describe('POST /api/mailbox-connections/imap/signin', () => {
     expect(connection?.userId).toBe(user.id)
   })
 
-  it('connects the mailbox to an existing pro (team) account but issues no session — password still required', async () => {
+  it('signs an existing pro (team) account owner back in and connects the mailbox — email no longer gates enterprise access', async () => {
     const proOrg = await prisma.organization.create({
       data: { name: 'Pro Co Imap', slug: `pro-co-imap-${Date.now()}`, isPersonal: false },
     })
@@ -242,13 +242,14 @@ describe('POST /api/mailbox-connections/imap/signin', () => {
     })
 
     const res = await request(app).post('/api/mailbox-connections/imap/signin').send(signinBody)
-    // Message dédié et actionnable (pas un générique) : la connexion IMAP réussie a déjà
-    // prouvé la possession de l'adresse, donc révéler "c'est un compte d'équipe" ici ne
-    // fuite rien à un tiers non authentifié — seulement à quelqu'un qui contrôle déjà
-    // cette boîte mail.
-    expect(res.status).toBe(400)
-    expect(res.body.code).toBe('account_exists_use_password')
-    expect(res.body.token).toBeUndefined()
+    // Une session est désormais délivrée pour ce compte pro — décision produit actée :
+    // une adresse personnelle n'identifie plus "un compte entreprise", la connexion IMAP
+    // réussie prouve la possession aussi fiablement qu'un mot de passe (voir plan de
+    // refonte, section "correctif isolé").
+    expect(res.status).toBe(200)
+    expect(res.body.token).toBeTruthy()
+    expect(res.body.user.id).toBe(proUser.id)
+    expect(res.body.organization.isPersonal).toBe(false)
 
     const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: proOrg.id, email: signinBody.email } })
     expect(connection?.userId).toBe(proUser.id)

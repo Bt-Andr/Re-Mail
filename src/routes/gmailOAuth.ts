@@ -207,29 +207,19 @@ router.get('/gmail/callback', async (req, res) => {
     return res.redirect(returnTo)
   }
 
-  // intent === 'signin' : aucune session préalable — résout un compte perso existant par
-  // email (lookup global raw prisma, avant que l'org soit connue — même exception
-  // documentée que auth.ts /login et publicUserInvites.ts), ou en crée un à la volée.
+  // intent === 'signin' : aucune session préalable — résout un compte existant par email
+  // (lookup global raw prisma, avant que l'org soit connue — même exception documentée
+  // que auth.ts /login et publicUserInvites.ts), ou en crée un à la volée. Un compte
+  // d'équipe (organization.isPersonal === false) suit exactement le même chemin qu'un
+  // compte perso : l'email n'identifie plus "un compte entreprise" par nature (décision
+  // produit actée — voir plan de refonte) — réussir l'OAuth Google prouve la possession
+  // de l'adresse aussi fiablement qu'un mot de passe, quel que soit le type de compte
+  // qu'elle atteint. Changement de posture volontaire : avant cette décision, un compte
+  // pro exigeait toujours le mot de passe, jamais ce raccourci — ce n'est plus le cas.
   let userId: string
   let organizationId: string
   try {
     const existingUser = await prisma.user.findUnique({ where: { email }, include: { organization: true } })
-    if (existingUser && !existingUser.organization.isPersonal) {
-      // Compte d'équipe existant avec cet email — on ne délivre PAS de session via ce
-      // mécanisme pensé pour le perso (portée validée avec l'utilisateur : le mot de passe
-      // reste requis pour accéder à un compte pro), mais on connecte quand même le Gmail à
-      // ce compte : réussir l'OAuth Google prouve la possession de l'adresse aussi
-      // fiablement qu'un mot de passe, et ça évite une manipulation manuelle redondante
-      // dans Boîtes externes une fois connecté normalement.
-      // Code dédié (account_exists_use_password), PAS le générique account_provisioning_failed
-      // réutilisé ailleurs : ici l'appelant a déjà prouvé la possession de la boîte (OAuth
-      // Google réussi) avant d'atteindre cette branche, donc lui révéler "cette adresse est
-      // déjà un compte d'équipe" ne fuite rien à un tiers nonauthentifié — seulement à
-      // quelqu'un qui contrôle déjà cette boîte mail. Un message clair et actionnable vaut
-      // mieux qu'une erreur générique incompréhensible pour ce cas précis.
-      const result = await connectGmailMailbox(existingUser.organizationId, existingUser.id, email, refreshToken, accessToken)
-      return res.redirect(withError(returnTo, result.ok ? 'account_exists_use_password' : result.error))
-    }
     if (existingUser) {
       userId = existingUser.id
       organizationId = existingUser.organizationId

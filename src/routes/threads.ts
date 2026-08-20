@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { buildNotificationEmail, sendNotificationEmail } from '../lib/email'
 import { buildResendClient } from '../lib/resendClient'
 import { getDecryptedResendKey } from '../helpers/resendAccount'
-import { createActivity } from '../helpers/thread'
+import { createActivity, getHiddenProCanaux } from '../helpers/thread'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
 import prisma from '../lib/prisma'
@@ -18,7 +18,6 @@ router.get('/', authenticateToken, async (req, res) => {
     const db = forOrg(req.user!.organizationId)
     const { canal, status, folder, q, take, skip, account } = req.query
     const where: Record<string, unknown> = {}
-    if (canal) where.canal = canal
     if (status) where.status = status
     // Switcher de compte (voir routes/accounts.ts) : 'resend' = fils sans boîte externe
     // d'origine (sourceId null, webhook Resend/compose sortant) ; sinon un
@@ -43,6 +42,18 @@ router.get('/', authenticateToken, async (req, res) => {
 
     if (!isManager(req.user!.orgRole)) {
       where.assignedToId = req.user!.id
+    }
+
+    // Combine avec le filtre `canal` explicite (switcher de dossier par canal) : un
+    // canal demandé mais caché (adresse pro non connectée par l'appelant) ne doit jamais
+    // silencieusement ignorer la restriction de visibilité — court-circuite en résultat
+    // vide plutôt que de laisser `where.canal` écraser le `notIn` ci-dessous.
+    const hiddenCanaux = await getHiddenProCanaux(db, req.user!.id)
+    if (typeof canal === 'string' && canal) {
+      if (hiddenCanaux.includes(canal)) return res.json([])
+      where.canal = canal
+    } else if (hiddenCanaux.length > 0) {
+      where.canal = { notIn: hiddenCanaux }
     }
 
     // Recherche texte : sujet/expéditeur + corps des messages du fil. Combinée en AND
@@ -112,7 +123,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
     })
     if (!thread) return res.status(404).json({ error: 'Thread introuvable.' })
 
-    if (!isManager(req.user!.orgRole) && thread.assignedToId !== req.user!.id) {
+    const hiddenCanaux = await getHiddenProCanaux(db, req.user!.id)
+    const visible = !hiddenCanaux.includes(thread.canal) && (isManager(req.user!.orgRole) || thread.assignedToId === req.user!.id)
+    if (!visible) {
       return res.status(403).json({ error: 'Accès non autorisé.' })
     }
 
@@ -175,8 +188,7 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
 
   try {
     const db = forOrg(req.user!.organizationId)
-    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
-      return res.status(403).json({ error: 'Accès non autorisé.' })
+    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
     const prev = await db.thread.findUnique({ where: { id: req.params.id }, select: { status: true } })
     const thread = await db.thread.update({ where: { id: req.params.id }, data: { status } })
     await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'status_changed', { from: prev?.status, to: status })
@@ -186,11 +198,43 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
   }
 })
 
-// Accès : OWNER/ADMIN ou utilisateur assigné au fil
-async function canTouchThread(db: ReturnType<typeof forOrg>, userId: string, orgRole: string, threadId: string): Promise<boolean> {
-  if (isManager(orgRole)) return true
-  const t = await db.thread.findUnique({ where: { id: threadId }, select: { assignedToId: true } })
-  return !!t && t.assignedToId === userId
+// Accès : OWNER/ADMIN ou utilisateur assigné au fil — SAUF si le fil vient d'une
+// adresse pro que l'appelant n'a pas connectée (voir getHiddenProCanaux), auquel cas
+// même un manager est refusé (même règle pour tout le monde, décision produit actée).
+// 'not_found' (thread hors du scope forOrg, ex. autre organisation) est distinct de
+// 'forbidden' (thread visible dans l'org mais accès refusé) : la distinction importe
+// pour l'isolation tenant — un thread d'une autre org doit rester introuvable (404),
+// jamais confirmé comme existant via un 403 (voir test threads.test.ts).
+type ThreadAccess = 'not_found' | 'forbidden' | 'ok'
+async function checkThreadAccess(db: ReturnType<typeof forOrg>, userId: string, orgRole: string, threadId: string): Promise<ThreadAccess> {
+  const t = await db.thread.findUnique({ where: { id: threadId }, select: { assignedToId: true, canal: true } })
+  if (!t) return 'not_found'
+  const hiddenCanaux = await getHiddenProCanaux(db, userId)
+  if (hiddenCanaux.includes(t.canal)) return 'forbidden'
+  if (isManager(orgRole)) return 'ok'
+  return t.assignedToId === userId ? 'ok' : 'forbidden'
+}
+
+// Garde de début de handler : écrit la réponse 404/403 appropriée et renvoie true si
+// l'accès est refusé, auquel cas l'appelant doit `return` immédiatement. Un seul point
+// pour les 7 routes PATCH/DELETE ci-dessous plutôt que dupliquer le if/else à chacune.
+async function denyThreadAccess(
+  db: ReturnType<typeof forOrg>,
+  userId: string,
+  orgRole: string,
+  threadId: string,
+  res: import('express').Response
+): Promise<boolean> {
+  const access = await checkThreadAccess(db, userId, orgRole, threadId)
+  if (access === 'not_found') {
+    res.status(404).json({ error: 'Thread introuvable.' })
+    return true
+  }
+  if (access === 'forbidden') {
+    res.status(403).json({ error: 'Accès non autorisé.' })
+    return true
+  }
+  return false
 }
 
 // Contrepartie explicite du "lu" automatique (effet de bord de GET /:id) : remet
@@ -198,8 +242,7 @@ async function canTouchThread(db: ReturnType<typeof forOrg>, userId: string, org
 router.patch('/:id/unread', authenticateToken, async (req, res) => {
   try {
     const db = forOrg(req.user!.organizationId)
-    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
-      return res.status(403).json({ error: 'Accès non autorisé.' })
+    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
     await db.threadMessage.updateMany({
       where: { threadId: req.params.id, direction: 'inbound' },
       data: { readAt: null },
@@ -215,8 +258,7 @@ router.patch('/:id/unread', authenticateToken, async (req, res) => {
 router.patch('/:id/trash', authenticateToken, async (req, res) => {
   try {
     const db = forOrg(req.user!.organizationId)
-    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
-      return res.status(403).json({ error: 'Accès non autorisé.' })
+    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
     // archivedAt: null — un fil trashé sort aussi de l'archive, les deux dossiers
     // restent mutuellement exclusifs (voir GET / plus haut).
     const thread = await db.thread.update({ where: { id: req.params.id }, data: { deletedAt: new Date(), archivedAt: null } })
@@ -230,8 +272,7 @@ router.patch('/:id/trash', authenticateToken, async (req, res) => {
 router.patch('/:id/archive', authenticateToken, async (req, res) => {
   try {
     const db = forOrg(req.user!.organizationId)
-    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
-      return res.status(403).json({ error: 'Accès non autorisé.' })
+    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
     const thread = await db.thread.update({ where: { id: req.params.id }, data: { archivedAt: new Date() } })
     await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'archived', {})
     res.json(thread)
@@ -243,8 +284,7 @@ router.patch('/:id/archive', authenticateToken, async (req, res) => {
 router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
   try {
     const db = forOrg(req.user!.organizationId)
-    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
-      return res.status(403).json({ error: 'Accès non autorisé.' })
+    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
     const thread = await db.thread.update({ where: { id: req.params.id }, data: { archivedAt: null } })
     await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'unarchived', {})
     res.json(thread)
@@ -260,8 +300,7 @@ router.patch('/:id/star', authenticateToken, async (req, res) => {
   if (typeof starred !== 'boolean') return res.status(400).json({ error: 'starred (boolean) requis.' })
   try {
     const db = forOrg(req.user!.organizationId)
-    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
-      return res.status(403).json({ error: 'Accès non autorisé.' })
+    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
     const thread = await db.thread.update({ where: { id: req.params.id }, data: { starred } })
     res.json(thread)
   } catch {
@@ -272,8 +311,7 @@ router.patch('/:id/star', authenticateToken, async (req, res) => {
 router.patch('/:id/restore', authenticateToken, async (req, res) => {
   try {
     const db = forOrg(req.user!.organizationId)
-    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
-      return res.status(403).json({ error: 'Accès non autorisé.' })
+    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
     const thread = await db.thread.update({ where: { id: req.params.id }, data: { deletedAt: null } })
     await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'restored', {})
     res.json(thread)
@@ -309,9 +347,11 @@ router.patch('/bulk', authenticateToken, async (req, res) => {
 
   try {
     const db = forOrg(req.user!.organizationId)
+    const hiddenCanaux = await getHiddenProCanaux(db, req.user!.id)
     const where = {
       id: { in: ids as string[] },
       ...(isManager(req.user!.orgRole) ? {} : { assignedToId: req.user!.id }),
+      ...(hiddenCanaux.length > 0 ? { canal: { notIn: hiddenCanaux } } : {}),
     }
     const result = await db.thread.updateMany({ where, data })
     res.json({ updated: result.count })
@@ -325,8 +365,7 @@ router.patch('/bulk', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const db = forOrg(req.user!.organizationId)
-    if (!(await canTouchThread(db, req.user!.id, req.user!.orgRole, req.params.id)))
-      return res.status(403).json({ error: 'Accès non autorisé.' })
+    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
     const thread = await db.thread.findUnique({ where: { id: req.params.id }, select: { deletedAt: true } })
     if (!thread) return res.status(404).json({ error: 'Thread introuvable.' })
     if (!thread.deletedAt) return res.status(400).json({ error: 'Mettez d\'abord le fil à la corbeille.' })
@@ -340,9 +379,11 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 router.get('/:id/activity', authenticateToken, async (req, res) => {
   try {
     const db = forOrg(req.user!.organizationId)
-    const thread = await db.thread.findUnique({ where: { id: req.params.id }, select: { assignedToId: true } })
+    const thread = await db.thread.findUnique({ where: { id: req.params.id }, select: { assignedToId: true, canal: true } })
     if (!thread) return res.status(404).json({ error: 'Thread introuvable.' })
-    if (!isManager(req.user!.orgRole) && thread.assignedToId !== req.user!.id) {
+    const hiddenCanaux = await getHiddenProCanaux(db, req.user!.id)
+    const visible = !hiddenCanaux.includes(thread.canal) && (isManager(req.user!.orgRole) || thread.assignedToId === req.user!.id)
+    if (!visible) {
       return res.status(403).json({ error: 'Accès non autorisé.' })
     }
 

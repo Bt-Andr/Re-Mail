@@ -146,3 +146,15 @@ export async function createThread(db: PrismaClient, org: Organization, input: C
 
   return thread
 }
+
+// Visibilité des threads issus d'une adresse pro (ThreadRoutingRule) : même règle pour
+// tout le monde, y compris OWNER/ADMIN — un canal routé vers une adresse pro reste
+// invisible tant que la personne assignée ne l'a pas "connectée" (claimedAt). Décision
+// produit actée : la vue d'ensemble manager ne doit pas contourner le principe "adresse
+// indépendante, visible seulement une fois connectée" (voir plan de refonte identité).
+// L'ASSIGNATION elle-même (createThread ci-dessus) n'est PAS concernée — le routage
+// fonctionne dès la création de la règle ; seule la VISIBILITÉ attend le claim.
+export async function getHiddenProCanaux(db: PrismaClient, userId: string): Promise<string[]> {
+  const rules = await db.threadRoutingRule.findMany({ where: { active: true } })
+  return rules.filter(r => !(r.assignToId === userId && r.claimedAt)).map(r => r.canal)
+}

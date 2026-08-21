@@ -81,11 +81,17 @@ model User {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  // email/username sont uniques sur toute la plateforme (pas seulement par org) :
-  // en v1 chaque utilisateur appartient à une seule organisation, donc la connexion
-  // se fait par username seul (comme dans jeprogroup-website/server/src/routes/auth.ts) —
-  // ça ne marche que si le lookup n'est pas ambigu entre organisations.
-  email    String  @unique
+  // username reste unique sur toute la plateforme — la connexion classique se fait par
+  // username seul (comme dans jeprogroup-website/server/src/routes/auth.ts), sans
+  // ambiguïté possible entre organisations.
+  // email N'EST PLUS unique globalement (retiré volontairement) : une adresse
+  // personnelle peut désormais coexister, sur deux User distincts, avec l'email de
+  // contact d'un compte d'organisation — une connexion Google/IMAP ne doit jamais
+  // résoudre vers un compte non-personnel (voir personalAccountFactory.ts, gmailOAuth.ts
+  // et mailboxConnections.ts, qui scopent désormais leur recherche à
+  // organization.isPersonal). /auth/signup vérifie toujours l'unicité de l'email en
+  // code (routes/auth.ts), volontairement globale — pas de contrainte DB derrière.
+  email    String
   username String  @unique
   password String
   nom      String
@@ -108,6 +114,10 @@ model User {
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+  // Non-unique (voir commentaire sur le champ email plus haut) — gardé pour la
+  // performance des lookups par email (signin Google/IMAP, résolution assignToEmail),
+  // fréquents malgré la levée de la contrainte d'unicité.
+  @@index([email])
 }
 
 // Jeton d'échange unique et court (60s) entre la redirection OAuth publique (GET

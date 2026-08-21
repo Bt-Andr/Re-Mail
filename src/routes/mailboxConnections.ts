@@ -208,7 +208,16 @@ router.post('/imap/signin', imapSigninLimiter, async (req, res) => {
     return res.status(400).json({ error: (e as Error).message })
   }
 
-  const existingUser = await prisma.user.findUnique({ where: { email }, include: { organization: true } })
+  // Résout UNIQUEMENT un compte personnel existant (voir gmailOAuth.ts pour le même
+  // principe et sa justification complète) — jamais un compte d'organisation, même si
+  // cet email est aussi le contact d'un OWNER/ADMIN ailleurs. email n'est plus unique
+  // globalement (schema.prisma), d'où le findFirst + orderBy déterministe plutôt qu'un
+  // findUnique désormais impossible.
+  const existingUser = await prisma.user.findFirst({
+    where: { email, organization: { isPersonal: true } },
+    include: { organization: true },
+    orderBy: { createdAt: 'asc' },
+  })
 
   const attachMailbox = async (organizationId: string, userId: string) => {
     const db = forOrg(organizationId)
@@ -235,12 +244,6 @@ router.post('/imap/signin', imapSigninLimiter, async (req, res) => {
     return true
   }
 
-  // Un compte d'équipe (organization.isPersonal === false) suit exactement le même chemin
-  // qu'un compte perso : l'email n'identifie plus "un compte entreprise" par nature
-  // (décision produit actée — voir plan de refonte). La connexion IMAP réussie prouve la
-  // possession de l'adresse aussi fiablement qu'un mot de passe, quel que soit le type de
-  // compte qu'elle atteint. Changement de posture volontaire : avant cette décision, un
-  // compte pro exigeait toujours le mot de passe, jamais ce raccourci — ce n'est plus le cas.
   let userId: string
   let organizationId: string
   if (existingUser) {

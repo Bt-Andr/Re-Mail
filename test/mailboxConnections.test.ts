@@ -159,8 +159,11 @@ describe('POST /api/mailbox-connections/imap/signin', () => {
   })
 
   async function cleanupSigninAccount(email: string) {
-    const leftover = await prisma.user.findUnique({ where: { email } })
-    if (leftover) await cleanupOrg(leftover.organizationId)
+    // email n'est plus unique globalement (schema.prisma) — ne nettoie que le(s)
+    // compte(s) PERSO auto-créés par le signin ; les comptes pro sont créés et
+    // nettoyés explicitement par les tests qui les posent.
+    const leftovers = await prisma.user.findMany({ where: { email, organization: { isPersonal: true } } })
+    for (const leftover of leftovers) await cleanupOrg(leftover.organizationId)
   }
 
   afterEach(() => cleanupSigninAccount(signinBody.email))
@@ -175,7 +178,7 @@ describe('POST /api/mailbox-connections/imap/signin', () => {
     mockConnect.mockRejectedValueOnce(new Error('Invalid credentials'))
     const res = await request(app).post('/api/mailbox-connections/imap/signin').send(signinBody)
     expect(res.status).toBe(400)
-    expect(await prisma.user.findUnique({ where: { email: signinBody.email } })).toBeNull()
+    expect(await prisma.user.findFirst({ where: { email: signinBody.email } })).toBeNull()
   })
 
   it('creates a new personal account, connects the mailbox, and issues a real session', async () => {
@@ -185,7 +188,7 @@ describe('POST /api/mailbox-connections/imap/signin', () => {
     expect(res.body.user.email).toBe(signinBody.email)
     expect(res.body.organization.isPersonal).toBe(true)
 
-    const user = await prisma.user.findUnique({ where: { email: signinBody.email }, include: { organization: true } })
+    const user = await prisma.user.findFirst({ where: { email: signinBody.email }, include: { organization: true } })
     expect(user).toBeTruthy()
     expect(user?.orgRole).toBe('OWNER')
     expect(user?.organization.isPersonal).toBe(true)
@@ -226,7 +229,7 @@ describe('POST /api/mailbox-connections/imap/signin', () => {
     expect(connection?.userId).toBe(user.id)
   })
 
-  it('signs an existing pro (team) account owner back in and connects the mailbox — email no longer gates enterprise access', async () => {
+  it('never resolves to an existing pro (team) account — creates a separate personal account instead, even with the same email', async () => {
     const proOrg = await prisma.organization.create({
       data: { name: 'Pro Co Imap', slug: `pro-co-imap-${Date.now()}`, isPersonal: false },
     })
@@ -242,19 +245,26 @@ describe('POST /api/mailbox-connections/imap/signin', () => {
     })
 
     const res = await request(app).post('/api/mailbox-connections/imap/signin').send(signinBody)
-    // Une session est désormais délivrée pour ce compte pro — décision produit actée :
-    // une adresse personnelle n'identifie plus "un compte entreprise", la connexion IMAP
-    // réussie prouve la possession aussi fiablement qu'un mot de passe (voir plan de
-    // refonte, section "correctif isolé").
+    // Une session est délivrée, mais JAMAIS pour le compte pro — l'authentification
+    // IMAP ne doit jamais donner accès à une organisation automatiquement (décision
+    // produit actée — voir plan de refonte "Découpler l'identité personnelle de
+    // l'accès organisation").
     expect(res.status).toBe(200)
     expect(res.body.token).toBeTruthy()
-    expect(res.body.user.id).toBe(proUser.id)
-    expect(res.body.organization.isPersonal).toBe(false)
+    expect(res.body.user.id).not.toBe(proUser.id)
+    expect(res.body.organization.isPersonal).toBe(true)
 
-    const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: proOrg.id, email: signinBody.email } })
-    expect(connection?.userId).toBe(proUser.id)
-    expect(connection?.status).toBe('connected')
+    // Le compte pro n'est jamais touché : ni mailbox attachée, ni trace de cette
+    // connexion IMAP dessus.
+    const proConnection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: proOrg.id, email: signinBody.email } })
+    expect(proConnection).toBeNull()
+
+    // La mailbox est attachée au NOUVEAU compte perso.
+    const personalConnection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: res.body.organization.id, email: signinBody.email } })
+    expect(personalConnection?.userId).toBe(res.body.user.id)
+    expect(personalConnection?.status).toBe('connected')
 
     await cleanupOrg(proOrg.id)
+    await cleanupOrg(res.body.organization.id)
   })
 })

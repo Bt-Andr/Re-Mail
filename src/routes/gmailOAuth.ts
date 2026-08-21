@@ -207,19 +207,24 @@ router.get('/gmail/callback', async (req, res) => {
     return res.redirect(returnTo)
   }
 
-  // intent === 'signin' : aucune session préalable — résout un compte existant par email
-  // (lookup global raw prisma, avant que l'org soit connue — même exception documentée
-  // que auth.ts /login et publicUserInvites.ts), ou en crée un à la volée. Un compte
-  // d'équipe (organization.isPersonal === false) suit exactement le même chemin qu'un
-  // compte perso : l'email n'identifie plus "un compte entreprise" par nature (décision
-  // produit actée — voir plan de refonte) — réussir l'OAuth Google prouve la possession
-  // de l'adresse aussi fiablement qu'un mot de passe, quel que soit le type de compte
-  // qu'elle atteint. Changement de posture volontaire : avant cette décision, un compte
-  // pro exigeait toujours le mot de passe, jamais ce raccourci — ce n'est plus le cas.
+  // intent === 'signin' : aucune session préalable — résout UNIQUEMENT un compte
+  // personnel existant par email (organization.isPersonal: true), ou en crée un à la
+  // volée. Ne résout JAMAIS vers un compte d'organisation, même si cet email est aussi
+  // le contact d'un OWNER/ADMIN quelque part : l'authentification Google/IMAP ne doit
+  // jamais donner accès à une organisation automatiquement (décision produit actée —
+  // voir plan de refonte "Découpler l'identité personnelle de l'accès organisation").
+  // email n'est plus une contrainte d'unicité globale (voir schema.prisma) — les deux
+  // comptes peuvent coexister, un lookup par email seul serait donc ambigu.
+  // orderBy: createdAt asc rend le choix déterministe si jamais deux comptes personnels
+  // finissaient par partager un email (fenêtre de course théorique, jamais dangereuse).
   let userId: string
   let organizationId: string
   try {
-    const existingUser = await prisma.user.findUnique({ where: { email }, include: { organization: true } })
+    const existingUser = await prisma.user.findFirst({
+      where: { email, organization: { isPersonal: true } },
+      include: { organization: true },
+      orderBy: { createdAt: 'asc' },
+    })
     if (existingUser) {
       userId = existingUser.id
       organizationId = existingUser.organizationId

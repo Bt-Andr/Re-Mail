@@ -53,6 +53,17 @@ router.post('/signup', signupLimiter, async (req, res) => {
   }
 
   try {
+    const normalizedEmail = email.toLowerCase().trim()
+    // email n'est plus une contrainte d'unicité en base (schema.prisma — nécessaire
+    // pour que Google/IMAP signin puisse créer un compte perso même quand cet email
+    // sert déjà de contact à un compte d'organisation ailleurs, voir gmailOAuth.ts).
+    // L'inscription classique garde volontairement ce contrôle, global et inchangé :
+    // ce n'est pas le comportement visé par ce changement, juste une contrainte DB en
+    // moins à recréer en code (même motif que userInvites.ts:103).
+    if (await prisma.user.findFirst({ where: { email: normalizedEmail } })) {
+      return res.status(409).json({ error: "Ce nom d'utilisateur ou cet email est déjà utilisé." })
+    }
+
     const orgNameToUse = isPersonal ? nom || email.split('@')[0] : orgName
     const passwordHash = await bcrypt.hash(password, 12)
 

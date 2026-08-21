@@ -37,8 +37,12 @@ async function getSignedSigninState(returnTo: string) {
 // section réutilisent tous la même adresse mockée (moi@gmail.com) et doivent repartir
 // d'un état propre à chaque fois.
 async function cleanupSigninAccount() {
-  const leftover = await prisma.user.findUnique({ where: { email: 'moi@gmail.com' } })
-  if (leftover) await cleanupOrg(leftover.organizationId)
+  // email n'est plus unique globalement (schema.prisma) — plusieurs comptes peuvent
+  // partager 'moi@gmail.com' au fil des tests (un perso auto-créé par le signin, et/ou
+  // un pro créé manuellement par un test). Ne nettoie ici que le(s) compte(s) PERSO :
+  // les comptes pro sont créés et nettoyés explicitement par les tests qui les posent.
+  const leftovers = await prisma.user.findMany({ where: { email: 'moi@gmail.com', organization: { isPersonal: true } } })
+  for (const leftover of leftovers) await cleanupOrg(leftover.organizationId)
 }
 
 describe('Gmail OAuth', () => {
@@ -264,7 +268,7 @@ describe('Gmail OAuth', () => {
         expect(location.searchParams.get('handoff')).toBeTruthy()
         expect(location.searchParams.get('error')).toBeNull()
 
-        const user = await prisma.user.findUnique({ where: { email: 'moi@gmail.com' }, include: { organization: true } })
+        const user = await prisma.user.findFirst({ where: { email: 'moi@gmail.com' }, include: { organization: true } })
         expect(user).toBeTruthy()
         expect(user?.orgRole).toBe('OWNER')
         expect(user?.organization.isPersonal).toBe(true)
@@ -305,7 +309,7 @@ describe('Gmail OAuth', () => {
         expect(connection?.userId).toBe(user.id)
       })
 
-      it('signs an existing pro (team) account owner back in and connects the mailbox — email no longer gates enterprise access', async () => {
+      it('never resolves to an existing pro (team) account — creates a separate personal account instead, even with the same email', async () => {
         const proOrg = await prisma.organization.create({
           data: { name: 'Pro Co', slug: `pro-co-${Date.now()}`, isPersonal: false },
         })
@@ -324,22 +328,62 @@ describe('Gmail OAuth', () => {
         const res = await request(app).get('/api/mailbox-connections/gmail/callback').query({ code: 'auth-code', state }).redirects(0)
         expect(res.status).toBe(302)
         const location = new URL(res.headers.location)
-        // Une session est désormais délivrée pour ce compte pro — décision produit actée :
-        // une adresse personnelle n'identifie plus "un compte entreprise", réussir l'OAuth
-        // Google prouve la possession aussi fiablement qu'un mot de passe, quel que soit le
-        // type de compte atteint (voir plan de refonte, section "correctif isolé").
+        // Une session est délivrée, mais JAMAIS pour le compte pro — l'authentification
+        // Google ne doit jamais donner accès à une organisation automatiquement (décision
+        // produit actée — voir plan de refonte "Découpler l'identité personnelle de
+        // l'accès organisation").
         expect(location.searchParams.get('handoff')).toBeTruthy()
         expect(location.searchParams.get('error')).toBeNull()
 
+        // Deux comptes distincts partagent désormais cet email — email n'est plus une
+        // contrainte d'unicité globale (schema.prisma).
         const usersWithEmail = await prisma.user.findMany({ where: { email: 'moi@gmail.com' } })
-        expect(usersWithEmail).toHaveLength(1)
-        expect(usersWithEmail[0].id).toBe(proUser.id) // même compte, pas un doublon
+        expect(usersWithEmail).toHaveLength(2)
+        const personalUser = usersWithEmail.find(u => u.id !== proUser.id)
+        expect(personalUser).toBeTruthy()
+        const personalOrg = await prisma.organization.findUniqueOrThrow({ where: { id: personalUser!.organizationId } })
+        expect(personalOrg.isPersonal).toBe(true)
 
-        const connection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: proOrg.id, email: 'moi@gmail.com' } })
-        expect(connection?.userId).toBe(proUser.id)
-        expect(connection?.status).toBe('connected')
+        // Le compte pro n'est jamais touché : ni mailbox attachée, ni la moindre trace
+        // de cette connexion Google dessus.
+        const proConnection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: proOrg.id, email: 'moi@gmail.com' } })
+        expect(proConnection).toBeNull()
+
+        // La mailbox est attachée au NOUVEAU compte perso.
+        const personalConnection = await prisma.externalMailboxConnection.findFirst({ where: { organizationId: personalOrg.id, email: 'moi@gmail.com' } })
+        expect(personalConnection?.userId).toBe(personalUser!.id)
+        expect(personalConnection?.status).toBe('connected')
 
         await cleanupOrg(proOrg.id)
+        await cleanupOrg(personalOrg.id)
+      })
+
+      it('resolves deterministically to the OLDEST personal account when two happen to share an email', async () => {
+        // Le fetch mocké de ce describe (beforeEach ci-dessus) renvoie toujours
+        // 'moi@gmail.com' — les deux comptes ci-dessous partagent volontairement cette
+        // même adresse pour tester le déterminisme (orderBy: createdAt asc).
+        const first = await prisma.organization.create({ data: { name: 'Dup 1', slug: `dup1-${Date.now()}`, isPersonal: true } })
+        const firstUser = await prisma.user.create({
+          data: { organizationId: first.id, username: `dup1-${Date.now()}`, email: 'moi@gmail.com', password: 'x', nom: 'First', orgRole: 'OWNER' },
+        })
+        await new Promise(r => setTimeout(r, 10)) // garantit createdAt strictement postérieur
+        const second = await prisma.organization.create({ data: { name: 'Dup 2', slug: `dup2-${Date.now()}`, isPersonal: true } })
+        const secondUser = await prisma.user.create({
+          data: { organizationId: second.id, username: `dup2-${Date.now()}`, email: 'moi@gmail.com', password: 'x', nom: 'Second', orgRole: 'OWNER' },
+        })
+
+        const state = await getSignedSigninState(signinReturnTo)
+        const res = await request(app).get('/api/mailbox-connections/gmail/callback').query({ code: 'auth-code', state }).redirects(0)
+        expect(res.status).toBe(302)
+
+        const connection = await prisma.externalMailboxConnection.findFirst({ where: { email: 'moi@gmail.com', organizationId: first.id } })
+        expect(connection?.userId).toBe(firstUser.id)
+        const secondOrgConnection = await prisma.externalMailboxConnection.findFirst({ where: { email: 'moi@gmail.com', organizationId: second.id } })
+        expect(secondOrgConnection).toBeNull()
+        expect(secondUser.id).not.toBe(firstUser.id) // sanity check des deux comptes créés
+
+        await cleanupOrg(first.id)
+        await cleanupOrg(second.id)
       })
     })
   })

@@ -68,6 +68,25 @@ describe('Visibilité des threads issus d\'une adresse pro — claim requis, y c
     expect(list.body.map((t: { id: string }) => t.id)).toContain(thread.id)
   })
 
+  it('le canal réservé "email" (boîtes IMAP/Gmail personnelles) n\'est jamais masqué, même si une ThreadRoutingRule y existe par erreur', async () => {
+    // PUT /thread-routing-rules/email est refusé désormais (voir proAddresses.test.ts),
+    // mais une ligne préexistante (créée avant ce correctif) doit rester inoffensive —
+    // insérée directement pour simuler cette donnée résiduelle.
+    const other = await prisma.user.create({
+      data: { organizationId: org.organizationId, username: `other-${Date.now()}`, email: `other-${Date.now()}@thread-vis.example`, password: 'x', nom: 'Other', orgRole: 'MEMBER' },
+    })
+    await prisma.threadRoutingRule.create({
+      data: { organizationId: org.organizationId, canal: 'email', assignToId: other.id, active: true },
+    })
+    const mailboxThread = await createThread(org, { canal: 'email', assignedToId: org.userId })
+
+    const list = await request(app).get('/api/threads?folder=inbox').set('Authorization', `Bearer ${org.token}`)
+    expect(list.body.map((t: { id: string }) => t.id)).toContain(mailboxThread.id)
+
+    const detail = await request(app).get(`/api/threads/${mailboxThread.id}`).set('Authorization', `Bearer ${org.token}`)
+    expect(detail.status).toBe(200)
+  })
+
   it('un MEMBER assigné via une adresse pro non connectée ne la voit pas non plus (même si assignedToId le désigne)', async () => {
     const member = await prisma.user.create({
       data: { organizationId: org.organizationId, username: `member-vis-${Date.now()}`, email: `member-vis-${Date.now()}@thread-vis.example`, password: 'x', nom: 'Member', orgRole: 'MEMBER' },

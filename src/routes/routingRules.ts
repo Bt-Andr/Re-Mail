@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
+import { PERSONAL_MAILBOX_CANAL } from '../helpers/thread'
 
 const router = Router()
 
@@ -35,6 +36,13 @@ router.put('/:canal', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), asy
   const { canal } = req.params
   const { assignToId, assignToEmail, active } = req.body
   if (!assignToId && !assignToEmail) return res.status(400).json({ error: 'assignToId ou assignToEmail requis.' })
+  // "email" est le canal réservé de toute boîte IMAP/Gmail personnelle connectée
+  // (mailboxPoller.ts, org entière confondue) — créer une adresse pro dessus
+  // masquerait/interceptrait le courrier personnel de tout le monde dans
+  // l'organisation, pas seulement un alias métier (bug réel déjà rencontré).
+  if (canal.toLowerCase() === PERSONAL_MAILBOX_CANAL) {
+    return res.status(400).json({ error: `"${PERSONAL_MAILBOX_CANAL}" est un nom réservé, choisissez un autre alias.` })
+  }
   try {
     const db = forOrg(req.user!.organizationId)
     const include = { assignTo: { select: { id: true, nom: true, username: true, orgRole: true } } } as const

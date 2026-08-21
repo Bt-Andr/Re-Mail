@@ -62,6 +62,25 @@ describe('Pro addresses — création/attribution (ThreadRoutingRule.assignToEma
     expect(JSON.parse(updatedInvite.pendingRoutingCanaux!)).toContain('support')
   })
 
+  it('PUT .../email is rejected — reserved canal used by every connected IMAP/Gmail mailbox org-wide', async () => {
+    const member = await prisma.user.create({
+      data: { organizationId: org.organizationId, username: `member-email-${Date.now()}`, email: `member-email-${Date.now()}@pro-addr.example`, password: 'x', nom: 'Member', orgRole: 'MEMBER' },
+    })
+    const res = await request(app)
+      .put('/api/thread-routing-rules/email')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ assignToId: member.id })
+    expect(res.status).toBe(400)
+    expect(await prisma.threadRoutingRule.findFirst({ where: { organizationId: org.organizationId, canal: 'email' } })).toBeNull()
+
+    // Insensible à la casse — un alias "EMAIL" contournerait sinon la protection.
+    const upper = await request(app)
+      .put('/api/thread-routing-rules/EMAIL')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ assignToId: member.id })
+    expect(upper.status).toBe(400)
+  })
+
   it('PUT .../:canal with assignToEmail matching neither a user nor a pending invite returns 404', async () => {
     const res = await request(app)
       .put('/api/thread-routing-rules/ghost')

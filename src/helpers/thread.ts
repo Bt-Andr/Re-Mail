@@ -62,6 +62,14 @@ export async function notifyUser(
   }
 }
 
+// Canal fixe utilisé par mailboxPoller.ts pour TOUTE boîte IMAP/Gmail connectée
+// (org entière confondue, quelle que soit la connexion d'origine) — jamais un alias
+// d'équipe routable. Exporté (pas seulement local à ce fichier) car routingRules.ts
+// doit aussi refuser qu'un admin crée une adresse pro sur ce canal réservé : ça
+// intercepterait/masquerait le courrier personnel de TOUT LE MONDE dans l'organisation,
+// pas juste un canal métier — bug réel rencontré (l'admin avait testé alias "email").
+export const PERSONAL_MAILBOX_CANAL = 'email'
+
 interface CreateThreadInput {
   canal: string
   sujet: string
@@ -112,6 +120,11 @@ export async function createThread(db: PrismaClient, org: Organization, input: C
   await createActivity(db, org.id, thread.id, null, 'created', { from: externalFrom, email: externalEmail })
 
   try {
+    // canal réservé (voir PERSONAL_MAILBOX_CANAL) : jamais de routage automatique — le
+    // poller (mailboxPoller.ts) pose déjà lui-même le bon assignedToId juste après cet
+    // appel, propre à CHAQUE connexion IMAP/Gmail individuelle.
+    if (canal === PERSONAL_MAILBOX_CANAL) return thread
+
     // findFirst (pas findUnique) : `canal` seul n'est plus une clé unique dans ce
     // schéma multi-tenant — l'unicité est composite ([organizationId, canal]), et
     // c'est le client scopé (forOrg) qui ajoute organizationId au where.
@@ -155,6 +168,6 @@ export async function createThread(db: PrismaClient, org: Organization, input: C
 // L'ASSIGNATION elle-même (createThread ci-dessus) n'est PAS concernée — le routage
 // fonctionne dès la création de la règle ; seule la VISIBILITÉ attend le claim.
 export async function getHiddenProCanaux(db: PrismaClient, userId: string): Promise<string[]> {
-  const rules = await db.threadRoutingRule.findMany({ where: { active: true } })
+  const rules = await db.threadRoutingRule.findMany({ where: { active: true, canal: { not: PERSONAL_MAILBOX_CANAL } } })
   return rules.filter(r => !(r.assignToId === userId && r.claimedAt)).map(r => r.canal)
 }

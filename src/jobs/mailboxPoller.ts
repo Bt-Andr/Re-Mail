@@ -5,7 +5,7 @@ import config from '../config'
 import prisma from '../lib/prisma'
 import { forOrg } from '../middleware/scopedPrisma'
 import { getMailboxAuth } from '../lib/mailboxAuth'
-import { createThread, createActivity, notifyUser } from '../helpers/thread'
+import { createThread, createActivity, notifyUser, PERSONAL_MAILBOX_CANAL } from '../helpers/thread'
 import { uploadBufferToCloudinary, buildOrgFolder, saveAttachmentRecords, StoredAttachment } from '../helpers/attachments'
 
 let intervalHandle: NodeJS.Timeout | null = null
@@ -97,9 +97,9 @@ async function processMessage(
   const bodyHtml = parsed.html || `<p>${(parsed.text || '').replace(/\n/g, '<br>')}</p>`
 
   // Une connexion IMAP est la boîte perso d'UNE personne, pas un alias d'équipe routable
-  // — canal fixe, pas de ThreadRoutingRule (qui appliquerait le même assigné à tous les
-  // fils IMAP de l'org, quelle que soit la connexion d'origine).
-  const canal = 'email'
+  // — canal fixe et réservé (voir PERSONAL_MAILBOX_CANAL), jamais de ThreadRoutingRule
+  // dessus (createThread l'exclut explicitement, et routingRules.ts refuse de le créer).
+  const canal = PERSONAL_MAILBOX_CANAL
 
   const stored: StoredAttachment[] = []
   for (const att of parsed.attachments) {

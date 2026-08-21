@@ -137,11 +137,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       void (async () => {
         const failedId = activeId;
         if (!failedId) return;
+        const remaining =
+          (personal && personal.user.id !== failedId ? 1 : 0) + orgs.filter(a => a.user.id !== failedId).length;
         await logout(failedId);
-        router.replace('/(auth)/welcome');
+        // Si un autre compte reste, logout() a déjà basculé dessus et vidé le cache
+        // react-query — pas de redirection nécessaire, sinon (auth)/_layout.tsx nous
+        // renverrait de toute façon vers l'inbox aussitôt (bascule silencieuse à la
+        // switchAccount), une navigation inutile et visible.
+        if (remaining === 0) router.replace('/(auth)/welcome');
       })();
     });
-  }, [activeId, logout]);
+  }, [activeId, personal, orgs, logout]);
 
   // Hydrate le storage au démarrage puis valide/rafraîchit UNIQUEMENT le compte actif
   // (un seul appel /auth/me, comme avant) — les autres comptes stockés restent tels

@@ -99,14 +99,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const connectOrganization = useCallback(
     (token: string, nextUser: User, nextOrg: OrganizationSummary) => {
-      setOrgsState(prev => {
-        const next = [...prev.filter(a => a.user.id !== nextUser.id), { token, user: nextUser, organization: nextOrg }]
-        setStoredOrgs(next)
-        return next
-      })
+      const next = [...orgs.filter(a => a.user.id !== nextUser.id), { token, user: nextUser, organization: nextOrg }]
+      setOrgs(next)
       setActiveId(nextUser.id)
     },
-    [setActiveId]
+    [orgs, setOrgs, setActiveId]
   )
 
   const logout = useCallback(

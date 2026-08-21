@@ -69,6 +69,19 @@ export default function WelcomeScreen() {
     }
   }, [pendingIntent, hasPersonalAccount, setPendingOrgIntent]);
 
+  // Si poussé par activate.tsx (suppressAutoNav) et abandonné (retour arrière sans
+  // connecter d'identité perso) plutôt que résolu via router.back() ci-dessus, le
+  // marqueur resterait sinon posé indéfiniment pour le reste de la session en mémoire
+  // — (auth)/_layout.tsx ne redirigerait alors plus jamais vers l'inbox après un login
+  // classique tant que l'app n'est pas redémarrée. Nettoyage sûr même sur le chemin
+  // "résolu" : le marqueur est déjà à null à ce moment-là (no-op).
+  useEffect(() => {
+    return () => {
+      if (suppressAutoNav) setPendingOrgIntent(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Identique à (auth)/login.tsx et (auth)/signup.tsx (non touchés, voir plan) —
   // dupliqué ici plutôt que partagé, pour ne rien risquer sur ces deux écrans.
   const continueWithGoogle = async () => {
@@ -133,7 +146,11 @@ export default function WelcomeScreen() {
         </Text>
 
         <View className="-mx-6 border-t border-neutral-200 dark:border-neutral-800">
-          {ENTRIES.filter(entry => !pendingIntent || (entry.id !== 'create-enterprise' && entry.id !== 'join-enterprise')).map(entry => (
+          {/* pendingOrgIntent brut (pas juste pendingIntent) : cache aussi ces entrées
+              pendant le sous-flux poussé par activate.tsx, pour ne pas laisser
+              l'utilisateur écraser son marqueur 'activate-awaiting-personal' en
+              cliquant "Créer/Rejoindre une entreprise" ici par erreur. */}
+          {ENTRIES.filter(entry => !pendingOrgIntent || (entry.id !== 'create-enterprise' && entry.id !== 'join-enterprise')).map(entry => (
             <Pressable
               key={entry.id}
               onPress={() => selectProvider(entry.id)}

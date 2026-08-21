@@ -1,23 +1,38 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
-import { Link, useLocalSearchParams } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import { resolveInviteByToken } from '../../src/api/invites';
 import { describeError } from '../../src/api/client';
+import { useSession } from '../../src/context/SessionContext';
 import { UploadFileStep } from '../../src/components/activate/UploadFileStep';
 import { VerifyCodeStep } from '../../src/components/activate/VerifyCodeStep';
 import { SetPasswordStep } from '../../src/components/activate/SetPasswordStep';
+import { Button } from '../../src/components/ui/Button';
 
 // `token` arrive via un lien d'invitation par email (web aujourd'hui) ou un deep
 // link natif une fois les App/Universal Links configurés (voir plan roadmap) —
 // saute directement à l'étape du code, sans upload manuel du fichier.
 export default function ActivateScreen() {
   const { token: linkToken } = useLocalSearchParams<{ token?: string }>();
+  const { hasPersonalAccount, setPendingOrgIntent } = useSession();
 
   const [fileToken, setFileToken] = useState<string | null>(null);
   const [organizationName, setOrganizationName] = useState('');
   const [activationToken, setActivationToken] = useState<string | null>(null);
   const [resolvingLink, setResolvingLink] = useState(!!linkToken);
   const [linkError, setLinkError] = useState('');
+  const [awaitingPersonal, setAwaitingPersonal] = useState(false);
+
+  // (auth)/welcome.tsx reste empilé au-dessus tant qu'on ne revient pas ici — dès que
+  // l'identité personnelle est connectée là-bas, ce même écran (jamais démonté par la
+  // navigation push, voir router.back() ci-dessous) reprend automatiquement.
+  useEffect(() => {
+    if (awaitingPersonal && hasPersonalAccount) {
+      setAwaitingPersonal(false);
+      setPendingOrgIntent(null);
+      router.back();
+    }
+  }, [awaitingPersonal, hasPersonalAccount, setPendingOrgIntent]);
 
   useEffect(() => {
     if (!linkToken) return;
@@ -68,7 +83,31 @@ export default function ActivateScreen() {
             <VerifyCodeStep fileToken={fileToken} organizationName={organizationName} onVerified={setActivationToken} />
           )}
 
-          {fileToken && activationToken && (
+          {fileToken && activationToken && !hasPersonalAccount && (
+            <View className="gap-3">
+              <Text className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                3. Connectez d'abord votre identité personnelle
+              </Text>
+              <Text className="text-xs text-neutral-500 dark:text-neutral-400">
+                Rejoindre une entreprise sur Re-Mail nécessite d'abord une identité personnelle (Google ou une autre
+                boîte mail) — l'accès à l'organisation vient s'ajouter à celle-ci, il ne la remplace jamais.
+              </Text>
+              <Button
+                onPress={() => {
+                  setAwaitingPersonal(true);
+                  // Marqueur distinct de ceux que welcome.tsx gère lui-même
+                  // ('create-enterprise'/'join-enterprise') — juste pour tenir
+                  // (auth)/_layout.tsx à distance le temps de notre propre retour.
+                  setPendingOrgIntent('activate-awaiting-personal');
+                  router.push({ pathname: '/(auth)/welcome', params: { suppressAutoNav: '1' } });
+                }}
+              >
+                Connecter mon identité personnelle
+              </Button>
+            </View>
+          )}
+
+          {fileToken && activationToken && hasPersonalAccount && (
             <SetPasswordStep fileToken={fileToken} activationToken={activationToken} />
           )}
 

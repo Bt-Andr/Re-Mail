@@ -13,7 +13,7 @@ import { ResendConnectModal } from '../mailboxes/ResendConnectModal'
 // fois la session établie, plutôt que d'atterrir en boîte de réception avant d'avoir
 // rien connecté.
 export function CreateEnterpriseFlow({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { login } = useSession()
+  const { connectOrganization } = useSession()
   const navigate = useNavigate()
   const [signedUp, setSignedUp] = useState(false)
   const [form, setForm] = useState({ orgName: '', nom: '', username: '', email: '', password: '' })
@@ -40,7 +40,10 @@ export function CreateEnterpriseFlow({ open, onClose }: { open: boolean; onClose
         return
       }
       const data = await res.json()
-      login(data.token, data.user, data.organization)
+      // Connexion ADDITIVE : ne remplace jamais l'identité personnelle déjà en place
+      // (WelcomePage n'ouvre ce flow qu'une fois hasPersonalAccount vrai — voir plan
+      // "Découpler l'identité personnelle de l'accès organisation", Phase 2).
+      connectOrganization(data.token, data.user, data.organization)
       setSignedUp(true)
     } catch (err) {
       setError(networkErrorMessage(err))

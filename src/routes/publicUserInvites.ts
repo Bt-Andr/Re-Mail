@@ -203,7 +203,25 @@ router.post('/activate', publicInviteLimiter, async (req, res) => {
 
     const token = signToken(user)
     const { password: _password, ...userWithoutPassword } = user
-    res.status(201).json({ token, user: userWithoutPassword })
+    // organization requis par le client (connectOrganization) pour connecter ce nouveau
+    // compte en plus de l'identité personnelle, jamais à sa place — voir SessionContext
+    // côté webmail/mobile et le plan de refonte Phase 2. invite.organizationId est déjà
+    // résolu côté serveur (jamais depuis une entrée utilisateur), lookup global sûr.
+    const organization = await prisma.organization.findUnique({
+      where: { id: invite.organizationId },
+      select: { id: true, name: true, slug: true, isPersonal: true, _count: { select: { users: true } } },
+    })
+    res.status(201).json({
+      token,
+      user: userWithoutPassword,
+      organization: organization && {
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        isPersonal: organization.isPersonal,
+        memberCount: organization._count.users,
+      },
+    })
   } catch (e) {
     const err = e as { code?: string }
     if (err.code === 'P2002') return res.status(409).json({ error: "Ce nom d'utilisateur ou cet email est déjà utilisé." })

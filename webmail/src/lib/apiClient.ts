@@ -1,22 +1,13 @@
+import { resolveActiveToken } from './accountsStorage'
+
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
-const TOKEN_KEY = 'rmm_token'
-
+// Un seul jeton "actif" à la fois (le backend reste scopé à une organisation par
+// requête) mais plusieurs comptes coexistent en storage — voir accountsStorage.ts.
+// Le handler enregistré ici (par SessionContext) décide QUEL compte retirer sur un 401.
 let unauthorizedHandler: (() => void) | null = null
 export function registerUnauthorizedHandler(cb: () => void): void {
   unauthorizedHandler = cb
-}
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token)
-}
-
-export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY)
 }
 
 interface ApiFetchOptions extends RequestInit {
@@ -33,7 +24,7 @@ interface ApiFetchOptions extends RequestInit {
 // d'invitation envoient du multipart) — laisser le navigateur poser le boundary.
 export async function apiFetch(path: string, options: ApiFetchOptions = {}): Promise<Response> {
   const { skipAuthRedirect, ...rest } = options
-  const token = getToken()
+  const token = resolveActiveToken()
   const isFormData = rest.body instanceof FormData
   const headers: Record<string, string> = {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
@@ -57,8 +48,9 @@ export async function apiFetch(path: string, options: ApiFetchOptions = {}): Pro
   // session tout juste établie).
   if (res.status === 401) {
     if (token && !skipAuthRedirect) {
-      console.error(`[api] 401 — ${method} ${path} → déconnexion forcée (token présent mais rejeté)`)
-      clearToken()
+      console.error(`[api] 401 — ${method} ${path} → déconnexion forcée du compte actif (jeton présent mais rejeté)`)
+      // Le retrait du compte en storage est délégué au handler (SessionContext) : lui
+      // seul sait quel compte était actif et vers lequel basculer ensuite.
       unauthorizedHandler?.()
     } else {
       console.error(`[api] 401 — ${method} ${path} (${skipAuthRedirect ? 'endpoint public, pas une session à invalider' : 'pas de session en cours'})`)

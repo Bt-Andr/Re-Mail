@@ -98,7 +98,7 @@ export default function SettingsScreen() {
         </View>
       )}
 
-      <Button variant="destructive" onPress={() => logout()}>
+      <Button variant="destructive" onPress={() => void logout()}>
         Se déconnecter
       </Button>
     </View>

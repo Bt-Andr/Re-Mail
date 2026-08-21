@@ -11,7 +11,7 @@ interface SetPasswordStepProps {
 }
 
 export function SetPasswordStep({ fileToken, activationToken }: SetPasswordStepProps) {
-  const { login } = useSession()
+  const { connectOrganization } = useSession()
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -35,8 +35,10 @@ export function SetPasswordStep({ fileToken, activationToken }: SetPasswordStepP
         return
       }
       const data = await res.json()
-      // Réponse identique à un login classique — connecte directement l'utilisateur.
-      login(data.token, data.user)
+      // Rejoindre une entreprise est toujours une connexion ADDITIVE : ActivatePage ne
+      // rend cette étape qu'une fois une identité personnelle déjà connectée (voir
+      // gate juste au-dessus dans ActivatePage.tsx).
+      connectOrganization(data.token, data.user, data.organization)
       navigate('/inbox')
     } catch (err) {
       setError(networkErrorMessage(err))

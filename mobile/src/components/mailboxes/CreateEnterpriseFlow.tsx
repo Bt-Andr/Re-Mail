@@ -12,7 +12,7 @@ import { ResendConnectSheet } from './ResendConnectSheet';
 // (auth)/signup.tsx, juste réduite à ce cas précis — puis enchaîne directement sur
 // ResendConnectSheet (réutilisé tel quel) une fois la session établie.
 export function CreateEnterpriseFlow({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { login } = useSession();
+  const { connectOrganization } = useSession();
   const [signedUp, setSignedUp] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [nom, setNom] = useState('');
@@ -38,7 +38,9 @@ export function CreateEnterpriseFlow({ open, onClose }: { open: boolean; onClose
     setLoading(true);
     try {
       const data = await signup({ accountType: 'pro', orgName, nom, username: username.trim(), email: email.trim(), password });
-      await login(data.token, { ...data.user, organization: data.organization });
+      // Connexion ADDITIVE : ne remplace jamais l'identité personnelle déjà en place
+      // (welcome.tsx n'ouvre ce flow qu'une fois hasPersonalAccount vrai).
+      await connectOrganization(data.token, data.user, data.organization);
       setSignedUp(true);
     } catch (e) {
       setError(describeError(e));

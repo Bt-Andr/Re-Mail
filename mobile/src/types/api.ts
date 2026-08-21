@@ -26,6 +26,7 @@ export interface User {
 export interface AuthResponse {
   token: string;
   user: User;
+  organization: Organization;
 }
 
 export interface AssignedTo {

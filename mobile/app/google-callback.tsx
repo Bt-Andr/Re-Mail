@@ -43,7 +43,7 @@ export default function GoogleCallbackScreen() {
 
     exchangeGoogleHandoff(String(params.handoff))
       .then(async data => {
-        await login(data.token, { ...data.user, organization: data.organization });
+        await login(data.token, data.user, data.organization);
         router.replace('/(app)/(drawer)/inbox');
       })
       .catch(e => {

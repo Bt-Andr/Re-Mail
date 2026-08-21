@@ -11,7 +11,7 @@ import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
 
 export default function LoginScreen() {
-  const { login } = useSession();
+  const { login, connectOrganization } = useSession();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -23,7 +23,11 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const data = await loginRequest(username.trim(), password);
-      await login(data.token, data.user);
+      // Nom d'utilisateur+mot de passe peut résoudre un compte perso OU une organisation
+      // (login n'est pas restreint comme Google/IMAP) — perso remplace l'identité,
+      // organisation se connecte en plus (voir SessionContext).
+      if (data.organization.isPersonal) await login(data.token, data.user, data.organization);
+      else await connectOrganization(data.token, data.user, data.organization);
       router.replace('/(app)/(drawer)/inbox');
     } catch (e) {
       setError(describeError(e));
@@ -57,7 +61,9 @@ export default function LoginScreen() {
         return;
       }
       const data = await exchangeGoogleHandoff(String(handoff));
-      await login(data.token, { ...data.user, organization: data.organization });
+      // Google/IMAP signin ne résout jamais qu'un compte perso (voir Phase 1) — login()
+      // ici est donc toujours l'identité personnelle, jamais connectOrganization().
+      await login(data.token, data.user, data.organization);
       router.replace('/(app)/(drawer)/inbox');
     } catch (e) {
       setError(describeError(e));

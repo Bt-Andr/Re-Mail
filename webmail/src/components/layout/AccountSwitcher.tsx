@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, Mail, Check } from 'lucide-react'
 import { useAccountSwitcher } from '../../context/AccountSwitcherContext'
-import { useSession } from '../../context/SessionContext'
-import { displayName } from '../../lib/session'
 
-// N'apparaît que si l'utilisateur a plusieurs comptes distincts (boîtes externes +
-// éventuellement l'organisation elle-même) — sinon aucun changement visuel par rapport
-// à avant (juste le bloc org/utilisateur statique).
+// Filtre l'inbox par boîte externe connectée (au sein de l'organisation/identité
+// actuellement active — voir IdentitySwitcher pour changer d'identité/organisation).
+// N'apparaît que s'il y a plus d'une boîte à filtrer.
 export function AccountSwitcher() {
-  const { user, organization } = useSession()
   const { accounts, selectedAccountId, setSelectedAccountId } = useAccountSwitcher()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -22,14 +19,7 @@ export function AccountSwitcher() {
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [open])
 
-  if (accounts.length <= 1) {
-    return (
-      <div className="hidden lg:block px-5 py-3 border-b border-border">
-        <p className="font-medium text-foreground text-sm truncate">{organization?.name ?? '...'}</p>
-        <p className="text-xs text-muted-foreground truncate">{user ? displayName(user) : ''}</p>
-      </div>
-    )
-  }
+  if (accounts.length <= 1) return null
 
   const selected = accounts.find(a => a.id === selectedAccountId)
 
@@ -42,7 +32,6 @@ export function AccountSwitcher() {
       >
         <div className="min-w-0">
           <p className="font-medium text-foreground text-sm truncate">{selected ? selected.label : 'Toutes les boîtes'}</p>
-          <p className="text-xs text-muted-foreground truncate">{organization?.name ?? ''}</p>
         </div>
         <ChevronDown size={16} className="text-muted-foreground flex-shrink-0" />
       </button>

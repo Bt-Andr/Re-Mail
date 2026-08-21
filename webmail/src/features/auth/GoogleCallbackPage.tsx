@@ -45,8 +45,15 @@ export function GoogleCallbackPage() {
           return
         }
         const data = await res.json()
+        // Google/IMAP signin ne résout jamais qu'un compte perso (voir Phase 1) — login()
+        // ici est donc toujours l'identité personnelle, jamais connectOrganization().
         login(data.token, data.user, data.organization)
-        navigate('/inbox', { replace: true })
+
+        // Repli vers /welcome si cette connexion Google a été déclenchée depuis le
+        // sous-flux "connectez d'abord votre identité personnelle" (créer/rejoindre une
+        // entreprise) — voir WelcomePage, qui reprend l'intention en attente.
+        const pendingIntent = sessionStorage.getItem('rmm_pending_intent')
+        navigate(pendingIntent ? '/welcome' : '/inbox', { replace: true })
       } catch (err) {
         setError(networkErrorMessage(err))
       }

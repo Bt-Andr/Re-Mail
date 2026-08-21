@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiFetch, parseError, networkErrorMessage } from '../../lib/apiClient'
+import { useSession } from '../../context/SessionContext'
 import { Spinner } from '../../components/ui/Spinner'
+import { Button } from '../../components/ui/Button'
 import { UploadFileStep } from './steps/UploadFileStep'
 import { VerifyCodeStep } from './steps/VerifyCodeStep'
 import { SetPasswordStep } from './steps/SetPasswordStep'
@@ -13,6 +15,8 @@ import { SetPasswordStep } from './steps/SetPasswordStep'
 // de sauter directement à l'étape du code sans passer par l'upload manuel du fichier.
 export function ActivatePage() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { hasPersonalAccount, setPendingOrgIntent } = useSession()
   const linkToken = searchParams.get('token')
 
   const [fileToken, setFileToken] = useState<string | null>(null)
@@ -71,7 +75,32 @@ export function ActivatePage() {
           <VerifyCodeStep fileToken={fileToken} organizationName={organizationName} onVerified={setActivationToken} />
         )}
 
-        {fileToken && activationToken && <SetPasswordStep fileToken={fileToken} activationToken={activationToken} />}
+        {fileToken && activationToken && !hasPersonalAccount && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold">3. Connectez d'abord votre identité personnelle</h2>
+            <p className="text-xs text-muted-foreground">
+              Rejoindre une entreprise sur Re-Mail nécessite d'abord une identité personnelle (Google ou une autre
+              boîte mail) — l'accès à l'organisation vient s'ajouter à celle-ci, il ne la remplace jamais.
+            </p>
+            <Button
+              className="w-full"
+              onClick={() => {
+                setPendingOrgIntent('join-enterprise')
+                // Préserve ?token= (lien d'invitation par email) pour que la reprise
+                // depuis WelcomePage retombe sur la résolution automatique plutôt que de
+                // forcer un ré-upload manuel du fichier.
+                if (linkToken) sessionStorage.setItem('rmm_activate_return_query', window.location.search)
+                navigate('/welcome')
+              }}
+            >
+              Connecter mon identité personnelle
+            </Button>
+          </div>
+        )}
+
+        {fileToken && activationToken && hasPersonalAccount && (
+          <SetPasswordStep fileToken={fileToken} activationToken={activationToken} />
+        )}
 
         <p className="text-xs text-muted-foreground mt-6 text-center">
           Déjà activé ? <Link to="/login" className="text-foreground font-medium hover:underline">Se connecter</Link>

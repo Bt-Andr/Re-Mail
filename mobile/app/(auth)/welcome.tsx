@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -25,9 +25,21 @@ const ENTRIES: { id: WelcomeProvider; label: string; icon: React.ReactElement }[
   ...BASE_PROVIDERS.filter(p => p.id === 'other'),
 ];
 
+// Marqueurs reconnus par CET écran (voir SessionContext.pendingOrgIntent) — distinct du
+// marqueur posé par (auth)/activate.tsx quand IL pousse cet écran en attendant son
+// propre retour (router.back()) : celui-là n'est pas à nous, on ne doit pas y toucher.
+type WelcomeIntent = 'create-enterprise' | 'join-enterprise';
+function isWelcomeIntent(v: string | null): v is WelcomeIntent {
+  return v === 'create-enterprise' || v === 'join-enterprise';
+}
+
 export default function WelcomeScreen() {
-  const { login } = useSession();
-  const params = useLocalSearchParams<{ error?: string }>();
+  const { login, hasPersonalAccount, pendingOrgIntent, setPendingOrgIntent } = useSession();
+  const params = useLocalSearchParams<{ error?: string; suppressAutoNav?: string }>();
+  // Poussé ici depuis (auth)/activate.tsx en attente d'une identité personnelle : cet
+  // écran reste empilé en dessous (voir router.back() dans activate.tsx) — ne pas
+  // rediriger vers l'inbox une fois connecté, le laisser reprendre la main lui-même.
+  const suppressAutoNav = params.suppressAutoNav === '1';
   const [googleLoading, setGoogleLoading] = useState(false);
   // Peut arriver déjà rempli si on revient ici depuis le filet de sécurité
   // google-callback.tsx (deep link qui a "fui" hors de l'interception normale de
@@ -36,6 +48,26 @@ export default function WelcomeScreen() {
   const [formOpen, setFormOpen] = useState(false);
   const [formPreset, setFormPreset] = useState<Partial<(typeof MAILBOX_PRESETS)[string]> | undefined>(undefined);
   const [createOpen, setCreateOpen] = useState(false);
+  // Créer/rejoindre une entreprise exige une identité personnelle préalable (décision
+  // produit — plan "Découpler l'identité personnelle de l'accès organisation", Phase
+  // 2). Contrairement au web, openAuthSessionAsync ne démonte jamais cet écran pendant
+  // le flux Google — un simple état en mémoire (dans SessionContext, partagé avec
+  // (auth)/_layout.tsx qui doit lui aussi ignorer "user truthy" pendant ce temps) suffit.
+  const pendingIntent = isWelcomeIntent(pendingOrgIntent) ? pendingOrgIntent : null;
+
+  useEffect(() => {
+    if (!pendingIntent || !hasPersonalAccount) return;
+    setFormOpen(false);
+    if (pendingIntent === 'create-enterprise') {
+      // Ne PAS effacer pendingOrgIntent ici : la modale reste sur cet écran, il faut
+      // continuer à tenir (auth)/_layout.tsx à distance — seule sa fermeture l'efface,
+      // voir onClose plus bas.
+      setCreateOpen(true);
+    } else {
+      setPendingOrgIntent(null);
+      router.push('/(auth)/activate');
+    }
+  }, [pendingIntent, hasPersonalAccount, setPendingOrgIntent]);
 
   // Identique à (auth)/login.tsx et (auth)/signup.tsx (non touchés, voir plan) —
   // dupliqué ici plutôt que partagé, pour ne rien risquer sur ces deux écrans.
@@ -59,8 +91,10 @@ export default function WelcomeScreen() {
         return;
       }
       const data = await exchangeGoogleHandoff(String(handoff));
-      await login(data.token, { ...data.user, organization: data.organization });
-      router.replace('/(app)/(drawer)/inbox');
+      await login(data.token, data.user, data.organization);
+      // Si un intent create/join-enterprise attend une identité perso, laisser l'effet
+      // ci-dessus reprendre ; idem si (auth)/activate.tsx attend notre retour.
+      if (!pendingIntent && !suppressAutoNav) router.replace('/(app)/(drawer)/inbox');
     } catch (e) {
       setError(describeError(e));
     } finally {
@@ -74,12 +108,13 @@ export default function WelcomeScreen() {
       void continueWithGoogle();
       return;
     }
-    if (id === 'create-enterprise') {
-      setCreateOpen(true);
-      return;
-    }
-    if (id === 'join-enterprise') {
-      router.push('/(auth)/activate');
+    if (id === 'create-enterprise' || id === 'join-enterprise') {
+      if (!hasPersonalAccount) {
+        setPendingOrgIntent(id);
+        return;
+      }
+      if (id === 'create-enterprise') setCreateOpen(true);
+      else router.push('/(auth)/activate');
       return;
     }
     setFormPreset(id === 'other' ? undefined : MAILBOX_PRESETS[id]);
@@ -93,10 +128,12 @@ export default function WelcomeScreen() {
           <Image source={require('../../assets/icon.png')} className="h-7 w-7 rounded-md" />
           <Text className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Bienvenue sur Re-Mail</Text>
         </View>
-        <Text className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">Choisissez le service de messagerie à connecter.</Text>
+        <Text className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">
+          {pendingIntent ? 'Connectez d’abord votre identité personnelle — nous reprendrons ensuite.' : 'Choisissez le service de messagerie à connecter.'}
+        </Text>
 
         <View className="-mx-6 border-t border-neutral-200 dark:border-neutral-800">
-          {ENTRIES.map(entry => (
+          {ENTRIES.filter(entry => !pendingIntent || (entry.id !== 'create-enterprise' && entry.id !== 'join-enterprise')).map(entry => (
             <Pressable
               key={entry.id}
               onPress={() => selectProvider(entry.id)}
@@ -111,6 +148,11 @@ export default function WelcomeScreen() {
         </View>
 
         {error ? <Text className="mt-3 text-xs text-red-600">{error}</Text> : null}
+        {pendingIntent ? (
+          <Pressable onPress={() => setPendingOrgIntent(null)}>
+            <Text className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">Annuler</Text>
+          </Pressable>
+        ) : null}
 
         <Link href="/(auth)/login" asChild>
           <Text className="mt-4 text-center text-xs text-neutral-500 dark:text-neutral-400">
@@ -124,9 +166,20 @@ export default function WelcomeScreen() {
         mode="signin"
         preset={formPreset}
         onClose={() => setFormOpen(false)}
-        onSaved={() => setFormOpen(false)}
+        onSaved={() => {
+          setFormOpen(false);
+          // Si un intent create/join-enterprise attend une identité perso, laisser
+          // l'effet ci-dessus reprendre ; idem si (auth)/activate.tsx attend notre retour.
+          if (!pendingIntent && !suppressAutoNav) router.replace('/(app)/(drawer)/inbox');
+        }}
       />
-      <CreateEnterpriseFlow open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateEnterpriseFlow
+        open={createOpen}
+        onClose={() => {
+          setCreateOpen(false);
+          setPendingOrgIntent(null);
+        }}
+      />
     </ScrollView>
   );
 }

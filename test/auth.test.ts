@@ -147,6 +147,11 @@ describe('POST /api/auth/login', () => {
     expect(res.body.token).toBeTruthy()
     expect(res.body.user.id).toBe(org.userId)
     expect(res.body.user.password).toBeUndefined()
+    // Le client (webmail/mobile) doit savoir si ce login résout vers un compte perso ou
+    // une organisation pour décider entre remplacer l'identité personnelle ou connecter
+    // l'organisation en plus (voir SessionContext) — voir plan de refonte Phase 2.
+    expect(res.body.organization.id).toBe(org.organizationId)
+    expect(res.body.organization.isPersonal).toBe(false)
   })
 
   it('rejects a wrong password with a generic message', async () => {

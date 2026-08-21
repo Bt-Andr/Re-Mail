@@ -75,8 +75,13 @@ export function MailboxConnectionFormModal({ open, onClose, onSaved, preset, mod
       }
       if (mode === 'signin') {
         const data = await res.json()
+        // IMAP signin ne résout jamais qu'un compte perso (voir Phase 1) — toujours
+        // login(), jamais connectOrganization().
         login(data.token, data.user, data.organization)
-        navigate('/inbox')
+        // Si ce signin a été déclenché depuis le sous-flux "connectez d'abord votre
+        // identité personnelle" (WelcomePage), ne pas naviguer : WelcomePage reprend
+        // l'intention en attente lui-même dès que hasPersonalAccount devient vrai.
+        if (!sessionStorage.getItem('rmm_pending_intent')) navigate('/inbox')
         return
       }
       onSaved()

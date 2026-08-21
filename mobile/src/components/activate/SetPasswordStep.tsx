@@ -13,7 +13,7 @@ interface SetPasswordStepProps {
 }
 
 export function SetPasswordStep({ fileToken, activationToken }: SetPasswordStepProps) {
-  const { login } = useSession();
+  const { connectOrganization } = useSession();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
@@ -27,7 +27,9 @@ export function SetPasswordStep({ fileToken, activationToken }: SetPasswordStepP
     setLoading(true);
     try {
       const data = await activateInvite(fileToken, activationToken, password);
-      await login(data.token, data.user);
+      // Rejoindre une entreprise est toujours une connexion ADDITIVE : activate.tsx ne
+      // rend cette étape qu'une fois une identité personnelle déjà connectée.
+      await connectOrganization(data.token, data.user, data.organization);
       router.replace('/(app)/(drawer)/inbox');
     } catch (e) {
       setError(describeError(e));

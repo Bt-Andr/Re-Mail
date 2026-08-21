@@ -14,7 +14,7 @@ import { Button } from '../../src/components/ui/Button';
 // signup dépose directement dans l'inbox, quel que soit le type de compte ; connecter
 // un domaine reste une opération à faire depuis le dashboard web pour l'instant.
 export default function SignupScreen() {
-  const { login } = useSession();
+  const { login, connectOrganization, hasPersonalAccount } = useSession();
   const [accountType, setAccountType] = useState<'pro' | 'perso'>('pro');
   const [orgName, setOrgName] = useState('');
   const [nom, setNom] = useState('');
@@ -27,10 +27,20 @@ export default function SignupScreen() {
 
   const submit = async () => {
     setError('');
+    // L'accès organisation ne doit jamais être la toute première identité d'un compte
+    // (décision produit — plan "Découpler l'identité personnelle de l'accès
+    // organisation", Phase 2) : une identité perso doit exister avant de créer une
+    // entreprise. Cet écran n'est atteignable que sans aucun compte connecté
+    // ((auth)/_layout.tsx redirige sinon), donc hasPersonalAccount est fiable ici.
+    if (accountType === 'pro' && !hasPersonalAccount) {
+      setError('Connectez d’abord une identité personnelle avant de créer une entreprise.');
+      return;
+    }
     setLoading(true);
     try {
       const data = await signupRequest({ accountType, orgName, nom, username: username.trim(), email: email.trim(), password });
-      await login(data.token, { ...data.user, organization: data.organization });
+      if (accountType === 'perso') await login(data.token, data.user, data.organization);
+      else await connectOrganization(data.token, data.user, data.organization);
       router.replace('/(app)/(drawer)/inbox');
     } catch (e) {
       setError(describeError(e));
@@ -61,7 +71,7 @@ export default function SignupScreen() {
         return;
       }
       const data = await exchangeGoogleHandoff(String(handoff));
-      await login(data.token, { ...data.user, organization: data.organization });
+      await login(data.token, data.user, data.organization);
       router.replace('/(app)/(drawer)/inbox');
     } catch (e) {
       setError(describeError(e));
@@ -103,6 +113,11 @@ export default function SignupScreen() {
           <Input label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" returnKeyType="next" />
           <Input label="Mot de passe" value={password} onChangeText={setPassword} secureTextEntry returnKeyType="done" onSubmitEditing={submit} />
           {error ? <Text className="text-xs text-red-600">{error}</Text> : null}
+          {accountType === 'pro' && !hasPersonalAccount && error ? (
+            <Link href="/(auth)/welcome" asChild>
+              <Text className="text-xs font-medium text-neutral-900 underline dark:text-neutral-100">Connecter mon identité personnelle</Text>
+            </Link>
+          ) : null}
           <Button
             onPress={submit}
             loading={loading}

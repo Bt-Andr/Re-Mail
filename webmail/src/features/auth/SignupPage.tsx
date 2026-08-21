@@ -6,7 +6,7 @@ import { Input } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
 
 export function SignupPage() {
-  const { login } = useSession()
+  const { login, connectOrganization, hasPersonalAccount } = useSession()
   const navigate = useNavigate()
   const [accountType, setAccountType] = useState<'pro' | 'perso'>('pro')
   const [form, setForm] = useState({ orgName: '', nom: '', username: '', email: '', password: '' })
@@ -19,6 +19,15 @@ export function SignupPage() {
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+    // L'accès organisation ne doit jamais être la toute première identité d'un compte
+    // (décision produit — plan "Découpler l'identité personnelle de l'accès
+    // organisation", Phase 2) : une identité perso doit exister avant de créer une
+    // entreprise. Ce formulaire n'est atteignable que sans aucun compte connecté
+    // (GuestGuard), donc hasPersonalAccount est fiable ici sans re-vérification serveur.
+    if (accountType === 'pro' && !hasPersonalAccount) {
+      setError('Connectez d’abord une identité personnelle avant de créer une entreprise.')
+      return
+    }
     setLoading(true)
     try {
       const res = await apiFetch('/auth/signup', { method: 'POST', body: JSON.stringify({ ...form, accountType }) })
@@ -27,7 +36,8 @@ export function SignupPage() {
         return
       }
       const data = await res.json()
-      login(data.token, data.user, data.organization)
+      if (accountType === 'perso') login(data.token, data.user, data.organization)
+      else connectOrganization(data.token, data.user, data.organization)
       navigate('/inbox')
     } catch (err) {
       setError(networkErrorMessage(err))
@@ -85,7 +95,14 @@ export function SignupPage() {
           <Input label="Nom d'utilisateur" value={form.username} onChange={set('username')} required />
           <Input label="Email" type="email" value={form.email} onChange={set('email')} required />
           <Input label="Mot de passe" type="password" value={form.password} onChange={set('password')} required />
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && (
+            <p className="text-xs text-destructive">
+              {error}{' '}
+              {accountType === 'pro' && !hasPersonalAccount && (
+                <Link to="/welcome" className="underline font-medium">Connecter mon identité personnelle</Link>
+              )}
+            </p>
+          )}
           <Button type="submit" loading={loading} className="w-full">Créer mon espace</Button>
         </form>
         <div className="flex items-center gap-3 my-4">

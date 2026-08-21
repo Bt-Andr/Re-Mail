@@ -103,19 +103,36 @@ router.post('/signup', signupLimiter, async (req, res) => {
   }
 })
 
+// Renvoie `organization` (comme /signup et /google/exchange) — nécessaire côté client
+// pour savoir si cette connexion doit remplacer l'identité personnelle ou s'ajouter
+// comme une connexion d'organisation additive (isPersonal), voir SessionContext côté
+// webmail/mobile.
 router.post('/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body
   if (!username || !password) return res.status(400).json({ error: 'Identifiants requis.' })
 
   try {
-    const user = await prisma.user.findUnique({ where: { username: username.toLowerCase().trim() } })
+    const user = await prisma.user.findUnique({
+      where: { username: username.toLowerCase().trim() },
+      include: { organization: { select: { id: true, name: true, slug: true, isPersonal: true, _count: { select: { users: true } } } } },
+    })
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ error: 'Identifiants incorrects.' })
     }
 
     const token = signToken(user)
-    const { password: _password, ...userWithoutPassword } = user
-    res.json({ token, user: userWithoutPassword })
+    const { password: _password, organization, ...userWithoutPassword } = user
+    res.json({
+      token,
+      user: userWithoutPassword,
+      organization: {
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        isPersonal: organization.isPersonal,
+        memberCount: organization._count.users,
+      },
+    })
   } catch (e) {
     console.error('[POST /api/auth/login]', e)
     res.status(500).json({ error: 'Erreur serveur.' })

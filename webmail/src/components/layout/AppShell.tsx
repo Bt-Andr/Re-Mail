@@ -4,6 +4,7 @@ import { useSession } from '../../context/SessionContext'
 import { useOrganization } from '../../hooks/useOrganization'
 import { useAccountContext } from '../../hooks/useAccountContext'
 import { AccountSwitcher } from './AccountSwitcher'
+import { IdentitySwitcher } from './IdentitySwitcher'
 
 // Sidebar = uniquement la messagerie (comme Gmail : les dossiers sont la nav, pas
 // une page "Boîte de réception" avec des onglets internes). L'administration
@@ -19,7 +20,16 @@ const MAIL_ITEMS = [
 ]
 
 export function AppShell() {
-  const { logout } = useSession()
+  const { accounts, logout } = useSession()
+
+  // Ne recharge que si un autre compte reste actif après cette déconnexion (bascule
+  // silencieuse à recharger, voir switchAccount) — sinon les guards renvoient
+  // naturellement vers /welcome, pas besoin de reload.
+  const handleLogout = () => {
+    const hadOthers = accounts.length > 1
+    logout()
+    if (hadOthers) window.location.reload()
+  }
   const { organization: orgStatus, error: orgError, refetch: refetchOrgStatus } = useOrganization()
   const { isManager, isPersonal } = useAccountContext()
 
@@ -32,6 +42,7 @@ export function AppShell() {
           <img src="/web-app-manifest-192x192.png" alt="Re-Mail" className="w-8 h-8 rounded-md flex-shrink-0" />
           <span className="hidden lg:inline font-bold text-base tracking-tight">Re-Mail</span>
         </div>
+        <IdentitySwitcher />
         <AccountSwitcher />
         <nav className="flex-1 px-2 lg:px-3 py-4 space-y-1">
           {MAIL_ITEMS.map(item => (
@@ -75,7 +86,7 @@ export function AppShell() {
           )}
           <button
             type="button"
-            onClick={logout}
+            onClick={handleLogout}
             title="Déconnexion"
             className="flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-base font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors w-full"
           >

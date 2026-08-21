@@ -1,7 +1,10 @@
 import { API_URL } from '../lib/config';
-import { getToken, clearToken } from '../lib/session';
+import { resolveActiveToken } from '../lib/accountsStorage';
 import type { ApiErrorBody } from '../types/api';
 
+// Un seul jeton "actif" à la fois (le backend reste scopé à une organisation par
+// requête) mais plusieurs comptes coexistent en storage — voir accountsStorage.ts. Le
+// handler enregistré ici (par SessionContext) décide QUEL compte retirer sur un 401.
 type UnauthorizedHandler = () => void;
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 
@@ -34,7 +37,7 @@ interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
 // une ressource et doit rester une erreur affichée en ligne, pas un logout.
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const { headers, body, skipAuthRedirect, ...rest } = options;
-  const token = await getToken();
+  const token = await resolveActiveToken();
   const isFormData = body instanceof FormData;
 
   const finalHeaders = new Headers(headers);
@@ -61,8 +64,9 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   // GET /auth/me quand l'utilisateur a été supprimé côté serveur).
   if (res.status === 401) {
     if (token && !skipAuthRedirect) {
-      console.error(`[api] 401 — ${method} ${path} → déconnexion forcée (token présent mais rejeté)`);
-      await clearToken();
+      console.error(`[api] 401 — ${method} ${path} → déconnexion forcée du compte actif (jeton présent mais rejeté)`);
+      // Le retrait du compte en storage est délégué au handler (SessionContext) : lui
+      // seul sait quel compte était actif et vers lequel basculer ensuite.
       unauthorizedHandler?.();
     } else {
       console.error(`[api] 401 — ${method} ${path} (${skipAuthRedirect ? 'endpoint public, pas une session à invalider' : 'pas de session en cours'})`);

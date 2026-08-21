@@ -1,6 +1,6 @@
 import { apiFetch } from './client';
 import { API_URL } from '../lib/config';
-import { getToken } from '../lib/session';
+import { resolveActiveToken } from '../lib/accountsStorage';
 import type { OrgRole, UserInvite } from '../types/api';
 
 export interface CreateInviteValues {
@@ -32,7 +32,7 @@ export function revokeInvite(id: string): Promise<UserInvite> {
 export async function downloadInviteFile(id: string, filename: string): Promise<string> {
   const { fetch: expoFetch } = await import('expo/fetch');
   const { File, Paths } = await import('expo-file-system');
-  const token = await getToken();
+  const token = await resolveActiveToken();
 
   const res = await expoFetch(`${API_URL}/user-invites/${id}/file`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,

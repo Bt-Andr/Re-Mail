@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Switch, Text, View } from 'react-native';
-import { router } from 'expo-router';
 import { createMailboxConnection, signinMailbox } from '../../api/mailboxConnections';
 import { describeError } from '../../api/client';
 import { useSession } from '../../context/SessionContext';
@@ -66,8 +65,12 @@ export function MailboxConnectionFormModal({ open, onClose, onSaved, preset, mod
       };
       if (mode === 'signin') {
         const data = await signinMailbox(values);
-        await login(data.token, { ...data.user, organization: data.organization });
-        router.replace('/(app)/(drawer)/inbox');
+        // IMAP signin ne résout jamais qu'un compte perso (voir Phase 1) — toujours
+        // login(), jamais connectOrganization(). Ne navigue pas ici : seul appelant
+        // (welcome.tsx) décide, pour pouvoir reprendre un intent create/join-enterprise
+        // en attente au lieu de partir vers l'inbox.
+        await login(data.token, data.user, data.organization);
+        onSaved();
         return;
       }
       await createMailboxConnection(values);

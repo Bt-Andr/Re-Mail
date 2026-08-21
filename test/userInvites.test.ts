@@ -93,6 +93,10 @@ describe('User invite activation flow', () => {
     expect(activated.body.token).toBeTruthy()
     expect(activated.body.user.username).toBe(created.body.username)
     expect(activated.body.user.password).toBeUndefined()
+    // Le client a besoin de organization pour connecter ce compte en plus de l'identité
+    // personnelle (connectOrganization) — voir plan de refonte Phase 2.
+    expect(activated.body.organization.id).toBe(org.organizationId)
+    expect(activated.body.organization.isPersonal).toBe(false)
 
     const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${activated.body.token}`)
     expect(me.status).toBe(200)

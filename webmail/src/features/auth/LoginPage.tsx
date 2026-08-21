@@ -6,7 +6,7 @@ import { Input } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
 
 export function LoginPage() {
-  const { login } = useSession()
+  const { login, connectOrganization } = useSession()
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -25,7 +25,11 @@ export function LoginPage() {
         return
       }
       const data = await res.json()
-      login(data.token, data.user)
+      // Nom d'utilisateur+mot de passe peut résoudre un compte perso OU une organisation
+      // (login n'est pas restreint comme Google/IMAP) — perso remplace l'identité,
+      // organisation se connecte en plus (voir SessionContext).
+      if (data.organization.isPersonal) login(data.token, data.user, data.organization)
+      else connectOrganization(data.token, data.user, data.organization)
       navigate('/inbox')
     } catch (err) {
       setError(networkErrorMessage(err))

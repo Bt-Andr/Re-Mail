@@ -84,11 +84,63 @@ export async function pollConnection(connection: ExternalMailboxConnection): Pro
   }
 }
 
+export const HISTORY_IMPORT_MIN_DAYS = 1
+export const HISTORY_IMPORT_MAX_DAYS = 90
+
+// Import ponctuel de l'historique — jamais déclenché par le polling normal (qui ne
+// regarde que du nouveau courrier au-delà de lastSeenUid, voir pollConnection). Borné
+// dans le temps et silencieux (pas de notifyUser) : contrairement au polling normal,
+// ceci peut créer/compléter beaucoup de threads d'un coup, jamais en une seule
+// notification par message comme le veut l'utilisateur au fil de l'eau. lastSeenUid
+// n'est jamais touché ici : les messages importés ont uid <= lastSeenUid par
+// construction (voir filtre plus bas), donc hors de portée du polling normal — aucun
+// risque de doublon entre les deux mécanismes.
+export async function importMailboxHistory(connection: ExternalMailboxConnection, days: number): Promise<{ imported: number }> {
+  if (connection.historyImportedAt) throw new Error('Historique déjà importé pour cette boîte.')
+
+  const org = await prisma.organization.findUnique({ where: { id: connection.organizationId } })
+  if (!org) throw new Error('Organisation introuvable.')
+
+  const db = forOrg(connection.organizationId)
+  const auth = await getMailboxAuth(connection)
+  const client = new ImapFlow({
+    host: connection.imapHost,
+    port: connection.imapPort,
+    secure: connection.imapSecure,
+    auth,
+    logger: false,
+  })
+
+  let imported = 0
+  await client.connect()
+  try {
+    await client.mailboxOpen('INBOX', { readOnly: true })
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    const uids = await client.search({ since }, { uid: true })
+    // Ne traite que ce que le polling normal ne traitera jamais (uid <= lastSeenUid) —
+    // le reste (courrier arrivé depuis la connexion) est déjà géré au fil de l'eau.
+    const historicalUids = (Array.isArray(uids) ? uids : []).filter(uid => uid <= connection.lastSeenUid).sort((a, b) => a - b)
+
+    for (const uid of historicalUids) {
+      const message = await client.fetchOne(String(uid), { source: true }, { uid: true })
+      if (!message || !message.source) continue
+      await processMessage(db, org, connection, message.source, { silent: true })
+      imported++
+    }
+  } finally {
+    await client.logout().catch(() => client.close())
+  }
+
+  await prisma.externalMailboxConnection.update({ where: { id: connection.id }, data: { historyImportedAt: new Date() } })
+  return { imported }
+}
+
 async function processMessage(
   db: PrismaClient,
   org: Organization,
   connection: ExternalMailboxConnection,
-  source: Buffer
+  source: Buffer,
+  opts: { silent?: boolean } = {}
 ): Promise<void> {
   const parsed = await simpleParser(source)
   const fromAddr = (parsed.from?.value[0]?.address || '').toLowerCase() || 'inconnu@inconnu.invalid'
@@ -124,16 +176,18 @@ async function processMessage(
     })
     await saveAttachmentRecords(db, msg.id, stored)
     await db.thread.update({ where: { id: activeThread.id }, data: { updatedAt: new Date() } })
-    await notifyUser(
-      db,
-      org,
-      connection.userId,
-      `Nouveau message — ${activeThread.sujet}`,
-      'Nouveau message reçu',
-      [{ label: 'De', value: `${fromName} <${fromAddr}>` }, { label: 'Sujet', value: activeThread.sujet }],
-      `${fromName}: ${subject}`,
-      activeThread.id
-    )
+    if (!opts.silent) {
+      await notifyUser(
+        db,
+        org,
+        connection.userId,
+        `Nouveau message — ${activeThread.sujet}`,
+        'Nouveau message reçu',
+        [{ label: 'De', value: `${fromName} <${fromAddr}>` }, { label: 'Sujet', value: activeThread.sujet }],
+        `${fromName}: ${subject}`,
+        activeThread.id
+      )
+    }
     return
   }
 

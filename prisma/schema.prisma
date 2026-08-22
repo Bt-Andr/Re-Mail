@@ -275,6 +275,12 @@ model ExternalMailboxConnection {
   lastSeenUid Int    @default(0)
   uidValidity BigInt?
 
+  // Import ponctuel de l'historique (voir src/jobs/mailboxPoller.ts::importMailboxHistory) —
+  // distinct du polling normal (lastSeenUid) : ne couvre que les mails déjà présents
+  // AVANT la connexion, une seule fois par connexion (non-null = déjà fait, l'action
+  // n'est plus proposée côté client).
+  historyImportedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

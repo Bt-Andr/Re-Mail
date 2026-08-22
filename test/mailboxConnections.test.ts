@@ -3,11 +3,20 @@ import request from 'supertest'
 
 const mockConnect = vi.fn()
 const mockMailboxOpen = vi.fn()
+const mockSearch = vi.fn()
+const mockFetchOne = vi.fn()
 const mockLogout = vi.fn()
 const mockClose = vi.fn()
 vi.mock('imapflow', () => ({
   ImapFlow: vi.fn().mockImplementation(function () {
-    return { connect: mockConnect, mailboxOpen: mockMailboxOpen, logout: mockLogout, close: mockClose }
+    return {
+      connect: mockConnect,
+      mailboxOpen: mockMailboxOpen,
+      search: mockSearch,
+      fetchOne: mockFetchOne,
+      logout: mockLogout,
+      close: mockClose,
+    }
   }),
 }))
 
@@ -266,5 +275,136 @@ describe('POST /api/mailbox-connections/imap/signin', () => {
 
     await cleanupOrg(proOrg.id)
     await cleanupOrg(res.body.organization.id)
+  })
+})
+
+function rawEmail(from: string, subject: string, body = 'Contenu.'): string {
+  return `From: ${from}\r\nTo: moi@import-history-test.example\r\nSubject: ${subject}\r\nDate: ${new Date().toUTCString()}\r\n\r\n${body}`
+}
+
+describe('POST /api/mailbox-connections/:id/import-history', () => {
+  let org: SeededOrg
+  let connectionId: string
+
+  beforeAll(async () => {
+    org = await seedOrg('mailbox-history-import-test')
+  })
+
+  afterAll(async () => {
+    await cleanupOrg(org.organizationId)
+  })
+
+  beforeEach(async () => {
+    mockConnect.mockReset().mockResolvedValue(undefined)
+    mockMailboxOpen.mockReset().mockResolvedValue({ uidValidity: 1000n, uidNext: 50 })
+    mockSearch.mockReset()
+    mockFetchOne.mockReset()
+    mockLogout.mockReset().mockResolvedValue(undefined)
+    mockClose.mockReset()
+    mockVerify.mockReset().mockResolvedValue(true)
+
+    // uidNext (50) - 1 = 49 : tout ce qui est <= 49 est "avant la connexion", donc
+    // hors de portée du polling normal — c'est justement ce que /import-history vise.
+    const create = await request(app)
+      .post('/api/mailbox-connections')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({
+        email: 'moi@import-history-test.example',
+        imapHost: 'imap.example.com',
+        imapPort: 993,
+        smtpHost: 'smtp.example.com',
+        smtpPort: 465,
+        password: 'x',
+      })
+    connectionId = create.body.id
+  })
+
+  afterEach(async () => {
+    await prisma.externalMailboxConnection.deleteMany({ where: { id: connectionId } })
+  })
+
+  it('returns 404 for a connection owned by someone else', async () => {
+    const other = await seedOrg('mailbox-history-import-other')
+    const res = await request(app)
+      .post(`/api/mailbox-connections/${connectionId}/import-history`)
+      .set('Authorization', `Bearer ${other.token}`)
+      .send({})
+    expect(res.status).toBe(404)
+    await cleanupOrg(other.organizationId)
+  })
+
+  it('imports only messages at or before the connection cursor, ignores newer ones, and is a one-time action', async () => {
+    mockSearch.mockResolvedValueOnce([10, 20, 60]) // 60 > lastSeenUid (49) — déjà couvert par le polling normal
+    mockFetchOne.mockImplementation(async (uid: string) => ({
+      source: Buffer.from(rawEmail(`ancien-${uid}@example.com`, `Vieux message ${uid}`)),
+    }))
+
+    const res = await request(app)
+      .post(`/api/mailbox-connections/${connectionId}/import-history`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ days: 30 })
+
+    expect(res.status).toBe(200)
+    expect(res.body.imported).toBe(2)
+    expect(mockFetchOne).toHaveBeenCalledTimes(2)
+
+    const connection = await prisma.externalMailboxConnection.findUnique({ where: { id: connectionId } })
+    expect(connection?.historyImportedAt).toBeTruthy()
+    // Le curseur de polling normal n'est jamais touché par l'import.
+    expect(connection?.lastSeenUid).toBe(49)
+
+    const threads = await prisma.thread.findMany({ where: { organizationId: org.organizationId, canal: 'email' } })
+    expect(threads.map(t => t.externalEmail).sort()).toEqual(['ancien-10@example.com', 'ancien-20@example.com'])
+
+    // Deuxième appel : refusé, l'import est une action à usage unique par connexion.
+    const replay = await request(app)
+      .post(`/api/mailbox-connections/${connectionId}/import-history`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({})
+    expect(replay.status).toBe(409)
+  })
+
+  it('appends a second historical message from the same sender to the same thread instead of duplicating it', async () => {
+    mockSearch.mockResolvedValueOnce([10, 11])
+    mockFetchOne.mockImplementation(async (uid: string) =>
+      uid === '10'
+        ? { source: Buffer.from(rawEmail('client@example.com', 'Premier message')) }
+        : { source: Buffer.from(rawEmail('client@example.com', 'Deuxième message')) }
+    )
+
+    const res = await request(app)
+      .post(`/api/mailbox-connections/${connectionId}/import-history`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({})
+    expect(res.status).toBe(200)
+    expect(res.body.imported).toBe(2)
+
+    const threads = await prisma.thread.findMany({ where: { organizationId: org.organizationId, externalEmail: 'client@example.com' } })
+    expect(threads).toHaveLength(1)
+    const messages = await prisma.threadMessage.findMany({ where: { threadId: threads[0].id } })
+    expect(messages).toHaveLength(2)
+  })
+
+  it('returns 400 and does not mark historyImportedAt when the IMAP connection fails', async () => {
+    mockConnect.mockRejectedValueOnce(new Error('Invalid credentials'))
+    const res = await request(app)
+      .post(`/api/mailbox-connections/${connectionId}/import-history`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({})
+    expect(res.status).toBe(400)
+    const connection = await prisma.externalMailboxConnection.findUnique({ where: { id: connectionId } })
+    expect(connection?.historyImportedAt).toBeNull()
+  })
+
+  it('clamps an out-of-range days value instead of rejecting the request', async () => {
+    mockSearch.mockResolvedValueOnce([])
+    const res = await request(app)
+      .post(`/api/mailbox-connections/${connectionId}/import-history`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ days: 99999 })
+    expect(res.status).toBe(200)
+    const [query] = mockSearch.mock.calls[0]
+    const daysRequested = (Date.now() - query.since.getTime()) / (24 * 60 * 60 * 1000)
+    expect(daysRequested).toBeCloseTo(90, 0) // HISTORY_IMPORT_MAX_DAYS
   })
 })

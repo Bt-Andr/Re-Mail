@@ -198,6 +198,7 @@ export interface ExternalMailboxConnection {
   status: 'connected' | 'error';
   lastError: string | null;
   lastPolledAt: string | null;
+  historyImportedAt: string | null;
   createdAt: string;
 }
 

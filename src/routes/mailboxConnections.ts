@@ -8,6 +8,7 @@ import prisma from '../lib/prisma'
 import { encryptMailboxCredential } from '../lib/mailboxCredentialCrypto'
 import { signToken } from '../lib/jwt'
 import { createPersonalAccountFromMailbox } from '../lib/personalAccountFactory'
+import { importMailboxHistory, HISTORY_IMPORT_MIN_DAYS, HISTORY_IMPORT_MAX_DAYS } from '../jobs/mailboxPoller'
 
 const router = Router()
 
@@ -79,6 +80,7 @@ const LIST_SELECT = {
   status: true,
   lastError: true,
   lastPolledAt: true,
+  historyImportedAt: true,
   createdAt: true,
 } as const
 
@@ -294,6 +296,31 @@ router.patch('/:id/retry', authenticateToken, async (req, res) => {
   })
   if (updated.count === 0) return res.status(404).json({ error: 'Connexion introuvable.' })
   res.json({ success: true })
+})
+
+// POST /api/mailbox-connections/:id/import-history — action ponctuelle et bornée
+// (voir importMailboxHistory) : contrairement au polling normal, elle est synchrone
+// et peut prendre du temps selon le volume de courrier sur la période demandée —
+// `days` reste volontairement plafonné pour éviter une requête interminable ou un
+// import massif silencieux.
+router.post('/:id/import-history', authenticateToken, async (req, res) => {
+  const db = forOrg(req.user!.organizationId)
+  const connection = await db.externalMailboxConnection.findFirst({ where: { id: req.params.id, userId: req.user!.id } })
+  if (!connection) return res.status(404).json({ error: 'Connexion introuvable.' })
+  if (connection.historyImportedAt) return res.status(409).json({ error: 'Historique déjà importé pour cette boîte.' })
+
+  const daysRaw = Number(req.body?.days)
+  const days = Number.isFinite(daysRaw)
+    ? Math.min(Math.max(Math.round(daysRaw), HISTORY_IMPORT_MIN_DAYS), HISTORY_IMPORT_MAX_DAYS)
+    : 30
+
+  try {
+    const { imported } = await importMailboxHistory(connection, days)
+    res.json({ imported })
+  } catch (e) {
+    console.error('[POST /api/mailbox-connections/:id/import-history]', e)
+    res.status(400).json({ error: (e as Error).message || "Import de l'historique impossible." })
+  }
 })
 
 export default router

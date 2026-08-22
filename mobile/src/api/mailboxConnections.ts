@@ -35,6 +35,12 @@ export function retryMailboxConnection(id: string): Promise<{ success: boolean }
   return apiFetch<{ success: boolean }>(`/mailbox-connections/${id}/retry`, { method: 'PATCH' });
 }
 
+// Action ponctuelle et bornée (30 jours) — voir src/jobs/mailboxPoller.ts::importMailboxHistory
+// côté backend, refusée une fois déjà faite pour cette connexion (historyImportedAt).
+export function importMailboxHistory(id: string, days = 30): Promise<{ imported: number }> {
+  return apiFetch<{ imported: number }>(`/mailbox-connections/${id}/import-history`, { method: 'POST', body: { days } });
+}
+
 export function listProAddresses(): Promise<ProAddress[]> {
   return apiFetch<ProAddress[]>('/pro-addresses/mine');
 }

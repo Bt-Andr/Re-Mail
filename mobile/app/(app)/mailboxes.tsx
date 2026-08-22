@@ -4,10 +4,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AtSign, CheckCircle2, Mail, Plus, RefreshCw, Trash2 } from 'lucide-react-native';
+import { AtSign, CheckCircle2, History, Mail, Plus, RefreshCw, Trash2 } from 'lucide-react-native';
 import {
   claimProAddress,
   deleteMailboxConnection,
+  importMailboxHistory,
   listMailboxConnections,
   listProAddresses,
   retryMailboxConnection,
@@ -46,6 +47,14 @@ export default function MailboxesScreen() {
 
   const retryMutation = useMutation({ mutationFn: (id: string) => retryMailboxConnection(id), onSuccess: invalidate });
   const deleteMutation = useMutation({ mutationFn: (id: string) => deleteMailboxConnection(id), onSuccess: invalidate });
+  const importMutation = useMutation({
+    mutationFn: (id: string) => importMailboxHistory(id),
+    onSuccess: ({ imported }) => {
+      invalidate();
+      Alert.alert(imported > 0 ? `${imported} mail${imported > 1 ? 's' : ''} importé${imported > 1 ? 's' : ''}` : 'Rien à importer sur cette période');
+    },
+    onError: e => Alert.alert('Erreur', describeError(e)),
+  });
   const claimMutation = useMutation({
     mutationFn: (id: string) => claimProAddress(id),
     onSuccess: () => {
@@ -97,6 +106,17 @@ export default function MailboxesScreen() {
       { text: 'Annuler', style: 'cancel' },
       { text: 'Déconnecter', style: 'destructive', onPress: () => deleteMutation.mutate(connection.id) },
     ]);
+  };
+
+  const confirmImport = (connection: ExternalMailboxConnection) => {
+    Alert.alert(
+      "Importer l'historique ?",
+      `Récupère les mails déjà présents dans ${connection.email} (30 derniers jours). Une seule fois par boîte.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Importer', onPress: () => importMutation.mutate(connection.id) },
+      ]
+    );
   };
 
   return (
@@ -192,6 +212,20 @@ export default function MailboxesScreen() {
               {item.status === 'error' && (
                 <Pressable onPress={() => retryMutation.mutate(item.id)} hitSlop={8} className="p-1.5">
                   <RefreshCw size={16} color="#9ca3af" />
+                </Pressable>
+              )}
+              {item.status === 'connected' && !item.historyImportedAt && (
+                <Pressable
+                  onPress={() => confirmImport(item)}
+                  disabled={importMutation.isPending && importMutation.variables === item.id}
+                  hitSlop={8}
+                  className="p-1.5"
+                >
+                  {importMutation.isPending && importMutation.variables === item.id ? (
+                    <ActivityIndicator size="small" />
+                  ) : (
+                    <History size={16} color="#9ca3af" />
+                  )}
                 </Pressable>
               )}
               <Pressable onPress={() => confirmDelete(item)} hitSlop={8} className="p-1.5">

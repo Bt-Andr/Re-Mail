@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { AtSign, CheckCircle2, Mail, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { AtSign, CheckCircle2, History, Mail, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useToast } from '../../context/ToastContext'
 import { useAccountSwitcher } from '../../context/AccountSwitcherContext'
@@ -44,6 +44,8 @@ export function ExternalMailboxesPage() {
   const [toDelete, setToDelete] = useState<ExternalMailboxConnection | null>(null)
   const [retryingId, setRetryingId] = useState<string | null>(null)
   const [connectingGmail, setConnectingGmail] = useState(false)
+  const [toImport, setToImport] = useState<ExternalMailboxConnection | null>(null)
+  const [importingId, setImportingId] = useState<string | null>(null)
 
   // Retour de /gmail/callback (succès sans erreur → juste un rechargement de la liste
   // via le `load` normal ; échec → ?error=... à traduire et effacer de l'URL).
@@ -152,6 +154,33 @@ export function ExternalMailboxesPage() {
     }
   }
 
+  // 30 jours, borné côté serveur (HISTORY_IMPORT_MIN_DAYS/MAX_DAYS) — action ponctuelle
+  // par connexion, jamais rejouable une fois historyImportedAt posé (voir bouton masqué
+  // plus bas et 409 côté serveur en cas de second appel).
+  const confirmImport = async () => {
+    if (!toImport) return
+    const connection = toImport
+    setImportingId(connection.id)
+    try {
+      const res = await apiFetch(`/mailbox-connections/${connection.id}/import-history`, {
+        method: 'POST',
+        body: JSON.stringify({ days: 30 }),
+      })
+      if (res.ok) {
+        const { imported } = await res.json()
+        showToast('success', imported > 0 ? `${imported} mail${imported > 1 ? 's' : ''} importé${imported > 1 ? 's' : ''}.` : 'Aucun mail à importer sur cette période.')
+        void load()
+      } else {
+        showToast('error', await parseError(res, "Import de l'historique impossible."))
+      }
+    } catch (err) {
+      showToast('error', networkErrorMessage(err))
+    } finally {
+      setImportingId(null)
+      setToImport(null)
+    }
+  }
+
   const confirmDelete = async () => {
     if (!toDelete) return
     try {
@@ -249,6 +278,17 @@ export function ExternalMailboxesPage() {
                   <RefreshCw size={15} className={retryingId === connection.id ? 'animate-spin' : ''} />
                 </button>
               )}
+              {connection.status === 'connected' && !connection.historyImportedAt && (
+                <button
+                  type="button"
+                  title="Importer l'historique (30 derniers jours)"
+                  onClick={() => setToImport(connection)}
+                  disabled={importingId === connection.id}
+                  className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+                >
+                  <History size={15} className={importingId === connection.id ? 'animate-pulse' : ''} />
+                </button>
+              )}
               <button
                 type="button"
                 title="Supprimer"
@@ -285,6 +325,15 @@ export function ExternalMailboxesPage() {
             void load()
             refetchAccounts()
           }}
+        />
+        <ConfirmDialog
+          open={!!toImport}
+          title="Importer l'historique ?"
+          message={`Récupère les mails déjà présents dans ${toImport?.email} (30 derniers jours). Une seule fois par boîte.`}
+          confirmLabel="Importer"
+          loading={!!toImport && importingId === toImport.id}
+          onConfirm={confirmImport}
+          onCancel={() => setToImport(null)}
         />
         <ConfirmDialog
           open={!!toDelete}

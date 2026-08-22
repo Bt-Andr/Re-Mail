@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -8,22 +7,18 @@ import { useColorScheme } from 'nativewind';
 import { colors, icons } from '@re-mail/design-tokens';
 import { useSession } from '../../context/SessionContext';
 import { useInboxSearch } from '../../context/InboxSearchContext';
-import { useAccountSwitcher } from '../../context/AccountSwitcherContext';
 import { avatarColor, initials } from '../../lib/format';
-import { AccountSwitcherSheet } from './AccountSwitcherSheet';
 
 // En-tête façon Gmail : hamburger (ouvre le tiroir) — recherche — avatar. L'avatar
-// ouvre le switcher de compte s'il y a 2+ comptes connectés (voir AccountSwitcherSheet),
-// sinon garde son ancien rôle de raccourci vers Réglages (aussi toujours accessible
-// depuis le bas du tiroir, voir DrawerContent).
+// est un raccourci fixe vers Réglages — le switch entre comptes/boîtes vit dans le
+// tiroir (voir DrawerContent), pas caché derrière une icône qui change de
+// comportement selon le nombre de comptes.
 export function InboxHeader({ navigation }: DrawerHeaderProps) {
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { user } = useSession();
   const { search, setSearch } = useInboxSearch();
-  const { accounts } = useAccountSwitcher();
-  const [switcherOpen, setSwitcherOpen] = useState(false);
 
   return (
     <View
@@ -53,14 +48,12 @@ export function InboxHeader({ navigation }: DrawerHeaderProps) {
       </View>
 
       <Pressable
-        onPress={() => (accounts.length > 1 ? setSwitcherOpen(true) : router.push('/(app)/settings'))}
+        onPress={() => router.push('/(app)/settings')}
         className="h-10 w-10 items-center justify-center rounded-full"
         style={{ backgroundColor: avatarColor(user?.email ?? user?.username ?? '') }}
       >
         <Text className="text-sm font-semibold text-white">{initials(user?.nom ?? user?.username ?? '?')}</Text>
       </Pressable>
-
-      <AccountSwitcherSheet open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
     </View>
   );
 }

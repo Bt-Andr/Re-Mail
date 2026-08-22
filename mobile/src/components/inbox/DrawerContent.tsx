@@ -8,10 +8,12 @@ import {
   AtSign,
   Building2,
   Check,
+  ChevronDown,
   FileEdit,
   FileText,
   Inbox,
   LogOut,
+  Mail,
   Plus,
   Send,
   Settings,
@@ -23,8 +25,10 @@ import {
 } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import { useSession } from '../../context/SessionContext';
+import { useAccountSwitcher } from '../../context/AccountSwitcherContext';
 import { useAccountContext } from '../../hooks/useAccountContext';
 import { AddAccountSheet } from '../mailboxes/AddAccountSheet';
+import { AccountSwitcherSheet } from './AccountSwitcherSheet';
 
 const FOLDER_ITEMS = [
   { route: 'inbox', label: 'Réception', icon: Inbox },
@@ -47,10 +51,13 @@ export function InboxDrawerContent({ state, navigation }: DrawerContentComponent
   const insets = useSafeAreaInsets();
   const { accounts, activeAccountId, switchAccount, logout } = useSession();
   const { isManager, isPersonal } = useAccountContext();
+  const { accounts: mailboxAccounts, selectedAccountId } = useAccountSwitcher();
   const { colorScheme } = useColorScheme();
   const iconColor = colorScheme === 'dark' ? '#f5f5f5' : '#111827';
   const activeRoute = state.routeNames[state.index];
   const [addAccountOpen, setAddAccountOpen] = useState(false);
+  const [mailboxSwitcherOpen, setMailboxSwitcherOpen] = useState(false);
+  const selectedMailbox = mailboxAccounts.find(a => a.id === selectedAccountId);
 
   const close = () => navigation.closeDrawer();
 
@@ -106,6 +113,21 @@ export function InboxDrawerContent({ state, navigation }: DrawerContentComponent
           <Text className="text-sm font-medium text-neutral-800 dark:text-neutral-200">Ajouter un compte</Text>
         </Pressable>
       </View>
+
+      {/* Filtre par BOÎTE connectée au sein de l'identité active (Gmail/IMAP) —
+          distinct du sélecteur d'identité ci-dessus, voir AccountSwitcherContext. */}
+      {mailboxAccounts.length > 1 && (
+        <Pressable
+          onPress={() => setMailboxSwitcherOpen(true)}
+          className="flex-row items-center gap-3 border-b border-neutral-100 px-5 py-3 dark:border-neutral-800"
+        >
+          <Mail size={16} color={iconColor} />
+          <Text className="flex-1 text-sm font-medium text-neutral-800 dark:text-neutral-200" numberOfLines={1}>
+            {selectedMailbox ? selectedMailbox.label : 'Toutes les boîtes'}
+          </Text>
+          <ChevronDown size={16} color="#9ca3af" />
+        </Pressable>
+      )}
 
       <View className="gap-1 px-3">
         {FOLDER_ITEMS.map(item => {
@@ -179,6 +201,7 @@ export function InboxDrawerContent({ state, navigation }: DrawerContentComponent
       </View>
 
       <AddAccountSheet open={addAccountOpen} onClose={() => setAddAccountOpen(false)} />
+      <AccountSwitcherSheet open={mailboxSwitcherOpen} onClose={() => setMailboxSwitcherOpen(false)} />
     </View>
   );
 }

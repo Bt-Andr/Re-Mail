@@ -36,6 +36,9 @@ router.put('/:canal', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), asy
   const { canal } = req.params
   const { assignToId, assignToEmail, active } = req.body
   if (!assignToId && !assignToEmail) return res.status(400).json({ error: 'assignToId ou assignToEmail requis.' })
+  if (assignToId !== undefined && typeof assignToId !== 'string') {
+    return res.status(400).json({ error: 'assignToId invalide.' })
+  }
   // "email" est le canal réservé de toute boîte IMAP/Gmail personnelle connectée
   // (mailboxPoller.ts, org entière confondue) — créer une adresse pro dessus
   // masquerait/interceptrait le courrier personnel de tout le monde dans
@@ -48,7 +51,10 @@ router.put('/:canal', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), asy
     const include = { assignTo: { select: { id: true, nom: true, username: true, orgRole: true } } } as const
 
     let resolvedAssignToId: string = assignToId
-    if (!resolvedAssignToId) {
+    if (resolvedAssignToId) {
+      const assignee = await db.user.findUnique({ where: { id: resolvedAssignToId }, select: { id: true } })
+      if (!assignee) return res.status(400).json({ error: "L'utilisateur assigné n'appartient pas à cette organisation." })
+    } else {
       const email = String(assignToEmail).toLowerCase().trim()
       const user = await db.user.findFirst({ where: { email } })
       if (user) {

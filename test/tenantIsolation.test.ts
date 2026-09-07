@@ -78,6 +78,12 @@ describe('Tenant isolation', () => {
     const getA = await request(app).get(`/api/threads/${thread.id}`).set('Authorization', `Bearer ${orgA.token}`)
     expect(getA.status).toBe(200)
     expect(getA.body.sujet).toBe('Sujet confidentiel org A')
+
+    const replyB = await request(app)
+      .post('/api/emails/reply')
+      .set('Authorization', `Bearer ${orgB.token}`)
+      .send({ threadId: thread.id, to: 'recipient@example.com', subject: 'Re', message: 'Tentative' })
+    expect(replyB.status).toBe(404)
   })
 
   it('does not let org B assign org A\'s thread to one of its own users', async () => {
@@ -101,6 +107,53 @@ describe('Tenant isolation', () => {
 
     const stillUnassigned = await prisma.thread.findUnique({ where: { id: thread.id } })
     expect(stillUnassigned?.assignedToId).toBeNull()
+  })
+
+  it('does not let an org A manager assign an org A thread to an org B user', async () => {
+    const thread = await prisma.thread.create({
+      data: {
+        organizationId: orgA.organizationId,
+        canal: 'contact',
+        sujet: 'Affectation inter-tenant',
+        externalFrom: 'Client A3',
+        externalEmail: 'client3@a.example',
+        origin: 'inbound',
+      },
+    })
+
+    const response = await request(app)
+      .patch(`/api/threads/${thread.id}/assign`)
+      .set('Authorization', `Bearer ${orgA.token}`)
+      .send({ assignedToId: orgB.userId })
+
+    expect(response.status).toBe(400)
+    const unchanged = await prisma.thread.findUnique({ where: { id: thread.id } })
+    expect(unchanged?.assignedToId).toBeNull()
+  })
+
+  it('does not let an org A routing rule reference an org B user', async () => {
+    const response = await request(app)
+      .put('/api/thread-routing-rules/finance')
+      .set('Authorization', `Bearer ${orgA.token}`)
+      .send({ assignToId: orgB.userId, active: true })
+
+    expect(response.status).toBe(400)
+    expect(await prisma.threadRoutingRule.findFirst({ where: { organizationId: orgA.organizationId, canal: 'finance' } })).toBeNull()
+  })
+
+  it('does not let an org A sender grant reference an org B user', async () => {
+    const alias = `shared-${Date.now()}@org-a.example`
+    await prisma.mailRoute.create({
+      data: { organizationId: orgA.organizationId, alias, personalEmail: 'owner@org-a.example', active: true },
+    })
+
+    const response = await request(app)
+      .post(`/api/users/${orgB.userId}/sender-grants`)
+      .set('Authorization', `Bearer ${orgA.token}`)
+      .send({ email: alias })
+
+    expect(response.status).toBe(404)
+    expect(await prisma.senderGrant.findFirst({ where: { organizationId: orgA.organizationId, userId: orgB.userId } })).toBeNull()
   })
 
   it('forOrg() extension never leaks rows across organizations even without an explicit where', async () => {

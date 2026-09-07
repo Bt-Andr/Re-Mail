@@ -109,6 +109,8 @@ router.post('/:id/sender-grants', authenticateToken, requireOrgRole(['OWNER', 'A
   if (!email) return res.status(400).json({ error: 'email requis.' })
   try {
     const db = forOrg(req.user!.organizationId)
+    const targetUser = await db.user.findUnique({ where: { id: req.params.id }, select: { id: true } })
+    if (!targetUser) return res.status(404).json({ error: 'Utilisateur introuvable.' })
     const route = await db.mailRoute.findFirst({ where: { alias: email, active: true } })
     if (!route) return res.status(400).json({ error: "Cet alias n'existe pas ou est inactif." })
 

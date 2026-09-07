@@ -150,9 +150,16 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
 router.patch('/:id/assign', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
   const { assignedToId } = req.body
+  if (assignedToId !== undefined && assignedToId !== null && typeof assignedToId !== 'string') {
+    return res.status(400).json({ error: 'assignedToId doit être un identifiant ou null.' })
+  }
   try {
     const db = forOrg(req.user!.organizationId)
     if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
+    if (assignedToId) {
+      const assignee = await db.user.findUnique({ where: { id: assignedToId }, select: { id: true } })
+      if (!assignee) return res.status(400).json({ error: "L'utilisateur assigné n'appartient pas à cette organisation." })
+    }
     const current = await db.thread.findUnique({ where: { id: req.params.id }, select: { sourceId: true } })
     if (current?.sourceId && assignedToId !== req.user!.id) {
       return res.status(400).json({ error: 'Une boîte personnelle ne peut pas être attribuée à un autre utilisateur.' })

@@ -7,7 +7,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Champ | Valeur |
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
-| Statut | En cours — lots 1 et 3 |
+| Statut | En cours — lots 1, 3 et 4 |
 | Dernière mise à jour | 2026-09-07 |
 | Branche de référence | `main` |
 | Baseline fonctionnelle | 28 fichiers de tests, 167 tests réussis |
@@ -30,7 +30,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | 1 | Réception durable et idempotente | Critique | En cours | 0 | Aucun événement perdu ou traité deux fois |
 | 2 | Corrélation des conversations | Critique | À faire | 0, 1 | Aucun regroupement fondé seulement sur l’expéditeur |
 | 3 | Classement comptes et dossiers | Haute | En cours | 2 | Fils visibles dans la bonne boîte et le bon dossier |
-| 4 | Intégrité tenant et validation | Critique | À faire | 0 | Aucune relation cross-tenant acceptée |
+| 4 | Intégrité tenant et validation | Critique | En cours | 0 | Aucune relation cross-tenant acceptée |
 | 5 | Comptes et rôles | Haute | À faire | 0, 4 | Dernier propriétaire protégé et récupération disponible |
 | 6 | Onboarding vérifié | Haute | À faire | 1–5 | Test réel d’envoi/réception réussi dans l’assistant |
 | 7 | Finition des clients | Moyenne | À faire | 3–6 | Parcours critiques couverts en end-to-end |
@@ -84,7 +84,7 @@ Validation :
 
 ## Lot 2 — Corrélation des conversations
 
-Statut : **À faire**
+Statut : **En cours — relations utilisateur critiques contrôlées**
 
 - [ ] Définir les nouvelles métadonnées email.
 - [ ] Créer la migration correspondante.
@@ -135,9 +135,10 @@ Validation :
 Statut : **À faire**
 
 - [ ] Créer les schémas de validation partagés.
-- [ ] Vérifier le tenant de l’utilisateur assigné à un fil.
-- [ ] Vérifier le tenant de l’utilisateur assigné à une règle.
-- [ ] Vérifier le tenant du bénéficiaire d’un `SenderGrant`.
+- [x] Vérifier le tenant de l’utilisateur assigné à un fil.
+- [x] Vérifier le tenant de l’utilisateur assigné à une règle.
+- [x] Vérifier le tenant du bénéficiaire d’un `SenderGrant`.
+- [x] Refuser une réponse associée à un fil absent, cross-tenant ou lié à la boîte personnelle d’un autre utilisateur avant tout envoi.
 - [ ] Vérifier le fil du message source d’un transfert.
 - [ ] Borner la pagination.
 - [ ] Valider le destinataire principal.
@@ -151,7 +152,7 @@ Statut : **À faire**
 
 Validation :
 
-- [ ] Tests cross-tenant négatifs.
+- [~] Tests cross-tenant négatifs — affectation, routage, autorisation d’expéditeur et réponse couverts ; inventaire restant à poursuivre.
 - [ ] Tests de payloads malformés.
 - [ ] Tests de limites de taille et pagination.
 - [ ] Tests de domaine et alias.
@@ -252,7 +253,7 @@ Sous Windows avec une politique PowerShell restrictive, utiliser `npm.cmd` et `n
 | R-02 | Double traitement d’un email | Haute | Moyenne | Lots 1 et 2, idempotence | Ouvert |
 | R-03 | Fusion de conversations indépendantes | Haute | Haute | Lot 2, en-têtes email | Ouvert |
 | R-04 | Mauvaise boîte ou mauvais dossier | Haute | Haute | Lot 3 | Ouvert |
-| R-05 | Relation cross-tenant forgée | Critique | Faible à moyenne | Lot 4 | Ouvert |
+| R-05 | Relation cross-tenant forgée | Critique | Faible à moyenne | Lot 4 | En réduction |
 | R-06 | Organisation sans propriétaire | Haute | Moyenne | Lot 5 | Ouvert |
 | R-07 | Configuration déclarée terminée mais inactive | Haute | Haute | Lot 6, tests réels | Ouvert |
 | R-08 | Régression non détectée dans les interfaces | Moyenne | Haute | Lot 7, end-to-end | Ouvert |
@@ -280,6 +281,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | 1 | Ajout du journal durable `InboundEvent`, déduplication Svix, revendication atomique, reprise périodique et verrou local IMAP | 11 migrations depuis zéro, typecheck/build backend, 172/172 tests | Dédupliquer les messages IMAP et extraire le traitement métier | Codex |
 | 2026-09-07 | 1 | Liaison unique entre événement entrant et message, identité IMAP connexion/UIDVALIDITY/UID et protection du curseur | 12 migrations depuis zéro, typecheck/build backend, 175/175 tests | Rendre les effets métier partiels entièrement reprenables | Codex |
 | 2026-09-07 | 3 | Classement des nouveaux fils SMTP par boîte source et isolation stricte des fils de boîtes personnelles entre utilisateurs d’une même organisation | Typecheck et tests backend complets | Corriger la visibilité des réponses sur les fils sortants | Codex |
+| 2026-09-07 | 4 | Validation du tenant des affectations, règles de routage et autorisations d’expéditeur ; arrêt des réponses sur fil inaccessible avant envoi | Tests ciblés d’isolation réussis | Étendre la validation structurée des payloads | Codex |
 
 ## Journal des validations
 
@@ -290,6 +292,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | Lot 1 — tranche 1 | 172/172 | Backend typecheck et build valides | 11/11 migrations rejouées depuis zéro | Couvert par intégration webhook | Double livraison Svix et double cycle local couverts |
 | 2026-09-07 | Lot 1 — tranche 2 | 175/175 | Backend typecheck et build valides | 12/12 migrations rejouées depuis zéro | Retry IMAP avec curseur périmé couvert | Un événement ne peut créer qu’un seul `ThreadMessage` |
 | 2026-09-07 | Lot 3 — tranche 1 | 176/176 | Backend typecheck et build valides | Sans migration | Classement SMTP et accès multi-utilisateur couverts par intégration | `sourceId` identifie désormais la boîte externe propriétaire |
+| 2026-09-07 | Lot 4 — tranche 1 | 179/179 | Backend typecheck et build valides | Sans migration | Tentatives cross-tenant couvertes par intégration | Les trois relations utilisateur exposées par l’API sont validées avant écriture |
 
 ## Journal des incidents et régressions
 

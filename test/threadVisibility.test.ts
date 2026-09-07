@@ -194,6 +194,12 @@ describe('Isolation des fils de boîtes externes personnelles', () => {
       .send({ assignedToId: org.userId })
     expect(foreignAssign.status).toBe(403)
 
+    const foreignReply = await request(app)
+      .post('/api/emails/reply')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ threadId: thread.id, to: 'recipient@example.com', subject: 'Re', message: 'Tentative' })
+    expect(foreignReply.status).toBe(403)
+
     const foreignBulk = await request(app)
       .patch('/api/threads/bulk')
       .set('Authorization', `Bearer ${org.token}`)

@@ -72,12 +72,23 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
     // Une réponse (ou un transfert) part obligatoirement de l'adresse qui a reçu le mail
     let receivedOn: string | null = null
     try {
-      const thread = await db.thread.findUnique({ where: { id: threadId }, select: { toEmail: true, assignedToId: true } })
+      const thread = await db.thread.findUnique({
+        where: { id: threadId },
+        select: { toEmail: true, assignedToId: true, sourceId: true },
+      })
+      if (!thread) return res.status(404).json({ error: 'Thread introuvable.' })
+      if (thread.sourceId) {
+        const ownedMailbox = await db.externalMailboxConnection.findFirst({
+          where: { id: thread.sourceId, userId: req.user!.id },
+          select: { id: true },
+        })
+        if (!ownedMailbox) return res.status(403).json({ error: 'Accès non autorisé.' })
+      }
       const isManager = req.user!.orgRole === 'OWNER' || req.user!.orgRole === 'ADMIN'
-      if (thread && !isManager && thread.assignedToId !== req.user!.id) {
+      if (!isManager && thread.assignedToId !== req.user!.id) {
         return res.status(403).json({ error: 'Accès non autorisé.' })
       }
-      receivedOn = thread?.toEmail ?? null
+      receivedOn = thread.toEmail ?? null
     } catch (e) {
       console.error('[REPLY] Thread lookup:', (e as Error).message)
     }

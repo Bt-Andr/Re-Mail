@@ -104,4 +104,52 @@ describe('POST /api/inbound-mail/:webhookToken', () => {
     expect(messages[0].direction).toBe('inbound')
     expect(messages[0].body).toContain('Bonjour, ceci est un test.')
   })
+
+  it('persists and processes the same Svix event only once when Resend retries it', async () => {
+    const body = payload({
+      email_id: 're_inbound_duplicate',
+      from: 'Duplicate Test <duplicate@example.com>',
+      subject: 'Événement rejoué',
+    })
+    const headers = signTestWebhook(org.webhookSecret, body)
+
+    const [first, retry] = await Promise.all([
+      request(app)
+        .post(`/api/inbound-mail/${org.webhookToken}`)
+        .set(headers)
+        .set('Content-Type', 'application/json')
+        .send(body),
+      request(app)
+        .post(`/api/inbound-mail/${org.webhookToken}`)
+        .set(headers)
+        .set('Content-Type', 'application/json')
+        .send(body),
+    ])
+
+    expect(first.status).toBe(200)
+    expect(retry.status).toBe(200)
+
+    const externalId = headers['svix-id']
+    let event = null
+    for (let i = 0; i < 30 && event?.status !== 'completed'; i++) {
+      event = await prisma.inboundEvent.findFirst({
+        where: { organizationId: org.organizationId, provider: 'resend', externalId },
+      })
+      if (event?.status !== 'completed') await new Promise(resolve => setTimeout(resolve, 100))
+    }
+
+    expect(event?.status).toBe('completed')
+    expect(event?.attemptCount).toBe(1)
+    expect(
+      await prisma.inboundEvent.count({
+        where: { organizationId: org.organizationId, provider: 'resend', externalId },
+      })
+    ).toBe(1)
+
+    const thread = await prisma.thread.findFirst({
+      where: { organizationId: org.organizationId, externalEmail: 'duplicate@example.com' },
+    })
+    expect(thread).not.toBeNull()
+    expect(await prisma.threadMessage.count({ where: { threadId: thread!.id } })).toBe(1)
+  })
 })

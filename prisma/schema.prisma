@@ -69,11 +69,40 @@ model Organization {
   deviceTokens       DeviceToken[]
   userInvites        UserInvite[]
   externalMailboxConnections ExternalMailboxConnection[]
+  inboundEvents      InboundEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([webhookToken])
+}
+
+// Journal durable des entrées reçues avant leur traitement. Le couple
+// organizationId/provider/externalId rend chaque événement idempotent, tandis que
+// status/lockedAt permettent à plusieurs instances de revendiquer le travail sans
+// traiter deux fois la même entrée.
+model InboundEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  provider   String
+  externalId String
+  payload    Json
+
+  status        String    @default("pending") // pending | processing | completed | failed
+  attemptCount  Int       @default(0)
+  lastError     String?
+  lockedAt      DateTime?
+  nextAttemptAt DateTime?
+  processedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, provider, externalId])
+  @@index([status, nextAttemptAt])
+  @@index([organizationId])
 }
 
 model User {

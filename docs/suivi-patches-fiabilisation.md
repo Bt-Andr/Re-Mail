@@ -7,7 +7,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Champ | Valeur |
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
-| Statut | En cours — lot 0 terminé |
+| Statut | En cours — lot 1, tranche Resend durable terminée |
 | Dernière mise à jour | 2026-09-07 |
 | Branche de référence | `main` |
 | Baseline fonctionnelle | 28 fichiers de tests, 167 tests réussis |
@@ -27,7 +27,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Lot | Sujet | Priorité | Statut | Dépend de | Critère de sortie principal |
 |---:|---|---|---|---|---|
 | 0 | Baseline des migrations | Bloquante | Terminé | — | Base reconstruite uniquement par migrations |
-| 1 | Réception durable et idempotente | Critique | À faire | 0 | Aucun événement perdu ou traité deux fois |
+| 1 | Réception durable et idempotente | Critique | En cours | 0 | Aucun événement perdu ou traité deux fois |
 | 2 | Corrélation des conversations | Critique | À faire | 0, 1 | Aucun regroupement fondé seulement sur l’expéditeur |
 | 3 | Classement comptes et dossiers | Haute | À faire | 2 | Fils visibles dans la bonne boîte et le bon dossier |
 | 4 | Intégrité tenant et validation | Critique | À faire | 0 | Aucune relation cross-tenant acceptée |
@@ -58,29 +58,29 @@ Validation :
 
 ## Lot 1 — Réception durable et idempotente
 
-Statut : **À faire**
+Statut : **En cours — persistance Resend et verrou local livrés**
 
-- [ ] Définir le schéma `InboundEvent`.
-- [ ] Créer la migration et régénérer Prisma Client.
-- [ ] Extraire le traitement entrant dans un service.
-- [ ] Persister avant l’accusé de réception HTTP.
-- [ ] Ajouter la revendication atomique d’un événement.
-- [ ] Ajouter les statuts et compteurs de tentatives.
-- [ ] Ajouter la reprise des événements échoués.
-- [ ] Dédupliquer les identifiants Resend.
+- [x] Définir le schéma `InboundEvent`.
+- [x] Créer la migration et régénérer Prisma Client.
+- [~] Extraire le traitement entrant dans un service — orchestration extraite, traitement métier Resend encore dans `routes/mail.ts`.
+- [x] Persister avant l’accusé de réception HTTP.
+- [x] Ajouter la revendication atomique d’un événement.
+- [x] Ajouter les statuts et compteurs de tentatives.
+- [x] Ajouter la reprise des événements échoués.
+- [x] Dédupliquer les identifiants Svix/Resend.
 - [ ] Dédupliquer les identifiants IMAP.
-- [ ] Ajouter un verrou local au poller.
-- [ ] Définir la stratégie multi-instance.
-- [ ] Nettoyer les logs pour exclure secrets et payloads sensibles.
+- [x] Ajouter un verrou local au poller.
+- [~] Définir la stratégie multi-instance — revendication atomique en place pour Resend, verrou distribué IMAP restant.
+- [x] Ne journaliser ni secret ni payload dans le nouveau processeur.
 
 Validation :
 
-- [ ] Test de webhook dupliqué.
-- [ ] Test de concurrence.
+- [x] Test de webhook dupliqué.
+- [x] Test de concurrence sur la création et la revendication.
 - [ ] Test de panne avant accusé de réception.
-- [ ] Test de reprise après panne.
+- [x] Test de reprise après panne du handler.
 - [ ] Test de redémarrage.
-- [ ] Test de chevauchement du poller.
+- [x] Test de chevauchement du poller local.
 
 ## Lot 2 — Corrélation des conversations
 
@@ -277,6 +277,7 @@ Ajouter une entrée à chaque session de travail significative.
 |---|---:|---|---|---|---|
 | 2026-09-07 | — | Création du plan et du document de suivi | Documents relus | Démarrer le lot 0 | Codex |
 | 2026-09-07 | 0 | Rejeu des 10 migrations sur une base vide, comparaison des schémas, baseline non destructive de `resend_mail_test` et documentation | Schémas identiques, migration à jour, 167/167 tests sur les deux bases | Démarrer le lot 1 | Codex |
+| 2026-09-07 | 1 | Ajout du journal durable `InboundEvent`, déduplication Svix, revendication atomique, reprise périodique et verrou local IMAP | 11 migrations depuis zéro, typecheck/build backend, 172/172 tests | Dédupliquer les messages IMAP et extraire le traitement métier | Codex |
 
 ## Journal des validations
 
@@ -284,6 +285,7 @@ Ajouter une entrée à chaque session de travail significative.
 |---|---|---:|---|---|---|---|
 | 2026-09-05 | Avant patches | 167/167 | Backend, web, webmail, mobile et dashboard valides | Historique absent sur la base Docker existante | Smoke HTTP valide | Baseline d’audit |
 | 2026-09-07 | Lot 0 | 167/167 | Inchangés | 10/10 migrations rejouées et baseline locale restaurée | Non requis | Aucun écart entre le schéma historique et le schéma migré |
+| 2026-09-07 | Lot 1 — tranche 1 | 172/172 | Backend typecheck et build valides | 11/11 migrations rejouées depuis zéro | Couvert par intégration webhook | Double livraison Svix et double cycle local couverts |
 
 ## Journal des incidents et régressions
 

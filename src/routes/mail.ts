@@ -12,6 +12,7 @@ import { verifyResendWebhook } from '../helpers/webhookSignature'
 import { extractEmail, stripQuotedText } from '../helpers/inbound'
 import { getAllowedSenders } from '../helpers/senders'
 import { createActivity, createThread, notifyUser } from '../helpers/thread'
+import { enqueueResendInboundEvent, processInboundEvent } from '../jobs/inboundEventProcessor'
 import {
   fetchInboundAttachments,
   uploadInboundAttachments,
@@ -315,17 +316,24 @@ router.post('/inbound-mail/:webhookToken', async (req, res) => {
     return res.status(401).json({ error: 'Signature invalide' })
   }
 
-  // Répondre immédiatement pour ne pas bloquer Resend (timeout 10s)
-  res.status(200).json({ ok: true })
-
   try {
-    await processInboundEmail(org, req.body)
+    // La réponse 200 signifie désormais « événement durablement accepté », et non
+    // « traitement lancé en mémoire ». Le svix-id est la clé idempotente fournie par
+    // Resend ; une répétition du webhook retrouve la même ligne.
+    const externalId = req.header('svix-id')!
+    const event = await enqueueResendInboundEvent(org.id, externalId, req.body)
+    res.status(200).json({ ok: true })
+    void processInboundEvent(event.id, processInboundEmail).catch(err => {
+      console.error(`[INBOUND] Org ${org.id} : lancement du traitement`, err)
+    })
   } catch (err) {
-    console.error(`[INBOUND] Org ${org.id} : erreur de traitement`, err)
+    // Sans persistance, aucun ACK : Resend pourra retenter l'événement.
+    console.error(`[INBOUND] Org ${org.id} : persistance impossible`, err)
+    if (!res.headersSent) res.status(500).json({ error: 'Réception temporairement indisponible' })
   }
 })
 
-async function processInboundEmail(org: Organization, payload: unknown): Promise<void> {
+export async function processInboundEmail(org: Organization, payload: unknown): Promise<void> {
   const db = forOrg(org.id)
   const resendApiKey = getDecryptedResendKey(org)
   const resend = buildResendClient(resendApiKey)

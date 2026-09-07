@@ -9,12 +9,14 @@ import { createThread, createActivity, notifyUser, PERSONAL_MAILBOX_CANAL } from
 import { uploadBufferToCloudinary, buildOrgFolder, saveAttachmentRecords, StoredAttachment } from '../helpers/attachments'
 
 let intervalHandle: NodeJS.Timeout | null = null
+let pollInProgress = false
 
 // Appelée une seule fois depuis src/server.ts — jamais depuis src/app.ts (c'est ce
 // fichier que test/*.test.ts importe via supertest, donc les tests ne déclenchent
 // jamais le poller par construction). Garde défensive en plus au cas où.
 export function startMailboxPolling(): void {
   if (config.nodeEnv === 'test' || intervalHandle) return
+  void pollAllMailboxes().catch(e => console.error('[MAILBOX-POLL]', (e as Error).message))
   intervalHandle = setInterval(() => {
     pollAllMailboxes().catch(e => console.error('[MAILBOX-POLL]', (e as Error).message))
   }, config.mailboxPollIntervalMs)
@@ -31,18 +33,24 @@ export function stopMailboxPolling(): void {
 // Traitement séquentiel, pas Promise.all, pour borner le nombre de connexions IMAP
 // simultanées.
 export async function pollAllMailboxes(): Promise<void> {
-  const connections = await prisma.externalMailboxConnection.findMany({ where: { status: 'connected' } })
-  for (const connection of connections) {
-    try {
-      await pollConnection(connection)
-    } catch (e) {
-      // Coupe-circuit : passe en erreur, le filtre status:'connected' ci-dessus l'exclut
-      // de tous les cycles suivants jusqu'à un retry manuel (PATCH .../retry).
-      console.error(`[MAILBOX-POLL] ${connection.id}`, (e as Error).message)
-      await prisma.externalMailboxConnection
-        .update({ where: { id: connection.id }, data: { status: 'error', lastError: (e as Error).message.slice(0, 500) } })
-        .catch(() => {})
+  if (pollInProgress) return
+  pollInProgress = true
+  try {
+    const connections = await prisma.externalMailboxConnection.findMany({ where: { status: 'connected' } })
+    for (const connection of connections) {
+      try {
+        await pollConnection(connection)
+      } catch (e) {
+        // Coupe-circuit : passe en erreur, le filtre status:'connected' ci-dessus l'exclut
+        // de tous les cycles suivants jusqu'à un retry manuel (PATCH .../retry).
+        console.error(`[MAILBOX-POLL] ${connection.id}`, (e as Error).message)
+        await prisma.externalMailboxConnection
+          .update({ where: { id: connection.id }, data: { status: 'error', lastError: (e as Error).message.slice(0, 500) } })
+          .catch(() => {})
+      }
     }
+  } finally {
+    pollInProgress = false
   }
 }
 

@@ -13,7 +13,7 @@ vi.mock('imapflow', () => ({
 
 import prisma from '../src/lib/prisma'
 import { encryptMailboxCredential } from '../src/lib/mailboxCredentialCrypto'
-import { pollConnection } from '../src/jobs/mailboxPoller'
+import { pollAllMailboxes, pollConnection } from '../src/jobs/mailboxPoller'
 import { seedOrg, cleanupOrg, SeededOrg } from './helpers/seed'
 
 const RAW_MESSAGE = Buffer.from(
@@ -131,5 +131,26 @@ describe('mailboxPoller.pollConnection', () => {
     const updated = await prisma.externalMailboxConnection.findUnique({ where: { id: connection.id } })
     expect(updated?.uidValidity).toBe(2000n)
     expect(updated?.lastSeenUid).toBe(0)
+  })
+
+  it('does not start a second polling cycle while the first one is still running', async () => {
+    let releaseQuery!: (value: []) => void
+    const pendingQuery = new Promise<[]>(resolve => {
+      releaseQuery = resolve
+    })
+    const findMany = vi
+      .spyOn(prisma.externalMailboxConnection, 'findMany')
+      .mockImplementationOnce(() => pendingQuery as never)
+
+    const firstCycle = pollAllMailboxes()
+    await Promise.resolve()
+    const secondCycle = pollAllMailboxes()
+
+    await secondCycle
+    expect(findMany).toHaveBeenCalledTimes(1)
+
+    releaseQuery([])
+    await firstCycle
+    findMany.mockRestore()
   })
 })

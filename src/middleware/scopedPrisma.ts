@@ -20,6 +20,7 @@ const SCOPED_MODELS = new Set([
   'ThreadActivity',
   'UserInvite',
   'ExternalMailboxConnection',
+  'InboundEvent',
 ])
 
 const READ_FILTER_OPS = new Set(['findMany', 'findFirst', 'findFirstOrThrow', 'findUnique', 'findUniqueOrThrow', 'count', 'aggregate', 'groupBy'])

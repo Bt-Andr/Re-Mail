@@ -26,11 +26,12 @@ import { seedOrg, cleanupOrg, SeededOrg } from './helpers/seed'
 // donc envoyer aucun email.
 describe('POST /api/emails/reply — via boîte externe (SMTP), sans Resend connecté', () => {
   let org: SeededOrg
+  let mailboxId: string
 
   beforeAll(async () => {
     org = await seedOrg('mailbox-send-test')
     await prisma.organization.update({ where: { id: org.organizationId }, data: { resendApiKeyEnc: null } })
-    await prisma.externalMailboxConnection.create({
+    const mailbox = await prisma.externalMailboxConnection.create({
       data: {
         organizationId: org.organizationId,
         userId: org.userId,
@@ -44,6 +45,7 @@ describe('POST /api/emails/reply — via boîte externe (SMTP), sans Resend conn
         status: 'connected',
       },
     })
+    mailboxId = mailbox.id
   })
 
   afterAll(async () => {
@@ -67,6 +69,20 @@ describe('POST /api/emails/reply — via boîte externe (SMTP), sans Resend conn
 
     const msg = await prisma.threadMessage.findFirst({ where: { threadId: res.body.threadId } })
     expect(msg?.fromEmail).toBe('moi@example.com')
+
+    const thread = await prisma.thread.findUnique({ where: { id: res.body.threadId } })
+    expect(thread?.sourceId).toBe(mailboxId)
+    expect(thread?.sourceType).toBe('imap')
+
+    const mailboxThreads = await request(app)
+      .get(`/api/threads?folder=sent&account=${mailboxId}`)
+      .set('Authorization', `Bearer ${org.token}`)
+    expect(mailboxThreads.body.map((item: { id: string }) => item.id)).toContain(res.body.threadId)
+
+    const resendThreads = await request(app)
+      .get('/api/threads?folder=sent&account=resend')
+      .set('Authorization', `Bearer ${org.token}`)
+    expect(resendThreads.body.map((item: { id: string }) => item.id)).not.toContain(res.body.threadId)
   })
 
   it('does not create a MailReplyToken for an SMTP send (the token mechanism is Resend/domain-only)', async () => {

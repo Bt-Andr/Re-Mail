@@ -18,11 +18,22 @@ router.get('/', authenticateToken, async (req, res) => {
     const db = forOrg(req.user!.organizationId)
     const { canal, status, folder, q, take, skip, account } = req.query
     const where: Record<string, unknown> = {}
+    const ownedMailboxes = await db.externalMailboxConnection.findMany({
+      where: { userId: req.user!.id },
+      select: { id: true },
+    })
+    const ownedMailboxIds = ownedMailboxes.map(mailbox => mailbox.id)
+
+    // Les fils Resend (sourceId null) sont des ressources d'equipe. Un fil lie a
+    // une boite externe reste strictement personnel a son proprietaire, y compris
+    // face a un OWNER/ADMIN de la meme organisation.
+    where.AND = [{ OR: [{ sourceId: null }, { sourceId: { in: ownedMailboxIds } }] }]
     if (status) where.status = status
     // Switcher de compte (voir routes/accounts.ts) : 'resend' = fils sans boîte externe
     // d'origine (sourceId null, webhook Resend/compose sortant) ; sinon un
     // ExternalMailboxConnection.id précis. Absent = tous les fils, "Toutes les boîtes".
     if (typeof account === 'string' && account) {
+      if (account !== 'resend' && !ownedMailboxIds.includes(account)) return res.json([])
       where.sourceId = account === 'resend' ? null : account
     }
 
@@ -123,11 +134,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     })
     if (!thread) return res.status(404).json({ error: 'Thread introuvable.' })
 
-    const hiddenCanaux = await getHiddenProCanaux(db, req.user!.id)
-    const visible = !hiddenCanaux.includes(thread.canal) && (isManager(req.user!.orgRole) || thread.assignedToId === req.user!.id)
-    if (!visible) {
-      return res.status(403).json({ error: 'Accès non autorisé.' })
-    }
+    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, thread.id, res)) return
 
     await db.threadMessage.updateMany({
       where: { threadId: thread.id, direction: 'inbound', readAt: null },
@@ -145,6 +152,11 @@ router.patch('/:id/assign', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']
   const { assignedToId } = req.body
   try {
     const db = forOrg(req.user!.organizationId)
+    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
+    const current = await db.thread.findUnique({ where: { id: req.params.id }, select: { sourceId: true } })
+    if (current?.sourceId && assignedToId !== req.user!.id) {
+      return res.status(400).json({ error: 'Une boîte personnelle ne peut pas être attribuée à un autre utilisateur.' })
+    }
     const thread = await db.thread.update({
       where: { id: req.params.id },
       data: { assignedToId: assignedToId || null },
@@ -207,8 +219,12 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
 // jamais confirmé comme existant via un 403 (voir test threads.test.ts).
 type ThreadAccess = 'not_found' | 'forbidden' | 'ok'
 async function checkThreadAccess(db: ReturnType<typeof forOrg>, userId: string, orgRole: string, threadId: string): Promise<ThreadAccess> {
-  const t = await db.thread.findUnique({ where: { id: threadId }, select: { assignedToId: true, canal: true } })
+  const t = await db.thread.findUnique({ where: { id: threadId }, select: { assignedToId: true, canal: true, sourceId: true } })
   if (!t) return 'not_found'
+  if (t.sourceId) {
+    const ownedMailbox = await db.externalMailboxConnection.findFirst({ where: { id: t.sourceId, userId }, select: { id: true } })
+    if (!ownedMailbox) return 'forbidden'
+  }
   const hiddenCanaux = await getHiddenProCanaux(db, userId)
   if (hiddenCanaux.includes(t.canal)) return 'forbidden'
   if (isManager(orgRole)) return 'ok'
@@ -347,11 +363,16 @@ router.patch('/bulk', authenticateToken, async (req, res) => {
 
   try {
     const db = forOrg(req.user!.organizationId)
-    const hiddenCanaux = await getHiddenProCanaux(db, req.user!.id)
+    const [hiddenCanaux, ownedMailboxes] = await Promise.all([
+      getHiddenProCanaux(db, req.user!.id),
+      db.externalMailboxConnection.findMany({ where: { userId: req.user!.id }, select: { id: true } }),
+    ])
+    const ownedMailboxIds = ownedMailboxes.map(mailbox => mailbox.id)
     const where = {
       id: { in: ids as string[] },
       ...(isManager(req.user!.orgRole) ? {} : { assignedToId: req.user!.id }),
       ...(hiddenCanaux.length > 0 ? { canal: { notIn: hiddenCanaux } } : {}),
+      AND: [{ OR: [{ sourceId: null }, { sourceId: { in: ownedMailboxIds } }] }],
     }
     const result = await db.thread.updateMany({ where, data })
     res.json({ updated: result.count })
@@ -379,13 +400,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 router.get('/:id/activity', authenticateToken, async (req, res) => {
   try {
     const db = forOrg(req.user!.organizationId)
-    const thread = await db.thread.findUnique({ where: { id: req.params.id }, select: { assignedToId: true, canal: true } })
-    if (!thread) return res.status(404).json({ error: 'Thread introuvable.' })
-    const hiddenCanaux = await getHiddenProCanaux(db, req.user!.id)
-    const visible = !hiddenCanaux.includes(thread.canal) && (isManager(req.user!.orgRole) || thread.assignedToId === req.user!.id)
-    if (!visible) {
-      return res.status(403).json({ error: 'Accès non autorisé.' })
-    }
+    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
 
     const activities = await db.threadActivity.findMany({
       where: { threadId: req.params.id },

@@ -121,3 +121,90 @@ describe('Visibilité des threads issus d\'une adresse pro — claim requis, y c
     expect(hidden.body).toEqual([])
   })
 })
+
+describe('Isolation des fils de boîtes externes personnelles', () => {
+  let org: SeededOrg
+
+  beforeAll(async () => {
+    org = await seedOrg('personal-thread-vis')
+  })
+
+  afterAll(async () => {
+    await cleanupOrg(org.organizationId)
+  })
+
+  it('refuse liste, détail, activité et mutations à un autre manager de la même organisation', async () => {
+    const mailboxOwner = await prisma.user.create({
+      data: {
+        organizationId: org.organizationId,
+        username: `mailbox-owner-${Date.now()}`,
+        email: `mailbox-owner-${Date.now()}@example.com`,
+        password: 'x',
+        nom: 'Mailbox Owner',
+        orgRole: 'ADMIN',
+      },
+    })
+    const ownerToken = jwt.sign(
+      { id: mailboxOwner.id, organizationId: org.organizationId, username: mailboxOwner.username, orgRole: mailboxOwner.orgRole, nom: mailboxOwner.nom },
+      config.jwtSecret,
+      { expiresIn: '1h' }
+    )
+    const connection = await prisma.externalMailboxConnection.create({
+      data: {
+        organizationId: org.organizationId,
+        userId: mailboxOwner.id,
+        provider: 'imap',
+        email: mailboxOwner.email,
+        imapHost: 'imap.example.com',
+        smtpHost: 'smtp.example.com',
+        credentialEnc: 'irrelevant',
+      },
+    })
+    const thread = await createThread(org, {
+      canal: 'email',
+      assignedToId: mailboxOwner.id,
+      sourceId: connection.id,
+      sourceType: connection.provider,
+    })
+
+    const foreignList = await request(app).get('/api/threads?folder=inbox').set('Authorization', `Bearer ${org.token}`)
+    expect(foreignList.body.map((item: { id: string }) => item.id)).not.toContain(thread.id)
+
+    const foreignAccount = await request(app)
+      .get(`/api/threads?folder=inbox&account=${connection.id}`)
+      .set('Authorization', `Bearer ${org.token}`)
+    expect(foreignAccount.status).toBe(200)
+    expect(foreignAccount.body).toEqual([])
+
+    const foreignDetail = await request(app).get(`/api/threads/${thread.id}`).set('Authorization', `Bearer ${org.token}`)
+    expect(foreignDetail.status).toBe(403)
+
+    const foreignActivity = await request(app).get(`/api/threads/${thread.id}/activity`).set('Authorization', `Bearer ${org.token}`)
+    expect(foreignActivity.status).toBe(403)
+
+    const foreignStatus = await request(app)
+      .patch(`/api/threads/${thread.id}/status`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ status: 'en_cours' })
+    expect(foreignStatus.status).toBe(403)
+
+    const foreignAssign = await request(app)
+      .patch(`/api/threads/${thread.id}/assign`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ assignedToId: org.userId })
+    expect(foreignAssign.status).toBe(403)
+
+    const foreignBulk = await request(app)
+      .patch('/api/threads/bulk')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ ids: [thread.id], status: 'resolu' })
+    expect(foreignBulk.status).toBe(200)
+    expect(foreignBulk.body.updated).toBe(0)
+
+    const ownList = await request(app).get('/api/threads?folder=inbox').set('Authorization', `Bearer ${ownerToken}`)
+    expect(ownList.body.map((item: { id: string }) => item.id)).toContain(thread.id)
+
+    const ownDetail = await request(app).get(`/api/threads/${thread.id}`).set('Authorization', `Bearer ${ownerToken}`)
+    expect(ownDetail.status).toBe(200)
+  })
+})

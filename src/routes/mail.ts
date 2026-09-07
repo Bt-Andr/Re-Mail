@@ -137,6 +137,8 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
           origin: 'outbound',
           status: 'en_cours',
           assignedToId: req.user!.id,
+          sourceId: mailbox?.id ?? null,
+          sourceType: mailbox?.provider ?? null,
         },
       })
       effectiveThreadId = newThread.id

@@ -7,7 +7,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Champ | Valeur |
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
-| Statut | En cours — lot 1, tranche Resend durable terminée |
+| Statut | En cours — lots 1 et 3 |
 | Dernière mise à jour | 2026-09-07 |
 | Branche de référence | `main` |
 | Baseline fonctionnelle | 28 fichiers de tests, 167 tests réussis |
@@ -29,7 +29,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | 0 | Baseline des migrations | Bloquante | Terminé | — | Base reconstruite uniquement par migrations |
 | 1 | Réception durable et idempotente | Critique | En cours | 0 | Aucun événement perdu ou traité deux fois |
 | 2 | Corrélation des conversations | Critique | À faire | 0, 1 | Aucun regroupement fondé seulement sur l’expéditeur |
-| 3 | Classement comptes et dossiers | Haute | À faire | 2 | Fils visibles dans la bonne boîte et le bon dossier |
+| 3 | Classement comptes et dossiers | Haute | En cours | 2 | Fils visibles dans la bonne boîte et le bon dossier |
 | 4 | Intégrité tenant et validation | Critique | À faire | 0 | Aucune relation cross-tenant acceptée |
 | 5 | Comptes et rôles | Haute | À faire | 0, 4 | Dernier propriétaire protégé et récupération disponible |
 | 6 | Onboarding vérifié | Haute | À faire | 1–5 | Test réel d’envoi/réception réussi dans l’assistant |
@@ -109,11 +109,12 @@ Validation :
 
 ## Lot 3 — Comptes et dossiers
 
-Statut : **À faire**
+Statut : **En cours — classement SMTP et confidentialité des boîtes personnelles corrigés**
 
-- [ ] Enregistrer `sourceId` lors d’un envoi SMTP.
-- [ ] Enregistrer `sourceType` lors d’un envoi SMTP.
-- [ ] Réserver `sourceId = null` à Resend.
+- [x] Enregistrer `sourceId` lors d’un envoi SMTP.
+- [x] Enregistrer `sourceType` lors d’un envoi SMTP.
+- [x] Réserver `sourceId = null` à Resend pour les nouveaux fils sortants.
+- [x] Restreindre les fils d’une boîte externe à son propriétaire, y compris face aux managers de l’organisation.
 - [ ] Valider la sémantique produit de Réception/Envoyés.
 - [ ] Implémenter le retour visible d’une réponse sur un fil sortant.
 - [ ] Aligner les compteurs non lus.
@@ -123,9 +124,8 @@ Statut : **À faire**
 
 Validation :
 
-- [ ] Envoi Gmail classé dans Gmail.
-- [ ] Envoi IMAP classé dans la bonne boîte.
-- [ ] Envoi Resend classé dans Resend.
+- [x] Envoi Gmail/IMAP classé dans la boîte sélectionnée au niveau backend.
+- [x] Envoi Resend classé dans Resend au niveau backend.
 - [ ] Réponse entrante visible et non lue.
 - [ ] Filtres multi-boîtes cohérents.
 - [ ] Comportement identique sur web et mobile.
@@ -279,6 +279,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | 0 | Rejeu des 10 migrations sur une base vide, comparaison des schémas, baseline non destructive de `resend_mail_test` et documentation | Schémas identiques, migration à jour, 167/167 tests sur les deux bases | Démarrer le lot 1 | Codex |
 | 2026-09-07 | 1 | Ajout du journal durable `InboundEvent`, déduplication Svix, revendication atomique, reprise périodique et verrou local IMAP | 11 migrations depuis zéro, typecheck/build backend, 172/172 tests | Dédupliquer les messages IMAP et extraire le traitement métier | Codex |
 | 2026-09-07 | 1 | Liaison unique entre événement entrant et message, identité IMAP connexion/UIDVALIDITY/UID et protection du curseur | 12 migrations depuis zéro, typecheck/build backend, 175/175 tests | Rendre les effets métier partiels entièrement reprenables | Codex |
+| 2026-09-07 | 3 | Classement des nouveaux fils SMTP par boîte source et isolation stricte des fils de boîtes personnelles entre utilisateurs d’une même organisation | Typecheck et tests backend complets | Corriger la visibilité des réponses sur les fils sortants | Codex |
 
 ## Journal des validations
 
@@ -288,6 +289,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | Lot 0 | 167/167 | Inchangés | 10/10 migrations rejouées et baseline locale restaurée | Non requis | Aucun écart entre le schéma historique et le schéma migré |
 | 2026-09-07 | Lot 1 — tranche 1 | 172/172 | Backend typecheck et build valides | 11/11 migrations rejouées depuis zéro | Couvert par intégration webhook | Double livraison Svix et double cycle local couverts |
 | 2026-09-07 | Lot 1 — tranche 2 | 175/175 | Backend typecheck et build valides | 12/12 migrations rejouées depuis zéro | Retry IMAP avec curseur périmé couvert | Un événement ne peut créer qu’un seul `ThreadMessage` |
+| 2026-09-07 | Lot 3 — tranche 1 | 176/176 | Backend typecheck et build valides | Sans migration | Classement SMTP et accès multi-utilisateur couverts par intégration | `sourceId` identifie désormais la boîte externe propriétaire |
 
 ## Journal des incidents et régressions
 

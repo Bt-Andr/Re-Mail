@@ -34,6 +34,35 @@ describe('POST /api/emails/reply — cc/bcc/forward', () => {
     global.fetch = originalFetch
   })
 
+  it('rejects malformed or oversized input before creating a thread or calling Resend', async () => {
+    const initialThreadCount = await prisma.thread.count({ where: { organizationId: org.organizationId } })
+    const invalidPayloads = [
+      { to: 'not-an-email', subject: 'Test', message: 'Bonjour' },
+      { to: 'client@example.com', subject: 'Test', message: '   ' },
+      { to: 'client@example.com', subject: 'x'.repeat(999), message: 'Bonjour' },
+      { to: 'client@example.com', subject: 'Test', message: 'x'.repeat(100_001) },
+      { to: 'client@example.com', subject: 'Test', message: 'Bonjour', threadId: { forged: true } },
+    ]
+
+    for (const payload of invalidPayloads) {
+      const response = await request(app).post('/api/emails/reply').set('Authorization', `Bearer ${org.token}`).send(payload)
+      expect(response.status).toBe(400)
+    }
+
+    expect(sendCalls).toHaveLength(0)
+    expect(await prisma.thread.count({ where: { organizationId: org.organizationId } })).toBe(initialThreadCount)
+  })
+
+  it('returns 413 instead of 500 when the HTTP JSON limit is exceeded', async () => {
+    const response = await request(app)
+      .post('/api/emails/reply')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ to: 'client@example.com', subject: 'Test', message: 'x'.repeat(110_000) })
+
+    expect(response.status).toBe(413)
+    expect(sendCalls).toHaveLength(0)
+  })
+
   it('sends a new email with cc/bcc and persists them on the ThreadMessage', async () => {
     const res = await request(app)
       .post('/api/emails/reply')

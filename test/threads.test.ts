@@ -152,3 +152,23 @@ describe('GET /api/threads — filtre par compte (?account=)', () => {
     expect(unfilteredIds).toContain(fromResend.id)
   })
 })
+
+describe('GET /api/threads — bornes de pagination', () => {
+  let org: SeededOrg
+
+  beforeAll(async () => {
+    org = await seedOrg('threads-pagination-bounds')
+  })
+
+  afterAll(async () => {
+    await cleanupOrg(org.organizationId)
+  })
+
+  it.each(['take=0', 'take=101', 'take=abc', 'skip=-1', 'skip=100001', 'skip=1.5'])(
+    'refuse le paramètre invalide %s',
+    async query => {
+      const response = await request(app).get(`/api/threads?${query}`).set('Authorization', `Bearer ${org.token}`)
+      expect(response.status).toBe(400)
+    }
+  )
+})

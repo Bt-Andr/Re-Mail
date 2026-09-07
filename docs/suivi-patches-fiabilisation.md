@@ -140,9 +140,9 @@ Statut : **À faire**
 - [x] Vérifier le tenant du bénéficiaire d’un `SenderGrant`.
 - [x] Refuser une réponse associée à un fil absent, cross-tenant ou lié à la boîte personnelle d’un autre utilisateur avant tout envoi.
 - [ ] Vérifier le fil du message source d’un transfert.
-- [ ] Borner la pagination.
-- [ ] Valider le destinataire principal.
-- [ ] Valider les longueurs de contenu.
+- [x] Borner la pagination des fils (`take` 1–100, `skip` 0–100000).
+- [x] Valider le destinataire principal avant tout effet de bord.
+- [x] Valider les longueurs du sujet et du corps avant tout effet de bord.
 - [ ] Imposer la politique de mot de passe côté serveur.
 - [ ] Vérifier le domaine auprès de Resend.
 - [ ] Valider les alias contre le domaine.
@@ -153,8 +153,8 @@ Statut : **À faire**
 Validation :
 
 - [~] Tests cross-tenant négatifs — affectation, routage, autorisation d’expéditeur et réponse couverts ; inventaire restant à poursuivre.
-- [ ] Tests de payloads malformés.
-- [ ] Tests de limites de taille et pagination.
+- [~] Tests de payloads malformés — envoi et identifiants relationnels couverts ; autres routes à inventorier.
+- [x] Tests de limites de taille de l’envoi et de pagination des fils.
 - [ ] Tests de domaine et alias.
 - [ ] Tests d’échappement HTML.
 
@@ -282,6 +282,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | 1 | Liaison unique entre événement entrant et message, identité IMAP connexion/UIDVALIDITY/UID et protection du curseur | 12 migrations depuis zéro, typecheck/build backend, 175/175 tests | Rendre les effets métier partiels entièrement reprenables | Codex |
 | 2026-09-07 | 3 | Classement des nouveaux fils SMTP par boîte source et isolation stricte des fils de boîtes personnelles entre utilisateurs d’une même organisation | Typecheck et tests backend complets | Corriger la visibilité des réponses sur les fils sortants | Codex |
 | 2026-09-07 | 4 | Validation du tenant des affectations, règles de routage et autorisations d’expéditeur ; arrêt des réponses sur fil inaccessible avant envoi | Tests ciblés d’isolation réussis | Étendre la validation structurée des payloads | Codex |
+| 2026-09-07 | 4 | Validation préalable de l’envoi, limites de sujet/corps, réponses HTTP 400/413 et pagination bornée | Typecheck/build backend, 187/187 tests | Centraliser les schémas de validation des autres routes | Codex |
 
 ## Journal des validations
 
@@ -293,6 +294,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | Lot 1 — tranche 2 | 175/175 | Backend typecheck et build valides | 12/12 migrations rejouées depuis zéro | Retry IMAP avec curseur périmé couvert | Un événement ne peut créer qu’un seul `ThreadMessage` |
 | 2026-09-07 | Lot 3 — tranche 1 | 176/176 | Backend typecheck et build valides | Sans migration | Classement SMTP et accès multi-utilisateur couverts par intégration | `sourceId` identifie désormais la boîte externe propriétaire |
 | 2026-09-07 | Lot 4 — tranche 1 | 179/179 | Backend typecheck et build valides | Sans migration | Tentatives cross-tenant couvertes par intégration | Les trois relations utilisateur exposées par l’API sont validées avant écriture |
+| 2026-09-07 | Lot 4 — tranche 2 | 187/187 | Backend typecheck et build valides | Sans migration | Entrées email et pagination couvertes par intégration | Les rejets ont lieu avant création de fil et avant appel au fournisseur |
 
 ## Journal des incidents et régressions
 

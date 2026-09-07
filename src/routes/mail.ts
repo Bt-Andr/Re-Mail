@@ -31,6 +31,9 @@ const router = Router()
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MAX_RECIPIENTS = 20
+const MAX_EMAIL_LENGTH = 320
+const MAX_SUBJECT_LENGTH = 998
+const MAX_MESSAGE_LENGTH = 100_000
 
 function parseEmailList(raw: unknown): string[] {
   if (typeof raw !== 'string' || !raw.trim()) return []
@@ -50,7 +53,22 @@ router.get('/emails/senders', authenticateToken, async (req, res) => {
 // (accepte JSON ou multipart avec fichiers dans le champ "attachments")
 // ─────────────────────────────────────────────────────────────────────────
 router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachments', 5), async (req, res) => {
-  const { to, subject, message, threadId, draftId, mode, sourceMessageId } = req.body
+  const { to: rawTo, subject: rawSubject, message: rawMessage, threadId, draftId, mode, sourceMessageId } = req.body
+  const to = typeof rawTo === 'string' ? rawTo.trim() : ''
+  const subject = typeof rawSubject === 'string' ? rawSubject : ''
+  const message = typeof rawMessage === 'string' ? rawMessage : ''
+
+  if (!to || to.length > MAX_EMAIL_LENGTH || !EMAIL_RE.test(to)) {
+    return res.status(400).json({ error: 'Destinataire principal invalide.' })
+  }
+  if (!message.trim()) return res.status(400).json({ error: 'Le corps du message est requis.' })
+  if (message.length > MAX_MESSAGE_LENGTH) return res.status(400).json({ error: 'Le corps du message est trop long.' })
+  if (subject.length > MAX_SUBJECT_LENGTH) return res.status(400).json({ error: 'Le sujet est trop long.' })
+  for (const [name, value] of Object.entries({ threadId, draftId, sourceMessageId })) {
+    if (value !== undefined && (typeof value !== 'string' || !value.trim() || value.length > 128)) {
+      return res.status(400).json({ error: `${name} invalide.` })
+    }
+  }
   const cc = parseEmailList(req.body.cc)
   const bcc = parseEmailList(req.body.bcc)
   const files = (req.files as Express.Multer.File[] | undefined) ?? []

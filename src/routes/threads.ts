@@ -82,14 +82,20 @@ router.get('/', authenticateToken, async (req, res) => {
 
     // Pagination optionnelle (rétrocompatible : sans `take`, comportement inchangé —
     // tout le dossier en un appel, comme avant).
-    const takeNum = typeof take === 'string' ? parseInt(take, 10) : undefined
-    const skipNum = typeof skip === 'string' ? parseInt(skip, 10) : undefined
+    const takeNum = typeof take === 'string' && /^\d+$/.test(take) ? Number(take) : undefined
+    const skipNum = typeof skip === 'string' && /^\d+$/.test(skip) ? Number(skip) : undefined
+    if (take !== undefined && (takeNum === undefined || takeNum < 1 || takeNum > 100)) {
+      return res.status(400).json({ error: 'take doit être un entier compris entre 1 et 100.' })
+    }
+    if (skip !== undefined && (skipNum === undefined || skipNum < 0 || skipNum > 100_000)) {
+      return res.status(400).json({ error: 'skip doit être un entier compris entre 0 et 100000.' })
+    }
 
     const threads = await db.thread.findMany({
       where,
       orderBy: { updatedAt: 'desc' },
-      ...(takeNum !== undefined && Number.isFinite(takeNum) ? { take: takeNum } : {}),
-      ...(skipNum !== undefined && Number.isFinite(skipNum) ? { skip: skipNum } : {}),
+      ...(takeNum !== undefined ? { take: takeNum } : {}),
+      ...(skipNum !== undefined ? { skip: skipNum } : {}),
       include: {
         assignedTo: { select: { id: true, nom: true, username: true } },
         messages: {

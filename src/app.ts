@@ -74,8 +74,15 @@ app.use('/api/pro-addresses', proAddressRoutes)
 // Jamais de stack trace / détail interne renvoyé au client, seulement loggé côté serveur.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[unhandled]', err)
   if (res.headersSent) return
+  const requestError = err as { type?: string; code?: string; status?: number }
+  if (requestError.type === 'entity.too.large' || requestError.code === 'LIMIT_FILE_SIZE' || requestError.code === 'LIMIT_FIELD_VALUE') {
+    return res.status(413).json({ error: 'Requête trop volumineuse.' })
+  }
+  if (requestError.type === 'entity.parse.failed' || requestError.status === 400 || requestError.code?.startsWith('LIMIT_')) {
+    return res.status(400).json({ error: 'Requête invalide.' })
+  }
+  console.error('[unhandled]', err)
   res.status(500).json({ error: 'Erreur serveur.' })
 })
 

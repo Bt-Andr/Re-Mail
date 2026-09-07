@@ -333,8 +333,12 @@ router.post('/inbound-mail/:webhookToken', async (req, res) => {
   }
 })
 
-export async function processInboundEmail(org: Organization, payload: unknown): Promise<void> {
+export async function processInboundEmail(org: Organization, payload: unknown, inboundEventId?: string): Promise<void> {
   const db = forOrg(org.id)
+  if (inboundEventId) {
+    const alreadyProcessed = await db.threadMessage.findFirst({ where: { inboundEventId }, select: { id: true } })
+    if (alreadyProcessed) return
+  }
   const resendApiKey = getDecryptedResendKey(org)
   const resend = buildResendClient(resendApiKey)
 
@@ -444,6 +448,7 @@ export async function processInboundEmail(org: Organization, payload: unknown): 
             fromName: senderName,
             fromEmail: fromAddr,
             body: cleanHtml,
+            inboundEventId,
           },
         })
         await saveAttachmentRecords(db, msg.id, storedAttachments)
@@ -486,7 +491,15 @@ export async function processInboundEmail(org: Organization, payload: unknown): 
   let threadId: string
   if (activeThread) {
     const msg = await db.threadMessage.create({
-      data: { organizationId: org.id, threadId: activeThread.id, direction: 'inbound', fromName: senderName, fromEmail: fromAddr, body: inboundHtml },
+      data: {
+        organizationId: org.id,
+        threadId: activeThread.id,
+        direction: 'inbound',
+        fromName: senderName,
+        fromEmail: fromAddr,
+        body: inboundHtml,
+        inboundEventId,
+      },
     })
     await saveAttachmentRecords(db, msg.id, storedAttachments)
     await db.thread.update({ where: { id: activeThread.id }, data: { updatedAt: new Date() } })
@@ -516,6 +529,7 @@ export async function processInboundEmail(org: Organization, payload: unknown): 
       externalEmail: fromAddr,
       toEmail: toAddr,
       bodyHtml: inboundHtml,
+      inboundEventId,
     })
     const firstMessageId = newThread.messages?.[0]?.id
     if (firstMessageId) await saveAttachmentRecords(db, firstMessageId, storedAttachments)

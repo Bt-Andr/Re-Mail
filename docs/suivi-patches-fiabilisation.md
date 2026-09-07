@@ -68,9 +68,9 @@ Statut : **En cours — persistance Resend et verrou local livrés**
 - [x] Ajouter les statuts et compteurs de tentatives.
 - [x] Ajouter la reprise des événements échoués.
 - [x] Dédupliquer les identifiants Svix/Resend.
-- [ ] Dédupliquer les identifiants IMAP.
+- [x] Dédupliquer les identifiants IMAP par connexion, UIDVALIDITY et UID.
 - [x] Ajouter un verrou local au poller.
-- [~] Définir la stratégie multi-instance — revendication atomique en place pour Resend, verrou distribué IMAP restant.
+- [x] Définir la stratégie multi-instance — revendication atomique par événement pour Resend et IMAP ; les connexions IMAP concurrentes restent possibles mais un seul traitement métier est autorisé.
 - [x] Ne journaliser ni secret ni payload dans le nouveau processeur.
 
 Validation :
@@ -278,6 +278,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | — | Création du plan et du document de suivi | Documents relus | Démarrer le lot 0 | Codex |
 | 2026-09-07 | 0 | Rejeu des 10 migrations sur une base vide, comparaison des schémas, baseline non destructive de `resend_mail_test` et documentation | Schémas identiques, migration à jour, 167/167 tests sur les deux bases | Démarrer le lot 1 | Codex |
 | 2026-09-07 | 1 | Ajout du journal durable `InboundEvent`, déduplication Svix, revendication atomique, reprise périodique et verrou local IMAP | 11 migrations depuis zéro, typecheck/build backend, 172/172 tests | Dédupliquer les messages IMAP et extraire le traitement métier | Codex |
+| 2026-09-07 | 1 | Liaison unique entre événement entrant et message, identité IMAP connexion/UIDVALIDITY/UID et protection du curseur | 12 migrations depuis zéro, typecheck/build backend, 175/175 tests | Rendre les effets métier partiels entièrement reprenables | Codex |
 
 ## Journal des validations
 
@@ -286,6 +287,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-05 | Avant patches | 167/167 | Backend, web, webmail, mobile et dashboard valides | Historique absent sur la base Docker existante | Smoke HTTP valide | Baseline d’audit |
 | 2026-09-07 | Lot 0 | 167/167 | Inchangés | 10/10 migrations rejouées et baseline locale restaurée | Non requis | Aucun écart entre le schéma historique et le schéma migré |
 | 2026-09-07 | Lot 1 — tranche 1 | 172/172 | Backend typecheck et build valides | 11/11 migrations rejouées depuis zéro | Couvert par intégration webhook | Double livraison Svix et double cycle local couverts |
+| 2026-09-07 | Lot 1 — tranche 2 | 175/175 | Backend typecheck et build valides | 12/12 migrations rejouées depuis zéro | Retry IMAP avec curseur périmé couvert | Un événement ne peut créer qu’un seul `ThreadMessage` |
 
 ## Journal des incidents et régressions
 

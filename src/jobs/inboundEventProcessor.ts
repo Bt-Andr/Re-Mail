@@ -1,7 +1,11 @@
 import type { Organization, Prisma } from '@prisma/client'
 import prisma from '../lib/prisma'
 
-export type InboundEventHandler = (organization: Organization, payload: unknown) => Promise<void>
+export type InboundEventHandler = (
+  organization: Organization,
+  payload: unknown,
+  inboundEventId: string
+) => Promise<void>
 
 const PROVIDER_RESEND = 'resend'
 const PROCESS_INTERVAL_MS = 5_000
@@ -16,11 +20,20 @@ export async function enqueueResendInboundEvent(
   externalId: string,
   payload: Prisma.InputJsonValue
 ) {
+  return enqueueInboundEvent(organizationId, PROVIDER_RESEND, externalId, payload)
+}
+
+export async function enqueueInboundEvent(
+  organizationId: string,
+  provider: string,
+  externalId: string,
+  payload: Prisma.InputJsonValue
+) {
   try {
     return await prisma.inboundEvent.create({
       data: {
         organizationId,
-        provider: PROVIDER_RESEND,
+        provider,
         externalId,
         payload,
       },
@@ -35,7 +48,7 @@ export async function enqueueResendInboundEvent(
       where: {
         organizationId_provider_externalId: {
           organizationId,
-          provider: PROVIDER_RESEND,
+          provider,
           externalId,
         },
       },
@@ -85,7 +98,7 @@ export async function processInboundEvent(eventId: string, handler: InboundEvent
   if (!event) return false
 
   try {
-    await handler(event.organization, event.payload)
+    await handler(event.organization, event.payload, event.id)
     await prisma.inboundEvent.update({
       where: { id: event.id },
       data: {
@@ -113,11 +126,12 @@ export async function processInboundEvent(eventId: string, handler: InboundEvent
   }
 }
 
-export async function processPendingInboundEvents(handler: InboundEventHandler): Promise<void> {
+export async function processPendingInboundEvents(provider: string, handler: InboundEventHandler): Promise<void> {
   const now = new Date()
   const staleBefore = new Date(now.getTime() - LOCK_TIMEOUT_MS)
   const events = await prisma.inboundEvent.findMany({
     where: {
+      provider,
       attemptCount: { lt: MAX_ATTEMPTS },
       OR: [
         {
@@ -138,12 +152,12 @@ export async function processPendingInboundEvents(handler: InboundEventHandler):
 export function startInboundEventProcessing(handler: InboundEventHandler): void {
   if (intervalHandle) return
   configuredHandler = handler
-  void processPendingInboundEvents(handler).catch(error => {
+  void processPendingInboundEvents(PROVIDER_RESEND, handler).catch(error => {
     console.error('[INBOUND-EVENT] reprise initiale:', error)
   })
   intervalHandle = setInterval(() => {
     if (!configuredHandler) return
-    void processPendingInboundEvents(configuredHandler).catch(error => {
+    void processPendingInboundEvents(PROVIDER_RESEND, configuredHandler).catch(error => {
       console.error('[INBOUND-EVENT] cycle de reprise:', error)
     })
   }, PROCESS_INTERVAL_MS)

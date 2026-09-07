@@ -32,9 +32,9 @@ model PlatformAdmin {
 // Une organisation = un client du produit, avec son propre compte Resend
 // (sa clé API, son domaine déjà vérifié chez Resend, son propre webhook).
 model Organization {
-  id     String @id @default(cuid())
-  name   String
-  slug   String @unique
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
 
   // Identifiants Resend — chiffrés au repos (voir src/lib/crypto.ts).
   // Jamais stockés en clair, jamais renvoyés par l'API.
@@ -45,7 +45,7 @@ model Organization {
 
   // Identité du webhook entrant : un token aléatoire (PAS l'id de l'org, pour
   // éviter l'énumération) formant l'URL unique à coller dans le dashboard Resend.
-  webhookToken    String  @unique @default(cuid())
+  webhookToken     String  @unique @default(cuid())
   webhookSecretEnc String?
 
   companyName  String?
@@ -56,20 +56,20 @@ model Organization {
   // visible) — réutilise tel quel forOrg()/JWT/chiffrement Resend, voir CLAUDE.md.
   isPersonal Boolean @default(false)
 
-  users              User[]
-  mailRoutes         MailRoute[]
-  threads            Thread[]
-  threadMessages     ThreadMessage[]
-  threadActivities   ThreadActivity[]
-  threadRoutingRules ThreadRoutingRule[]
-  replyTemplates     ReplyTemplate[]
-  mailReplyTokens    MailReplyToken[]
-  mailDrafts         MailDraft[]
-  senderGrants       SenderGrant[]
-  deviceTokens       DeviceToken[]
-  userInvites        UserInvite[]
+  users                      User[]
+  mailRoutes                 MailRoute[]
+  threads                    Thread[]
+  threadMessages             ThreadMessage[]
+  threadActivities           ThreadActivity[]
+  threadRoutingRules         ThreadRoutingRule[]
+  replyTemplates             ReplyTemplate[]
+  mailReplyTokens            MailReplyToken[]
+  mailDrafts                 MailDraft[]
+  senderGrants               SenderGrant[]
+  deviceTokens               DeviceToken[]
+  userInvites                UserInvite[]
   externalMailboxConnections ExternalMailboxConnection[]
-  inboundEvents      InboundEvent[]
+  inboundEvents              InboundEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -120,24 +120,24 @@ model User {
   // et mailboxConnections.ts, qui scopent désormais leur recherche à
   // organization.isPersonal). /auth/signup vérifie toujours l'unicité de l'email en
   // code (routes/auth.ts), volontairement globale — pas de contrainte DB derrière.
-  email    String
-  username String  @unique
-  password String
-  nom      String
-  proEmail String?
-  orgRole  OrgRole @default(MEMBER)
+  email      String
+  username   String  @unique
+  password   String
+  nom        String
+  proEmail   String?
+  orgRole    OrgRole @default(MEMBER)
   isDeptHead Boolean @default(false)
 
-  senderGrants    SenderGrant[]
-  mailDrafts      MailDraft[]
-  assignedThreads Thread[]            @relation("ThreadAssignee")
-  threadMessages  ThreadMessage[]     @relation("ThreadMessageSender")
-  routingRules    ThreadRoutingRule[] @relation("RoutingRuleAssignee")
-  activities      ThreadActivity[]    @relation("ActivityUser")
-  deviceTokens    DeviceToken[]
-  invitesCreated  UserInvite[]        @relation("InviteCreatedBy")
+  senderGrants               SenderGrant[]
+  mailDrafts                 MailDraft[]
+  assignedThreads            Thread[]                    @relation("ThreadAssignee")
+  threadMessages             ThreadMessage[]             @relation("ThreadMessageSender")
+  routingRules               ThreadRoutingRule[]         @relation("RoutingRuleAssignee")
+  activities                 ThreadActivity[]            @relation("ActivityUser")
+  deviceTokens               DeviceToken[]
+  invitesCreated             UserInvite[]                @relation("InviteCreatedBy")
   externalMailboxConnections ExternalMailboxConnection[]
-  loginHandoffs   LoginHandoff[]
+  loginHandoffs              LoginHandoff[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -301,7 +301,7 @@ model ExternalMailboxConnection {
   // Curseur de polling IMAP — UID plutôt que timestamp (RFC 3501, plus fiable).
   // uidValidity détecte un renumérotage serveur (rare) : si elle change, lastSeenUid n'a
   // plus de sens, le dossier doit être resynchronisé depuis 0.
-  lastSeenUid Int    @default(0)
+  lastSeenUid Int     @default(0)
   uidValidity BigInt?
 
   // Import ponctuel de l'historique (voir src/jobs/mailboxPoller.ts::importMailboxHistory) —
@@ -360,14 +360,14 @@ model MailReplyToken {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  token      String  @unique @default(cuid())
-  aliasFrom  String
-  externalTo String
+  token       String  @unique @default(cuid())
+  aliasFrom   String
+  externalTo  String
   externalCc  String?
   externalBcc String?
-  subject    String?
-  threadId   String?
-  thread     Thread? @relation(fields: [threadId], references: [id])
+  subject     String?
+  threadId    String?
+  thread      Thread? @relation(fields: [threadId], references: [id])
 
   createdAt DateTime @default(now())
   expiresAt DateTime
@@ -385,8 +385,8 @@ model Thread {
   externalEmail String
   toEmail       String? // adresse @domaine destinataire
   canal         String // contact | rh | commercial | ... | email
-  status        String  @default("nouveau") // nouveau | en_cours | resolu
-  origin        String  @default("inbound") // inbound | outbound
+  status        String    @default("nouveau") // nouveau | en_cours | resolu
+  origin        String    @default("inbound") // inbound | outbound
   deletedAt     DateTime? // corbeille (null = actif)
   archivedAt    DateTime? // archivé (null = actif) — distinct de la corbeille, jamais les deux à la fois
   starred       Boolean   @default(false)
@@ -424,21 +424,25 @@ model ThreadMessage {
   bccEmails String? // comma-separated
   body      String
 
+  // Lie le message à l'entrée durable qui l'a créé. Unique pour qu'un retry après
+  // crash ne puisse jamais insérer une seconde copie du même email.
+  inboundEventId String? @unique
+
   sentById String?
   sentBy   User?   @relation("ThreadMessageSender", fields: [sentById], references: [id])
 
   attachments ThreadAttachment[]
   readAt      DateTime?
-  sentAt      DateTime @default(now())
+  sentAt      DateTime           @default(now())
 
   @@index([organizationId])
   @@index([threadId])
 }
 
 model ThreadAttachment {
-  id          String        @id @default(cuid())
-  messageId   String
-  message     ThreadMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  id        String        @id @default(cuid())
+  messageId String
+  message   ThreadMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   filename    String
   contentType String?

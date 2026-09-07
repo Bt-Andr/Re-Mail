@@ -47,7 +47,7 @@ describe('mailboxPoller.pollConnection', () => {
     mockFetch.mockReset().mockImplementation(() => oneMessage())
   })
 
-  it('creates a Thread + ThreadMessage from a fetched IMAP message, assigns it to the connection owner, and advances lastSeenUid', async () => {
+  it('creates an IMAP message once, assigns it, advances the UID, and deduplicates a retry with a stale cursor', async () => {
     const connection = await prisma.externalMailboxConnection.create({
       data: {
         organizationId: org.organizationId,
@@ -74,11 +74,22 @@ describe('mailboxPoller.pollConnection', () => {
     const message = await prisma.threadMessage.findFirst({ where: { threadId: thread!.id } })
     expect(message?.body).toContain('Un message de test.')
     expect(message?.direction).toBe('inbound')
+    expect(message?.inboundEventId).not.toBeNull()
 
     const updated = await prisma.externalMailboxConnection.findUnique({ where: { id: connection.id } })
     expect(updated?.lastSeenUid).toBe(51)
     expect(updated?.uidValidity).toBe(1000n)
     expect(updated?.status).toBe('connected')
+
+    // Simule un retry avec l'ancien objet de connexion, par exemple après un crash
+    // entre l'insertion du message et le rechargement du curseur en mémoire.
+    await pollConnection(connection)
+    expect(await prisma.threadMessage.count({ where: { threadId: thread!.id } })).toBe(1)
+    expect(
+      await prisma.inboundEvent.count({
+        where: { organizationId: org.organizationId, provider: 'imap' },
+      })
+    ).toBe(1)
   })
 
   it('does nothing when there is no new UID to fetch', async () => {

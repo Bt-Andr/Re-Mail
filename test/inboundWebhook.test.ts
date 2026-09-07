@@ -77,6 +77,33 @@ describe('POST /api/inbound-mail/:webhookToken', () => {
     expect(res.status).toBe(401)
   })
 
+  it('returns 500 instead of acknowledging when durable persistence fails', async () => {
+    const body = payload({ email_id: 're_inbound_persistence_failure' })
+    const headers = signTestWebhook(org.webhookSecret, body)
+    const create = vi
+      .spyOn(prisma.inboundEvent, 'create')
+      .mockRejectedValueOnce(new Error('database temporarily unavailable'))
+
+    const res = await request(app)
+      .post(`/api/inbound-mail/${org.webhookToken}`)
+      .set(headers)
+      .set('Content-Type', 'application/json')
+      .send(body)
+
+    expect(res.status).toBe(500)
+    expect(res.body.error).toBe('Réception temporairement indisponible')
+    create.mockRestore()
+    expect(
+      await prisma.inboundEvent.count({
+        where: {
+          organizationId: org.organizationId,
+          provider: 'resend',
+          externalId: headers['svix-id'],
+        },
+      })
+    ).toBe(0)
+  })
+
   it('accepts a validly signed payload and creates a thread', async () => {
     const body = payload()
     const headers = signTestWebhook(org.webhookSecret, body)

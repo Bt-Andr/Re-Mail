@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import prisma from '../src/lib/prisma'
 import {
   enqueueResendInboundEvent,
   processInboundEvent,
+  processPendingInboundEvents,
 } from '../src/jobs/inboundEventProcessor'
 import { cleanupOrg, seedOrg, SeededOrg } from './helpers/seed'
 
@@ -11,6 +12,10 @@ describe('durable inbound event processor', () => {
 
   beforeAll(async () => {
     org = await seedOrg('inbound-event')
+  })
+
+  beforeEach(async () => {
+    await prisma.inboundEvent.deleteMany({ where: { organizationId: org.organizationId } })
   })
 
   afterAll(async () => {
@@ -81,5 +86,43 @@ describe('durable inbound event processor', () => {
     expect(stored?.status).toBe('completed')
     expect(stored?.attemptCount).toBe(2)
     expect(stored?.lastError).toBeNull()
+  })
+
+  it('recovers an event that was persisted but not started before a restart', async () => {
+    const event = await enqueueResendInboundEvent(
+      org.organizationId,
+      `evt-pending-${Date.now()}`,
+      { type: 'email.received' }
+    )
+    const handler = vi.fn(async () => {})
+
+    await processPendingInboundEvents('resend', handler)
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    const stored = await prisma.inboundEvent.findUnique({ where: { id: event.id } })
+    expect(stored?.status).toBe('completed')
+    expect(stored?.attemptCount).toBe(1)
+  })
+
+  it('reclaims a processing event whose worker lock expired', async () => {
+    const event = await enqueueResendInboundEvent(
+      org.organizationId,
+      `evt-stale-${Date.now()}`,
+      { type: 'email.received' }
+    )
+    await prisma.inboundEvent.update({
+      where: { id: event.id },
+      data: {
+        status: 'processing',
+        lockedAt: new Date(Date.now() - 10 * 60_000),
+      },
+    })
+    const handler = vi.fn(async () => {})
+
+    expect(await processInboundEvent(event.id, handler)).toBe(true)
+    expect(handler).toHaveBeenCalledTimes(1)
+    const stored = await prisma.inboundEvent.findUnique({ where: { id: event.id } })
+    expect(stored?.status).toBe('completed')
+    expect(stored?.attemptCount).toBe(1)
   })
 })

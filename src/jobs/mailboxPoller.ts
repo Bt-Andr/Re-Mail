@@ -7,6 +7,7 @@ import { forOrg } from '../middleware/scopedPrisma'
 import { getMailboxAuth } from '../lib/mailboxAuth'
 import { createThread, createActivity, notifyUser, PERSONAL_MAILBOX_CANAL } from '../helpers/thread'
 import { uploadBufferToCloudinary, buildOrgFolder, saveAttachmentRecords, StoredAttachment } from '../helpers/attachments'
+import { enqueueInboundEvent, processInboundEvent } from './inboundEventProcessor'
 
 let intervalHandle: NodeJS.Timeout | null = null
 let pollInProgress = false
@@ -78,7 +79,19 @@ export async function pollConnection(connection: ExternalMailboxConnection): Pro
     if (box.uidNext - 1 > lastSeenUid) {
       for await (const message of client.fetch(`${lastSeenUid + 1}:*`, { source: true, uid: true }, { uid: true })) {
         if (message.uid <= lastSeenUid || !message.source) continue
-        await processMessage(db, org, connection, message.source)
+        const externalId = `${connection.id}:${box.uidValidity.toString()}:${message.uid}`
+        const event = await enqueueInboundEvent(connection.organizationId, 'imap', externalId, {
+          connectionId: connection.id,
+          uidValidity: box.uidValidity.toString(),
+          uid: message.uid,
+        })
+        await processInboundEvent(event.id, async (_organization, _payload, inboundEventId) => {
+          await processMessage(db, org, connection, message.source!, { inboundEventId })
+        })
+        const processed = await prisma.inboundEvent.findUnique({ where: { id: event.id }, select: { status: true } })
+        if (processed?.status !== 'completed') {
+          throw new Error(`Le message IMAP UID ${message.uid} n'a pas pu être traité durablement.`)
+        }
         lastSeenUid = Math.max(lastSeenUid, message.uid)
       }
     }
@@ -132,7 +145,17 @@ export async function importMailboxHistory(connection: ExternalMailboxConnection
     for (const uid of historicalUids) {
       const message = await client.fetchOne(String(uid), { source: true }, { uid: true })
       if (!message || !message.source) continue
-      await processMessage(db, org, connection, message.source, { silent: true })
+      const externalId = `${connection.id}:${connection.uidValidity?.toString() ?? 'unknown'}:${uid}`
+      const event = await enqueueInboundEvent(connection.organizationId, 'imap-history', externalId, {
+        connectionId: connection.id,
+        uidValidity: connection.uidValidity?.toString() ?? null,
+        uid,
+      })
+      await processInboundEvent(event.id, async (_organization, _payload, inboundEventId) => {
+        await processMessage(db, org, connection, message.source!, { silent: true, inboundEventId })
+      })
+      const processed = await prisma.inboundEvent.findUnique({ where: { id: event.id }, select: { status: true } })
+      if (processed?.status !== 'completed') throw new Error(`Le message historique UID ${uid} n'a pas pu être traité durablement.`)
       imported++
     }
   } finally {
@@ -148,8 +171,16 @@ async function processMessage(
   org: Organization,
   connection: ExternalMailboxConnection,
   source: Buffer,
-  opts: { silent?: boolean } = {}
+  opts: { silent?: boolean; inboundEventId?: string } = {}
 ): Promise<void> {
+  if (opts.inboundEventId) {
+    const alreadyProcessed = await db.threadMessage.findFirst({
+      where: { inboundEventId: opts.inboundEventId },
+      select: { id: true },
+    })
+    if (alreadyProcessed) return
+  }
+
   const parsed = await simpleParser(source)
   const fromAddr = (parsed.from?.value[0]?.address || '').toLowerCase() || 'inconnu@inconnu.invalid'
   const fromName = parsed.from?.value[0]?.name || fromAddr
@@ -180,7 +211,15 @@ async function processMessage(
 
   if (activeThread) {
     const msg = await db.threadMessage.create({
-      data: { organizationId: org.id, threadId: activeThread.id, direction: 'inbound', fromName, fromEmail: fromAddr, body: bodyHtml },
+      data: {
+        organizationId: org.id,
+        threadId: activeThread.id,
+        direction: 'inbound',
+        fromName,
+        fromEmail: fromAddr,
+        body: bodyHtml,
+        inboundEventId: opts.inboundEventId,
+      },
     })
     await saveAttachmentRecords(db, msg.id, stored)
     await db.thread.update({ where: { id: activeThread.id }, data: { updatedAt: new Date() } })
@@ -208,6 +247,7 @@ async function processMessage(
     toEmail: connection.email,
     sourceType: connection.provider,
     sourceId: connection.id,
+    inboundEventId: opts.inboundEventId,
   })
   await db.thread.update({ where: { id: thread.id }, data: { assignedToId: connection.userId } })
   const owner = await db.user.findUnique({ where: { id: connection.userId }, select: { nom: true } })

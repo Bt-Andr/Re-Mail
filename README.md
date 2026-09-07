@@ -62,6 +62,9 @@ npm test
 Couvre : signature Svix du webhook (sans compte Resend réel), isolation entre
 deux organisations, chiffrement/déchiffrement, notifications push, CC/BCC/transfert.
 
+La base PostgreSQL locale dédiée aux tests et la vérification des migrations sont
+documentées dans [`docs/base-de-donnees-locale.md`](docs/base-de-donnees-locale.md).
+
 ## Hors périmètre (v1)
 
 Billing, infra multi-instance et 2FA.

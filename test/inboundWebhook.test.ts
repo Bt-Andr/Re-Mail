@@ -179,4 +179,59 @@ describe('POST /api/inbound-mail/:webhookToken', () => {
     expect(thread).not.toBeNull()
     expect(await prisma.threadMessage.count({ where: { threadId: thread!.id } })).toBe(1)
   })
+
+  it('never merges a Resend message into a personal-mailbox thread', async () => {
+    const connection = await prisma.externalMailboxConnection.create({
+      data: {
+        organizationId: org.organizationId,
+        userId: org.userId,
+        provider: 'imap',
+        email: `personal-${Date.now()}@example.com`,
+        imapHost: 'imap.example.com',
+        smtpHost: 'smtp.example.com',
+        credentialEnc: 'irrelevant',
+      },
+    })
+    const personalThread = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'contact',
+        sujet: 'Fil personnel existant',
+        externalFrom: 'Collision',
+        externalEmail: 'personal-collision@example.com',
+        assignedToId: org.userId,
+        sourceId: connection.id,
+        sourceType: connection.provider,
+      },
+    })
+    const body = payload({
+      email_id: `re_inbound_source_${Date.now()}`,
+      from: 'Collision <personal-collision@example.com>',
+      subject: 'Message Resend distinct',
+    })
+    const headers = signTestWebhook(org.webhookSecret, body)
+
+    const response = await request(app)
+      .post(`/api/inbound-mail/${org.webhookToken}`)
+      .set(headers)
+      .set('Content-Type', 'application/json')
+      .send(body)
+    expect(response.status).toBe(200)
+
+    let event = null
+    for (let i = 0; i < 30 && event?.status !== 'completed'; i++) {
+      event = await prisma.inboundEvent.findFirst({
+        where: { organizationId: org.organizationId, provider: 'resend', externalId: headers['svix-id'] },
+      })
+      if (event?.status !== 'completed') await new Promise(resolve => setTimeout(resolve, 100))
+    }
+
+    expect(event?.status).toBe('completed')
+    expect(await prisma.threadMessage.count({ where: { threadId: personalThread.id } })).toBe(0)
+    const resendThread = await prisma.thread.findFirst({
+      where: { organizationId: org.organizationId, externalEmail: 'personal-collision@example.com', sourceId: null },
+    })
+    expect(resendThread).not.toBeNull()
+    expect(await prisma.threadMessage.count({ where: { threadId: resendThread!.id } })).toBe(1)
+  })
 })

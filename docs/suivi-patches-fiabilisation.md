@@ -8,7 +8,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
 | Statut | En cours — lots 1, 3 et 4 |
-| Dernière mise à jour | 2026-09-07 |
+| Dernière mise à jour | 2026-09-09 |
 | Branche de référence | `main` |
 | Baseline fonctionnelle | 28 fichiers de tests, 167 tests réussis |
 | Responsable | À renseigner |
@@ -28,7 +28,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 |---:|---|---|---|---|---|
 | 0 | Baseline des migrations | Bloquante | Terminé | — | Base reconstruite uniquement par migrations |
 | 1 | Réception durable et idempotente | Critique | En cours | 0 | Aucun événement perdu ou traité deux fois |
-| 2 | Corrélation des conversations | Critique | À faire | 0, 1 | Aucun regroupement fondé seulement sur l’expéditeur |
+| 2 | Corrélation des conversations | Critique | En cours | 0, 1 | Aucun regroupement fondé seulement sur l’expéditeur |
 | 3 | Classement comptes et dossiers | Haute | En cours | 2 | Fils visibles dans la bonne boîte et le bon dossier |
 | 4 | Intégrité tenant et validation | Critique | En cours | 0 | Aucune relation cross-tenant acceptée |
 | 5 | Comptes et rôles | Haute | À faire | 0, 4 | Dernier propriétaire protégé et récupération disponible |
@@ -84,7 +84,7 @@ Validation :
 
 ## Lot 2 — Corrélation des conversations
 
-Statut : **En cours — relations utilisateur critiques contrôlées**
+Statut : **En cours — séparation par boîte source livrée, corrélation par en-têtes restante**
 
 - [ ] Définir les nouvelles métadonnées email.
 - [ ] Créer la migration correspondante.
@@ -92,7 +92,7 @@ Statut : **En cours — relations utilisateur critiques contrôlées**
 - [ ] Récupérer ou conserver les mêmes métadonnées côté Resend.
 - [ ] Implémenter la règle de corrélation ordonnée.
 - [ ] Retirer le rattachement par expéditeur + canal seul.
-- [ ] Inclure la boîte source dans toute corrélation personnelle.
+- [x] Inclure la boîte source dans toute corrélation personnelle et isoler les fils Resend (`sourceId = null`).
 - [ ] Ajouter le type d’usage aux tokens de réponse.
 - [ ] Empêcher l’écho d’une réponse client.
 - [ ] Préserver la lecture des fils historiques.
@@ -100,7 +100,7 @@ Statut : **En cours — relations utilisateur critiques contrôlées**
 Validation :
 
 - [ ] Même expéditeur, deux sujets indépendants.
-- [ ] Même expéditeur, deux boîtes différentes.
+- [x] Même expéditeur, deux boîtes différentes (IMAP ↔ IMAP et IMAP ↔ Resend).
 - [ ] Réponse `In-Reply-To`.
 - [ ] Réponse `References`.
 - [ ] Message sans métadonnées.
@@ -132,7 +132,7 @@ Validation :
 
 ## Lot 4 — Intégrité tenant et validation
 
-Statut : **À faire**
+Statut : **En cours — relations utilisateur critiques et entrées de messagerie contrôlées**
 
 - [ ] Créer les schémas de validation partagés.
 - [x] Vérifier le tenant de l’utilisateur assigné à un fil.
@@ -283,6 +283,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | 3 | Classement des nouveaux fils SMTP par boîte source et isolation stricte des fils de boîtes personnelles entre utilisateurs d’une même organisation | Typecheck et tests backend complets | Corriger la visibilité des réponses sur les fils sortants | Codex |
 | 2026-09-07 | 4 | Validation du tenant des affectations, règles de routage et autorisations d’expéditeur ; arrêt des réponses sur fil inaccessible avant envoi | Tests ciblés d’isolation réussis | Étendre la validation structurée des payloads | Codex |
 | 2026-09-07 | 4 | Validation préalable de l’envoi, limites de sujet/corps, réponses HTTP 400/413 et pagination bornée | Typecheck/build backend, 187/187 tests | Centraliser les schémas de validation des autres routes | Codex |
+| 2026-09-09 | 2 | Ajout systématique de la boîte source à la recherche d’un fil actif, avec séparation explicite de Resend | Tests ciblés IMAP et webhook réussis | Ajouter `Message-ID`, `In-Reply-To` et `References` | Codex |
 
 ## Journal des validations
 
@@ -295,6 +296,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | Lot 3 — tranche 1 | 176/176 | Backend typecheck et build valides | Sans migration | Classement SMTP et accès multi-utilisateur couverts par intégration | `sourceId` identifie désormais la boîte externe propriétaire |
 | 2026-09-07 | Lot 4 — tranche 1 | 179/179 | Backend typecheck et build valides | Sans migration | Tentatives cross-tenant couvertes par intégration | Les trois relations utilisateur exposées par l’API sont validées avant écriture |
 | 2026-09-07 | Lot 4 — tranche 2 | 187/187 | Backend typecheck et build valides | Sans migration | Entrées email et pagination couvertes par intégration | Les rejets ont lieu avant création de fil et avant appel au fournisseur |
+| 2026-09-09 | Lot 2 — tranche 1 | 189/189 | Backend typecheck et build valides | Sans migration | Collisions IMAP/IMAP et IMAP/Resend couvertes | La corrélation reste imparfaite sans en-têtes standards, mais ne traverse plus les boîtes |
 
 ## Journal des incidents et régressions
 

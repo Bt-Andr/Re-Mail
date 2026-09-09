@@ -117,6 +117,54 @@ describe('mailboxPoller.pollConnection', () => {
     expect(updated?.lastSeenUid).toBe(50)
   })
 
+  it('never merges messages from the same sender across two personal mailboxes', async () => {
+    const otherConnection = await prisma.externalMailboxConnection.create({
+      data: {
+        organizationId: org.organizationId,
+        userId: org.userId,
+        provider: 'imap',
+        email: `other-${Date.now()}@example.com`,
+        imapHost: 'imap.example.com',
+        smtpHost: 'smtp.example.com',
+        credentialEnc: encryptMailboxCredential('password'),
+      },
+    })
+    const existingThread = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'email',
+        sujet: 'Conversation dans une autre boîte',
+        externalFrom: 'Jean Dupont',
+        externalEmail: 'jean@example.com',
+        toEmail: otherConnection.email,
+        assignedToId: org.userId,
+        sourceId: otherConnection.id,
+        sourceType: otherConnection.provider,
+      },
+    })
+    const polledConnection = await prisma.externalMailboxConnection.create({
+      data: {
+        organizationId: org.organizationId,
+        userId: org.userId,
+        provider: 'imap',
+        email: `polled-${Date.now()}@example.com`,
+        imapHost: 'imap.example.com',
+        smtpHost: 'smtp.example.com',
+        credentialEnc: encryptMailboxCredential('password'),
+        lastSeenUid: 50,
+      },
+    })
+
+    await pollConnection(polledConnection)
+
+    expect(await prisma.threadMessage.count({ where: { threadId: existingThread.id } })).toBe(0)
+    const newThread = await prisma.thread.findFirst({
+      where: { organizationId: org.organizationId, sourceId: polledConnection.id, externalEmail: 'jean@example.com' },
+    })
+    expect(newThread).not.toBeNull()
+    expect(await prisma.threadMessage.count({ where: { threadId: newThread!.id } })).toBe(1)
+  })
+
   it('resets lastSeenUid to 0 when uidValidity changes (server renumbering)', async () => {
     mockMailboxOpen.mockResolvedValue({ uidValidity: 2000n, uidNext: 1 })
     const connection = await prisma.externalMailboxConnection.create({

@@ -205,7 +205,7 @@ async function processMessage(
   }
 
   const activeThread = await db.thread.findFirst({
-    where: { externalEmail: fromAddr, canal, status: { not: 'resolu' } },
+    where: { externalEmail: fromAddr, canal, sourceId: connection.id, status: { not: 'resolu' } },
     orderBy: { createdAt: 'desc' },
   })
 

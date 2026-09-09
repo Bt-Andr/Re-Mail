@@ -514,7 +514,7 @@ export async function processInboundEmail(org: Organization, payload: unknown, i
   )
 
   const activeThread = await db.thread.findFirst({
-    where: { externalEmail: fromAddr, canal, status: { not: 'resolu' } },
+    where: { externalEmail: fromAddr, canal, sourceId: null, status: { not: 'resolu' } },
     orderBy: { createdAt: 'desc' },
     include: { assignedTo: { select: { id: true, email: true, nom: true } } },
   })

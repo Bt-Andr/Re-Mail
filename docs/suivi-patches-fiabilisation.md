@@ -7,7 +7,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Champ | Valeur |
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
-| Statut | En cours — lots 1, 3 et 4 |
+| Statut | En cours — lots 2 et 3 terminés, lots 1 et 4 actifs |
 | Dernière mise à jour | 2026-09-10 |
 | Branche de référence | `main` |
 | Baseline fonctionnelle | 28 fichiers de tests, 167 tests réussis |
@@ -28,8 +28,8 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 |---:|---|---|---|---|---|
 | 0 | Baseline des migrations | Bloquante | Terminé | — | Base reconstruite uniquement par migrations |
 | 1 | Réception durable et idempotente | Critique | En cours | 0 | Aucun événement perdu ou traité deux fois |
-| 2 | Corrélation des conversations | Critique | En cours | 0, 1 | Aucun regroupement fondé seulement sur l’expéditeur |
-| 3 | Classement comptes et dossiers | Haute | En cours | 2 | Fils visibles dans la bonne boîte et le bon dossier |
+| 2 | Corrélation des conversations | Critique | Terminé | 0, 1 | Aucun regroupement fondé seulement sur l’expéditeur |
+| 3 | Classement comptes et dossiers | Haute | Terminé | 2 | Fils visibles dans la bonne boîte et le bon dossier |
 | 4 | Intégrité tenant et validation | Critique | En cours | 0 | Aucune relation cross-tenant acceptée |
 | 5 | Comptes et rôles | Haute | À faire | 0, 4 | Dernier propriétaire protégé et récupération disponible |
 | 6 | Onboarding vérifié | Haute | À faire | 1–5 | Test réel d’envoi/réception réussi dans l’assistant |
@@ -84,7 +84,7 @@ Validation :
 
 ## Lot 2 — Corrélation des conversations
 
-Statut : **En cours — corrélation par en-têtes et fallback prudent livrés**
+Statut : **Terminé — 2026-09-10**
 
 - [x] Définir les nouvelles métadonnées email.
 - [x] Créer la migration correspondante.
@@ -93,8 +93,8 @@ Statut : **En cours — corrélation par en-têtes et fallback prudent livrés**
 - [x] Implémenter la règle de corrélation ordonnée : `In-Reply-To`, `References`, puis fallback historique prudent.
 - [x] Retirer le rattachement par expéditeur + canal seul — le fallback exige aussi la boîte source et le sujet normalisé.
 - [x] Inclure la boîte source dans toute corrélation personnelle et isoler les fils Resend (`sourceId = null`).
-- [ ] Ajouter le type d’usage aux tokens de réponse.
-- [ ] Empêcher l’écho d’une réponse client.
+- [x] Ajouter le type d’usage aux tokens de réponse (`conversation`, `forward_bridge`, compatibilité `legacy`).
+- [x] Empêcher l’écho d’une réponse client tout en conservant les ponts de transfert.
 - [x] Préserver la lecture et le rattachement prudent des fils historiques sans métadonnées.
 
 Validation :
@@ -104,12 +104,12 @@ Validation :
 - [x] Réponse `In-Reply-To`.
 - [x] Réponse `References`.
 - [x] Message sans métadonnées, avec fallback sur le sujet normalisé.
-- [ ] Transfert collaborateur vers client.
-- [ ] Réponse client vers Re-Mail.
+- [x] Transfert collaborateur vers client.
+- [x] Réponse client vers Re-Mail, enregistrée sans auto-renvoi.
 
 ## Lot 3 — Comptes et dossiers
 
-Statut : **En cours — classement, confidentialité et dossiers mixtes corrigés**
+Statut : **Terminé — 2026-09-10**
 
 - [x] Enregistrer `sourceId` lors d’un envoi SMTP.
 - [x] Enregistrer `sourceType` lors d’un envoi SMTP.
@@ -251,8 +251,8 @@ Sous Windows avec une politique PowerShell restrictive, utiliser `npm.cmd` et `n
 |---|---|---|---|---|---|
 | R-01 | Perte d’un webhook après réponse `200` | Critique | Moyenne | Lot 1, persistance avant ACK | Ouvert |
 | R-02 | Double traitement d’un email | Haute | Moyenne | Lots 1 et 2, idempotence | Ouvert |
-| R-03 | Fusion de conversations indépendantes | Haute | Haute | Lot 2, en-têtes email | En réduction |
-| R-04 | Mauvaise boîte ou mauvais dossier | Haute | Haute | Lot 3 | Ouvert |
+| R-03 | Fusion de conversations indépendantes | Haute | Haute | Lot 2, en-têtes email | Réduit et couvert |
+| R-04 | Mauvaise boîte ou mauvais dossier | Haute | Haute | Lot 3 | Réduit et couvert |
 | R-05 | Relation cross-tenant forgée | Critique | Faible à moyenne | Lot 4 | En réduction |
 | R-06 | Organisation sans propriétaire | Haute | Moyenne | Lot 5 | Ouvert |
 | R-07 | Configuration déclarée terminée mais inactive | Haute | Haute | Lot 6, tests réels | Ouvert |
@@ -286,6 +286,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-09 | 2 | Ajout systématique de la boîte source à la recherche d’un fil actif, avec séparation explicite de Resend | Tests ciblés IMAP et webhook réussis | Ajouter `Message-ID`, `In-Reply-To` et `References` | Codex |
 | 2026-09-10 | 2 | Métadonnées RFC 5322, corrélation ordonnée, fallback par sujet normalisé et en-têtes de réponse SMTP | 13 migrations depuis zéro, typecheck/build backend, 196/196 tests | Typage des tokens puis finalisation Réception/Envoyés | Codex |
 | 2026-09-10 | 3 | Dossiers calculés depuis les messages du fil, non-lus limités à Réception et navigation post-envoi corrigée | Typecheck/build backend, 197/197 tests, builds webmail et mobile valides | Finaliser les tokens de réponse et les scénarios de transfert | Codex |
+| 2026-09-10 | 2 | Typage des tokens de conversation et de pont, suppression de l’écho client et conservation du relais collaborateur | 14 migrations depuis zéro, typecheck/build backend, 199/199 tests | Reprendre les dernières garanties du lot 1 | Codex |
 
 ## Journal des validations
 
@@ -301,6 +302,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-09 | Lot 2 — tranche 1 | 189/189 | Backend typecheck et build valides | Sans migration | Collisions IMAP/IMAP et IMAP/Resend couvertes | La corrélation reste imparfaite sans en-têtes standards, mais ne traverse plus les boîtes |
 | 2026-09-10 | Lot 2 — tranche 2 | 196/196 | Backend typecheck et build valides | 13/13 migrations rejouées depuis zéro | `In-Reply-To`, `References`, sujets indépendants et fallback historique couverts | Les réponses SMTP émettent et conservent les en-têtes de threading |
 | 2026-09-10 | Lot 3 — tranche 2 | 197/197 | Backend, webmail et mobile valides | 13/13 déjà validées | Fil mixte visible dans Réception et Envoyés | Le webmail ouvre les nouveaux fils directement dans Envoyés |
+| 2026-09-10 | Lot 2 — tranche 3 | 199/199 | Backend typecheck et build valides | 14/14 migrations rejouées depuis zéro | Conversation sans écho et pont de transfert couverts | Les anciens tokens conservent temporairement leur comportement `legacy` jusqu’à expiration |
 
 ## Journal des incidents et régressions
 

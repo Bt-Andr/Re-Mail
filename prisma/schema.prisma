@@ -366,6 +366,7 @@ model MailReplyToken {
   externalCc  String?
   externalBcc String?
   subject     String?
+  purpose     String  @default("legacy") // conversation | forward_bridge | legacy
   threadId    String?
   thread      Thread? @relation(fields: [threadId], references: [id])
 

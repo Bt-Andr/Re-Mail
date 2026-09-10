@@ -85,6 +85,8 @@ describe('POST /api/emails/reply — cc/bcc/forward', () => {
     const msg = await prisma.threadMessage.findFirst({ where: { threadId: res.body.threadId } })
     expect(msg?.ccEmails).toBe('manager@example.com')
     expect(msg?.bccEmails).toBe('archive@example.com')
+    const token = await prisma.mailReplyToken.findFirst({ where: { threadId: res.body.threadId } })
+    expect(token?.purpose).toBe('conversation')
   })
 
   it('forwards a message reusing its stored attachments, without re-fetching from Resend', async () => {

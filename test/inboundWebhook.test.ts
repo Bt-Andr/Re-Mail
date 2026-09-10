@@ -304,4 +304,110 @@ describe('POST /api/inbound-mail/:webhookToken', () => {
     expect(messages[1].inReplyTo).toBe('<resend-original@example.com>')
     expect(messages[1].references).toEqual(['<root@example.com>', '<resend-original@example.com>'])
   })
+
+  it('records a conversation-token reply without echoing it back to the client', async () => {
+    const thread = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'contact',
+        sujet: 'Conversation sans écho',
+        externalFrom: 'Client Echo',
+        externalEmail: 'client-echo@example.com',
+      },
+    })
+    const token = await prisma.mailReplyToken.create({
+      data: {
+        organizationId: org.organizationId,
+        aliasFrom: 'contact@testco.example',
+        externalTo: 'client-echo@example.com',
+        subject: thread.sujet,
+        purpose: 'conversation',
+        threadId: thread.id,
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    })
+    const body = payload({
+      email_id: `re_inbound_no_echo_${Date.now()}`,
+      from: 'Client Echo <client-echo@example.com>',
+      to: [`reply+${token.token}@testco.example`],
+      subject: 'Re: Conversation sans écho',
+    })
+    const headers = signTestWebhook(org.webhookSecret, body)
+
+    const response = await request(app)
+      .post(`/api/inbound-mail/${org.webhookToken}`)
+      .set(headers)
+      .set('Content-Type', 'application/json')
+      .send(body)
+    expect(response.status).toBe(200)
+
+    let event = null
+    for (let i = 0; i < 30 && event?.status !== 'completed'; i++) {
+      event = await prisma.inboundEvent.findFirst({
+        where: { organizationId: org.organizationId, provider: 'resend', externalId: headers['svix-id'] },
+      })
+      if (event?.status !== 'completed') await new Promise(resolve => setTimeout(resolve, 100))
+    }
+
+    expect(event?.status).toBe('completed')
+    expect(await prisma.threadMessage.count({ where: { threadId: thread.id, direction: 'inbound' } })).toBe(1)
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>
+    const outboundCalls = fetchMock.mock.calls.filter(([input]) => input.toString() === 'https://api.resend.com/emails')
+    expect(outboundCalls).toHaveLength(0)
+  })
+
+  it('keeps relaying replies received through a forward-bridge token', async () => {
+    const thread = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'contact',
+        sujet: 'Pont de transfert',
+        externalFrom: 'Client Pont',
+        externalEmail: 'client-bridge@example.com',
+      },
+    })
+    const token = await prisma.mailReplyToken.create({
+      data: {
+        organizationId: org.organizationId,
+        aliasFrom: 'contact@testco.example',
+        externalTo: 'client-bridge@example.com',
+        subject: thread.sujet,
+        purpose: 'forward_bridge',
+        threadId: thread.id,
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    })
+    const body = payload({
+      email_id: `re_inbound_bridge_${Date.now()}`,
+      from: 'Collaborateur <collaborateur@example.com>',
+      to: [`reply+${token.token}@testco.example`],
+      subject: 'Re: Pont de transfert',
+    })
+    const headers = signTestWebhook(org.webhookSecret, body)
+
+    const response = await request(app)
+      .post(`/api/inbound-mail/${org.webhookToken}`)
+      .set(headers)
+      .set('Content-Type', 'application/json')
+      .send(body)
+    expect(response.status).toBe(200)
+
+    let event = null
+    for (let i = 0; i < 30 && event?.status !== 'completed'; i++) {
+      event = await prisma.inboundEvent.findFirst({
+        where: { organizationId: org.organizationId, provider: 'resend', externalId: headers['svix-id'] },
+      })
+      if (event?.status !== 'completed') await new Promise(resolve => setTimeout(resolve, 100))
+    }
+
+    expect(event?.status).toBe('completed')
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>
+    const outboundCalls = fetchMock.mock.calls.filter(([input]) => input.toString() === 'https://api.resend.com/emails')
+    expect(outboundCalls).toHaveLength(1)
+    const nextToken = await prisma.mailReplyToken.findFirst({
+      where: { organizationId: org.organizationId, threadId: thread.id, id: { not: token.id } },
+      orderBy: { createdAt: 'desc' },
+    })
+    expect(nextToken?.purpose).toBe('forward_bridge')
+  })
 })

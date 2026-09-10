@@ -193,6 +193,7 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
           externalCc: cc.length ? cc.join(',') : null,
           externalBcc: bcc.length ? bcc.join(',') : null,
           subject,
+          purpose: 'conversation',
           threadId: effectiveThreadId,
           expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
         },
@@ -475,38 +476,45 @@ export async function processInboundEmail(org: Organization, payload: unknown, i
       storedAttachments
     )
 
-    // Nouveau token pour la prochaine réponse (chaîne bidirectionnelle)
-    let clientReplyTo = replyToken.aliasFrom
-    try {
-      const nextToken = await db.mailReplyToken.create({
-        data: {
-          organizationId: org.id,
-          aliasFrom: replyToken.aliasFrom,
-          externalTo: replyToken.externalTo,
-          externalCc: replyToken.externalCc,
-          externalBcc: replyToken.externalBcc,
-          subject: replyToken.subject || subject,
-          threadId: replyToken.threadId,
-          expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-        },
-      })
-      const domain = replyToken.aliasFrom.split('@')[1]
-      clientReplyTo = `reply+${nextToken.token}@${domain}`
-    } catch (e) {
-      console.error('[INBOUND-REPLY] next token:', (e as Error).message)
-    }
+    // Un token de conversation sert uniquement à rattacher la réponse reçue : la
+    // renvoyer à externalTo créerait un écho vers la personne qui vient de répondre.
+    // Seuls les tokens de pont (et les tokens historiques) relaient le message au
+    // destinataire externe d'origine.
+    if (replyToken.purpose !== 'conversation') {
+      let clientReplyTo = replyToken.aliasFrom
+      try {
+        const nextToken = await db.mailReplyToken.create({
+          data: {
+            organizationId: org.id,
+            aliasFrom: replyToken.aliasFrom,
+            externalTo: replyToken.externalTo,
+            externalCc: replyToken.externalCc,
+            externalBcc: replyToken.externalBcc,
+            subject: replyToken.subject || subject,
+            purpose: replyToken.purpose,
+            threadId: replyToken.threadId,
+            expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+          },
+        })
+        const domain = replyToken.aliasFrom.split('@')[1]
+        clientReplyTo = `reply+${nextToken.token}@${domain}`
+      } catch (e) {
+        console.error('[INBOUND-REPLY] next token:', (e as Error).message)
+      }
 
-    await resend.emails.send({
-      from: `${org.companyName || org.name} <${replyToken.aliasFrom}>`,
-      replyTo: clientReplyTo,
-      to: replyToken.externalTo,
-      cc: replyToken.externalCc ? replyToken.externalCc.split(',') : undefined,
-      bcc: replyToken.externalBcc ? replyToken.externalBcc.split(',') : undefined,
-      subject: /^re:/i.test(subject) ? subject : `Re: ${replyToken.subject || subject}`,
-      html: cleanHtml,
-      attachments: toResendAttachments(inboundAttachments),
-    })
-    console.log(`[INBOUND-REPLY] Org ${org.id} : ${replyToken.aliasFrom} -> ${replyToken.externalTo}`)
+      const relayed = await resend.emails.send({
+        from: `${org.companyName || org.name} <${replyToken.aliasFrom}>`,
+        replyTo: clientReplyTo,
+        to: replyToken.externalTo,
+        cc: replyToken.externalCc ? replyToken.externalCc.split(',') : undefined,
+        bcc: replyToken.externalBcc ? replyToken.externalBcc.split(',') : undefined,
+        subject: /^re:/i.test(subject) ? subject : `Re: ${replyToken.subject || subject}`,
+        html: cleanHtml,
+        attachments: toResendAttachments(inboundAttachments),
+      })
+      if (relayed.error) throw new Error(relayed.error.message)
+      console.log(`[INBOUND-REPLY] Org ${org.id} : ${replyToken.aliasFrom} -> ${replyToken.externalTo}`)
+    }
 
     if (replyToken.threadId) {
       try {
@@ -637,7 +645,15 @@ export async function processInboundEmail(org: Organization, payload: unknown, i
   }
 
   const inboundToken = await db.mailReplyToken.create({
-    data: { organizationId: org.id, aliasFrom: route.alias, externalTo: fromAddr, subject, threadId, expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) },
+    data: {
+      organizationId: org.id,
+      aliasFrom: route.alias,
+      externalTo: fromAddr,
+      subject,
+      purpose: 'forward_bridge',
+      threadId,
+      expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+    },
   })
   const domain = route.alias.split('@')[1]
   const replyToAddr = `reply+${inboundToken.token}@${domain}`

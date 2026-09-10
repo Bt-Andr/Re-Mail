@@ -8,7 +8,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
 | Statut | En cours — lots 1, 3 et 4 |
-| Dernière mise à jour | 2026-09-09 |
+| Dernière mise à jour | 2026-09-10 |
 | Branche de référence | `main` |
 | Baseline fonctionnelle | 28 fichiers de tests, 167 tests réussis |
 | Responsable | À renseigner |
@@ -84,26 +84,26 @@ Validation :
 
 ## Lot 2 — Corrélation des conversations
 
-Statut : **En cours — séparation par boîte source livrée, corrélation par en-têtes restante**
+Statut : **En cours — corrélation par en-têtes et fallback prudent livrés**
 
-- [ ] Définir les nouvelles métadonnées email.
-- [ ] Créer la migration correspondante.
-- [ ] Parser `Message-ID`, `In-Reply-To` et `References` côté IMAP.
-- [ ] Récupérer ou conserver les mêmes métadonnées côté Resend.
-- [ ] Implémenter la règle de corrélation ordonnée.
-- [ ] Retirer le rattachement par expéditeur + canal seul.
+- [x] Définir les nouvelles métadonnées email.
+- [x] Créer la migration correspondante.
+- [x] Parser `Message-ID`, `In-Reply-To` et `References` côté IMAP.
+- [x] Récupérer ou conserver les mêmes métadonnées côté Resend.
+- [x] Implémenter la règle de corrélation ordonnée : `In-Reply-To`, `References`, puis fallback historique prudent.
+- [x] Retirer le rattachement par expéditeur + canal seul — le fallback exige aussi la boîte source et le sujet normalisé.
 - [x] Inclure la boîte source dans toute corrélation personnelle et isoler les fils Resend (`sourceId = null`).
 - [ ] Ajouter le type d’usage aux tokens de réponse.
 - [ ] Empêcher l’écho d’une réponse client.
-- [ ] Préserver la lecture des fils historiques.
+- [x] Préserver la lecture et le rattachement prudent des fils historiques sans métadonnées.
 
 Validation :
 
-- [ ] Même expéditeur, deux sujets indépendants.
+- [x] Même expéditeur, deux sujets indépendants.
 - [x] Même expéditeur, deux boîtes différentes (IMAP ↔ IMAP et IMAP ↔ Resend).
-- [ ] Réponse `In-Reply-To`.
-- [ ] Réponse `References`.
-- [ ] Message sans métadonnées.
+- [x] Réponse `In-Reply-To`.
+- [x] Réponse `References`.
+- [x] Message sans métadonnées, avec fallback sur le sujet normalisé.
 - [ ] Transfert collaborateur vers client.
 - [ ] Réponse client vers Re-Mail.
 
@@ -251,7 +251,7 @@ Sous Windows avec une politique PowerShell restrictive, utiliser `npm.cmd` et `n
 |---|---|---|---|---|---|
 | R-01 | Perte d’un webhook après réponse `200` | Critique | Moyenne | Lot 1, persistance avant ACK | Ouvert |
 | R-02 | Double traitement d’un email | Haute | Moyenne | Lots 1 et 2, idempotence | Ouvert |
-| R-03 | Fusion de conversations indépendantes | Haute | Haute | Lot 2, en-têtes email | Ouvert |
+| R-03 | Fusion de conversations indépendantes | Haute | Haute | Lot 2, en-têtes email | En réduction |
 | R-04 | Mauvaise boîte ou mauvais dossier | Haute | Haute | Lot 3 | Ouvert |
 | R-05 | Relation cross-tenant forgée | Critique | Faible à moyenne | Lot 4 | En réduction |
 | R-06 | Organisation sans propriétaire | Haute | Moyenne | Lot 5 | Ouvert |
@@ -284,6 +284,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | 4 | Validation du tenant des affectations, règles de routage et autorisations d’expéditeur ; arrêt des réponses sur fil inaccessible avant envoi | Tests ciblés d’isolation réussis | Étendre la validation structurée des payloads | Codex |
 | 2026-09-07 | 4 | Validation préalable de l’envoi, limites de sujet/corps, réponses HTTP 400/413 et pagination bornée | Typecheck/build backend, 187/187 tests | Centraliser les schémas de validation des autres routes | Codex |
 | 2026-09-09 | 2 | Ajout systématique de la boîte source à la recherche d’un fil actif, avec séparation explicite de Resend | Tests ciblés IMAP et webhook réussis | Ajouter `Message-ID`, `In-Reply-To` et `References` | Codex |
+| 2026-09-10 | 2 | Métadonnées RFC 5322, corrélation ordonnée, fallback par sujet normalisé et en-têtes de réponse SMTP | 13 migrations depuis zéro, typecheck/build backend, 196/196 tests | Typage des tokens puis finalisation Réception/Envoyés | Codex |
 
 ## Journal des validations
 
@@ -297,6 +298,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | Lot 4 — tranche 1 | 179/179 | Backend typecheck et build valides | Sans migration | Tentatives cross-tenant couvertes par intégration | Les trois relations utilisateur exposées par l’API sont validées avant écriture |
 | 2026-09-07 | Lot 4 — tranche 2 | 187/187 | Backend typecheck et build valides | Sans migration | Entrées email et pagination couvertes par intégration | Les rejets ont lieu avant création de fil et avant appel au fournisseur |
 | 2026-09-09 | Lot 2 — tranche 1 | 189/189 | Backend typecheck et build valides | Sans migration | Collisions IMAP/IMAP et IMAP/Resend couvertes | La corrélation reste imparfaite sans en-têtes standards, mais ne traverse plus les boîtes |
+| 2026-09-10 | Lot 2 — tranche 2 | 196/196 | Backend typecheck et build valides | 13/13 migrations rejouées depuis zéro | `In-Reply-To`, `References`, sujets indépendants et fallback historique couverts | Les réponses SMTP émettent et conservent les en-têtes de threading |
 
 ## Journal des incidents et régressions
 

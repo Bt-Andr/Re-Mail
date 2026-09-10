@@ -364,7 +364,7 @@ describe('POST /api/mailbox-connections/:id/import-history', () => {
     expect(replay.status).toBe(409)
   })
 
-  it('appends a second historical message from the same sender to the same thread instead of duplicating it', async () => {
+  it('keeps historical messages with different subjects in separate threads, even for the same sender', async () => {
     mockSearch.mockResolvedValueOnce([10, 11])
     mockFetchOne.mockImplementation(async (uid: string) =>
       uid === '10'
@@ -380,9 +380,29 @@ describe('POST /api/mailbox-connections/:id/import-history', () => {
     expect(res.body.imported).toBe(2)
 
     const threads = await prisma.thread.findMany({ where: { organizationId: org.organizationId, externalEmail: 'client@example.com' } })
-    expect(threads).toHaveLength(1)
-    const messages = await prisma.threadMessage.findMany({ where: { threadId: threads[0].id } })
+    expect(threads).toHaveLength(2)
+    const messages = await prisma.threadMessage.findMany({ where: { threadId: { in: threads.map(thread => thread.id) } } })
     expect(messages).toHaveLength(2)
+    expect(new Set(messages.map(message => message.threadId)).size).toBe(2)
+  })
+
+  it('keeps the historical fallback for reply-prefixed versions of the same subject', async () => {
+    mockSearch.mockResolvedValueOnce([10, 11])
+    mockFetchOne.mockImplementation(async (uid: string) =>
+      uid === '10'
+        ? { source: Buffer.from(rawEmail('fallback@example.com', 'Demande de devis')) }
+        : { source: Buffer.from(rawEmail('fallback@example.com', 'Re: Demande de devis')) }
+    )
+
+    const res = await request(app)
+      .post(`/api/mailbox-connections/${connectionId}/import-history`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({})
+    expect(res.status).toBe(200)
+
+    const threads = await prisma.thread.findMany({ where: { organizationId: org.organizationId, externalEmail: 'fallback@example.com' } })
+    expect(threads).toHaveLength(1)
+    expect(await prisma.threadMessage.count({ where: { threadId: threads[0].id } })).toBe(2)
   })
 
   it('returns 400 and does not mark historyImportedAt when the IMAP connection fails', async () => {

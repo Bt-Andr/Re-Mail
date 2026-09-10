@@ -5,14 +5,17 @@ import prisma from '../src/lib/prisma'
 import { seedOrg, cleanupOrg, SeededOrg } from './helpers/seed'
 import { signTestWebhook } from './helpers/webhookSigner'
 
-function mockResendFetch() {
+function mockResendFetch(receivedEmail: Record<string, unknown> = {}) {
   return vi.fn(async (input: Parameters<typeof fetch>[0]) => {
     const url = input.toString()
     if (url.includes('/emails/receiving/') && url.endsWith('/attachments')) {
       return new Response(JSON.stringify({ data: [] }), { status: 200 })
     }
     if (url.includes('/emails/receiving/')) {
-      return new Response(JSON.stringify({ html: '<p>Bonjour, ceci est un test.</p>', text: 'Bonjour, ceci est un test.' }), { status: 200 })
+      return new Response(
+        JSON.stringify({ html: '<p>Bonjour, ceci est un test.</p>', text: 'Bonjour, ceci est un test.', ...receivedEmail }),
+        { status: 200 }
+      )
     }
     if (url.includes('api.resend.com/emails')) {
       return new Response(JSON.stringify({ id: 're_sent_test' }), { status: 200 })
@@ -233,5 +236,72 @@ describe('POST /api/inbound-mail/:webhookToken', () => {
     })
     expect(resendThread).not.toBeNull()
     expect(await prisma.threadMessage.count({ where: { threadId: resendThread!.id } })).toBe(1)
+  })
+
+  it('uses Resend In-Reply-To metadata to select the exact thread before the subject fallback', async () => {
+    const exactThread = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'contact',
+        sujet: 'Sujet initial',
+        externalFrom: 'Reference Client',
+        externalEmail: 'reference-client@example.com',
+        messages: {
+          create: {
+            organizationId: org.organizationId,
+            direction: 'outbound',
+            fromName: 'Test User',
+            fromEmail: 'contact@testco.example',
+            body: '<p>Réponse initiale</p>',
+            internetMessageId: '<resend-original@example.com>',
+          },
+        },
+      },
+    })
+    await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'contact',
+        sujet: 'Sujet concurrent',
+        externalFrom: 'Reference Client',
+        externalEmail: 'reference-client@example.com',
+      },
+    })
+    global.fetch = mockResendFetch({
+      message_id: '<resend-reply@example.com>',
+      headers: {
+        'In-Reply-To': '<resend-original@example.com>',
+        References: '<root@example.com> <resend-original@example.com>',
+      },
+    })
+    const body = payload({
+      email_id: `re_inbound_reference_${Date.now()}`,
+      message_id: '<resend-reply@example.com>',
+      from: 'Reference Client <reference-client@example.com>',
+      subject: 'Sujet sans rapport avec le fallback',
+    })
+    const headers = signTestWebhook(org.webhookSecret, body)
+
+    const response = await request(app)
+      .post(`/api/inbound-mail/${org.webhookToken}`)
+      .set(headers)
+      .set('Content-Type', 'application/json')
+      .send(body)
+    expect(response.status).toBe(200)
+
+    let event = null
+    for (let i = 0; i < 30 && event?.status !== 'completed'; i++) {
+      event = await prisma.inboundEvent.findFirst({
+        where: { organizationId: org.organizationId, provider: 'resend', externalId: headers['svix-id'] },
+      })
+      if (event?.status !== 'completed') await new Promise(resolve => setTimeout(resolve, 100))
+    }
+
+    expect(event?.status).toBe('completed')
+    const messages = await prisma.threadMessage.findMany({ where: { threadId: exactThread.id }, orderBy: { sentAt: 'asc' } })
+    expect(messages).toHaveLength(2)
+    expect(messages[1].internetMessageId).toBe('<resend-reply@example.com>')
+    expect(messages[1].inReplyTo).toBe('<resend-original@example.com>')
+    expect(messages[1].references).toEqual(['<root@example.com>', '<resend-original@example.com>'])
   })
 })

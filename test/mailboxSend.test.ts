@@ -53,7 +53,7 @@ describe('POST /api/emails/reply — via boîte externe (SMTP), sans Resend conn
   })
 
   beforeEach(() => {
-    mockSendMail.mockReset().mockResolvedValue({ messageId: 'test' })
+    mockSendMail.mockReset().mockResolvedValue({ messageId: '<smtp-sent@example.com>' })
   })
 
   it('sends successfully through the connected mailbox even with no Resend key on the org', async () => {
@@ -69,6 +69,7 @@ describe('POST /api/emails/reply — via boîte externe (SMTP), sans Resend conn
 
     const msg = await prisma.threadMessage.findFirst({ where: { threadId: res.body.threadId } })
     expect(msg?.fromEmail).toBe('moi@example.com')
+    expect(msg?.internetMessageId).toBe('<smtp-sent@example.com>')
 
     const thread = await prisma.thread.findUnique({ where: { id: res.body.threadId } })
     expect(thread?.sourceId).toBe(mailboxId)
@@ -94,6 +95,51 @@ describe('POST /api/emails/reply — via boîte externe (SMTP), sans Resend conn
     expect(res.status).toBe(200)
     const tokens = await prisma.mailReplyToken.findMany({ where: { threadId: res.body.threadId } })
     expect(tokens).toHaveLength(0)
+  })
+
+  it('sends and stores In-Reply-To/References when replying through SMTP', async () => {
+    const thread = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'email',
+        sujet: 'Demande SMTP',
+        externalFrom: 'Client',
+        externalEmail: 'client-thread@example.com',
+        toEmail: 'moi@example.com',
+        assignedToId: org.userId,
+        sourceId: mailboxId,
+        sourceType: 'imap',
+        messages: {
+          create: {
+            organizationId: org.organizationId,
+            direction: 'inbound',
+            fromName: 'Client',
+            fromEmail: 'client-thread@example.com',
+            body: '<p>Question</p>',
+            internetMessageId: '<incoming@example.com>',
+            references: ['<root@example.com>'],
+          },
+        },
+      },
+    })
+
+    const response = await request(app)
+      .post('/api/emails/reply')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ threadId: thread.id, to: 'client-thread@example.com', subject: 'Re: Demande SMTP', message: 'Réponse' })
+
+    expect(response.status).toBe(200)
+    expect(mockSendMail.mock.calls[0][0].headers).toEqual({
+      'In-Reply-To': '<incoming@example.com>',
+      References: '<root@example.com> <incoming@example.com>',
+    })
+    const outbound = await prisma.threadMessage.findFirst({
+      where: { threadId: thread.id, direction: 'outbound' },
+      orderBy: { sentAt: 'desc' },
+    })
+    expect(outbound?.internetMessageId).toBe('<smtp-sent@example.com>')
+    expect(outbound?.inReplyTo).toBe('<incoming@example.com>')
+    expect(outbound?.references).toEqual(['<root@example.com>', '<incoming@example.com>'])
   })
 
   it('still returns 400 when neither Resend nor a matching mailbox connection is available', async () => {
@@ -133,7 +179,7 @@ describe('POST /api/emails/reply — via boîte externe (gmail, XOAUTH2)', () =>
   })
 
   beforeEach(() => {
-    mockSendMail.mockReset().mockResolvedValue({ messageId: 'test' })
+    mockSendMail.mockReset().mockResolvedValue({ messageId: '<gmail-sent@example.com>' })
     mockCreateTransport.mockClear()
     mockRefreshGoogleAccessToken.mockReset().mockResolvedValue('fresh-access-token')
   })

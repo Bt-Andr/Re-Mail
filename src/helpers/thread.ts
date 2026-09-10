@@ -80,6 +80,9 @@ interface CreateThreadInput {
   sourceType?: string | null
   toEmail?: string | null
   inboundEventId?: string | null
+  internetMessageId?: string | null
+  inReplyTo?: string | null
+  references?: string[]
 }
 
 export async function createThread(db: PrismaClient, org: Organization, input: CreateThreadInput) {
@@ -93,6 +96,9 @@ export async function createThread(db: PrismaClient, org: Organization, input: C
     sourceType = null,
     toEmail = null,
     inboundEventId = null,
+    internetMessageId = null,
+    inReplyTo = null,
+    references = [],
   } = input
 
   const thread = await db.thread.create({
@@ -114,6 +120,9 @@ export async function createThread(db: PrismaClient, org: Organization, input: C
           fromEmail: externalEmail,
           body: bodyHtml,
           inboundEventId,
+          internetMessageId,
+          inReplyTo,
+          references,
         },
       },
     },

@@ -424,6 +424,12 @@ model ThreadMessage {
   bccEmails String? // comma-separated
   body      String
 
+  // En-têtes standards de corrélation RFC 5322. Les valeurs sont normalisées
+  // (trim + domaine en minuscules) avant stockage ; references conserve l'ordre.
+  internetMessageId String?
+  inReplyTo         String?
+  references        String[] @default([])
+
   // Lie le message à l'entrée durable qui l'a créé. Unique pour qu'un retry après
   // crash ne puisse jamais insérer une seconde copie du même email.
   inboundEventId String? @unique
@@ -437,6 +443,7 @@ model ThreadMessage {
 
   @@index([organizationId])
   @@index([threadId])
+  @@index([organizationId, internetMessageId])
 }
 
 model ThreadAttachment {

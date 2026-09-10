@@ -24,8 +24,8 @@ const RAW_MESSAGE = Buffer.from(
     '<p>Un message de test.</p>\r\n'
 )
 
-async function* oneMessage() {
-  yield { uid: 51, source: RAW_MESSAGE }
+async function* oneMessage(source = RAW_MESSAGE) {
+  yield { uid: 51, source }
 }
 
 describe('mailboxPoller.pollConnection', () => {
@@ -163,6 +163,114 @@ describe('mailboxPoller.pollConnection', () => {
     })
     expect(newThread).not.toBeNull()
     expect(await prisma.threadMessage.count({ where: { threadId: newThread!.id } })).toBe(1)
+  })
+
+  it('does not merge two unrelated subjects from the same sender and mailbox', async () => {
+    const connection = await prisma.externalMailboxConnection.create({
+      data: {
+        organizationId: org.organizationId,
+        userId: org.userId,
+        provider: 'imap',
+        email: `subjects-${Date.now()}@example.com`,
+        imapHost: 'imap.example.com',
+        smtpHost: 'smtp.example.com',
+        credentialEnc: encryptMailboxCredential('password'),
+        lastSeenUid: 50,
+      },
+    })
+    const existingThread = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'email',
+        sujet: 'Premier dossier',
+        externalFrom: 'Jean Dupont',
+        externalEmail: 'jean@example.com',
+        assignedToId: org.userId,
+        sourceId: connection.id,
+        sourceType: connection.provider,
+      },
+    })
+    const secondSubject = Buffer.from(
+      'From: "Jean Dupont" <jean@example.com>\r\n' +
+        'Subject: Deuxième dossier\r\n' +
+        'Content-Type: text/plain; charset=utf-8\r\n\r\n' +
+        'Conversation indépendante.\r\n'
+    )
+    mockFetch.mockImplementation(() => oneMessage(secondSubject))
+
+    await pollConnection(connection)
+
+    expect(await prisma.threadMessage.count({ where: { threadId: existingThread.id } })).toBe(0)
+    expect(
+      await prisma.thread.count({ where: { organizationId: org.organizationId, sourceId: connection.id, externalEmail: 'jean@example.com' } })
+    ).toBe(2)
+  })
+
+  it('uses In-Reply-To before the subject to attach an IMAP reply to the exact thread', async () => {
+    const connection = await prisma.externalMailboxConnection.create({
+      data: {
+        organizationId: org.organizationId,
+        userId: org.userId,
+        provider: 'imap',
+        email: `references-${Date.now()}@example.com`,
+        imapHost: 'imap.example.com',
+        smtpHost: 'smtp.example.com',
+        credentialEnc: encryptMailboxCredential('password'),
+        lastSeenUid: 50,
+      },
+    })
+    const exactThread = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'email',
+        sujet: 'Sujet original',
+        externalFrom: 'Jean Dupont',
+        externalEmail: 'jean@example.com',
+        assignedToId: org.userId,
+        sourceId: connection.id,
+        sourceType: connection.provider,
+        messages: {
+          create: {
+            organizationId: org.organizationId,
+            direction: 'outbound',
+            fromName: 'Test User',
+            fromEmail: connection.email,
+            body: '<p>Message original</p>',
+            internetMessageId: '<original@example.com>',
+          },
+        },
+      },
+    })
+    await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'email',
+        sujet: 'Un autre sujet',
+        externalFrom: 'Jean Dupont',
+        externalEmail: 'jean@example.com',
+        assignedToId: org.userId,
+        sourceId: connection.id,
+        sourceType: connection.provider,
+      },
+    })
+    const reply = Buffer.from(
+      'From: "Jean Dupont" <jean@example.com>\r\n' +
+        'Message-ID: <reply@example.com>\r\n' +
+        'In-Reply-To: <original@example.com>\r\n' +
+        'References: <older@example.com> <original@example.com>\r\n' +
+        'Subject: Sujet volontairement différent\r\n' +
+        'Content-Type: text/plain; charset=utf-8\r\n\r\n' +
+        'Réponse exacte.\r\n'
+    )
+    mockFetch.mockImplementation(() => oneMessage(reply))
+
+    await pollConnection(connection)
+
+    const messages = await prisma.threadMessage.findMany({ where: { threadId: exactThread.id }, orderBy: { sentAt: 'asc' } })
+    expect(messages).toHaveLength(2)
+    expect(messages[1].internetMessageId).toBe('<reply@example.com>')
+    expect(messages[1].inReplyTo).toBe('<original@example.com>')
+    expect(messages[1].references).toEqual(['<older@example.com>', '<original@example.com>'])
   })
 
   it('resets lastSeenUid to 0 when uidValidity changes (server renumbering)', async () => {

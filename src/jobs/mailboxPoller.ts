@@ -6,6 +6,7 @@ import prisma from '../lib/prisma'
 import { forOrg } from '../middleware/scopedPrisma'
 import { getMailboxAuth } from '../lib/mailboxAuth'
 import { createThread, createActivity, notifyUser, PERSONAL_MAILBOX_CANAL } from '../helpers/thread'
+import { findCorrelatedThread, normalizeMessageId, parseMessageIdList } from '../helpers/threadCorrelation'
 import { uploadBufferToCloudinary, buildOrgFolder, saveAttachmentRecords, StoredAttachment } from '../helpers/attachments'
 import { enqueueInboundEvent, processInboundEvent } from './inboundEventProcessor'
 
@@ -186,6 +187,9 @@ async function processMessage(
   const fromName = parsed.from?.value[0]?.name || fromAddr
   const subject = parsed.subject || '(Sans sujet)'
   const bodyHtml = parsed.html || `<p>${(parsed.text || '').replace(/\n/g, '<br>')}</p>`
+  const internetMessageId = normalizeMessageId(parsed.messageId)
+  const inReplyTo = normalizeMessageId(parsed.inReplyTo)
+  const references = parseMessageIdList(parsed.references)
 
   // Une connexion IMAP est la boîte perso d'UNE personne, pas un alias d'équipe routable
   // — canal fixe et réservé (voir PERSONAL_MAILBOX_CANAL), jamais de ThreadRoutingRule
@@ -204,9 +208,13 @@ async function processMessage(
     }
   }
 
-  const activeThread = await db.thread.findFirst({
-    where: { externalEmail: fromAddr, canal, sourceId: connection.id, status: { not: 'resolu' } },
-    orderBy: { createdAt: 'desc' },
+  const activeThread = await findCorrelatedThread(db, {
+    externalEmail: fromAddr,
+    canal,
+    sourceId: connection.id,
+    subject,
+    inReplyTo,
+    references,
   })
 
   if (activeThread) {
@@ -219,6 +227,9 @@ async function processMessage(
         fromEmail: fromAddr,
         body: bodyHtml,
         inboundEventId: opts.inboundEventId,
+        internetMessageId,
+        inReplyTo,
+        references,
       },
     })
     await saveAttachmentRecords(db, msg.id, stored)
@@ -248,6 +259,9 @@ async function processMessage(
     sourceType: connection.provider,
     sourceId: connection.id,
     inboundEventId: opts.inboundEventId,
+    internetMessageId,
+    inReplyTo,
+    references,
   })
   await db.thread.update({ where: { id: thread.id }, data: { assignedToId: connection.userId } })
   const owner = await db.user.findUnique({ where: { id: connection.userId }, select: { nom: true } })

@@ -12,6 +12,7 @@ import { verifyResendWebhook } from '../helpers/webhookSignature'
 import { extractEmail, stripQuotedText } from '../helpers/inbound'
 import { getAllowedSenders } from '../helpers/senders'
 import { createActivity, createThread, notifyUser } from '../helpers/thread'
+import { findCorrelatedThread, getEmailHeader, normalizeMessageId, parseMessageIdList } from '../helpers/threadCorrelation'
 import { enqueueResendInboundEvent, processInboundEvent } from '../jobs/inboundEventProcessor'
 import {
   fetchInboundAttachments,
@@ -227,9 +228,28 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
     )
   }
 
+  let outboundInReplyTo: string | null = null
+  let outboundReferences: string[] = []
+  if (effectiveThreadId && !isForward) {
+    const latestIdentifiedMessage = await db.threadMessage.findFirst({
+      where: { threadId: effectiveThreadId, internetMessageId: { not: null } },
+      orderBy: { sentAt: 'desc' },
+      select: { internetMessageId: true, references: true },
+    })
+    outboundInReplyTo = normalizeMessageId(latestIdentifiedMessage?.internetMessageId)
+    outboundReferences = parseMessageIdList([
+      ...(latestIdentifiedMessage?.references ?? []),
+      latestIdentifiedMessage?.internetMessageId,
+    ])
+  }
+  const threadingHeaders = outboundInReplyTo
+    ? { 'In-Reply-To': outboundInReplyTo, References: outboundReferences.join(' ') }
+    : undefined
+
   try {
     const emailSubject = isForward && !/^fwd:/i.test(subject || '') ? `Fwd: ${subject}` : subject
     const emailAttachments = forwardAttachments ?? (files.length ? files.map(f => ({ content: f.buffer, filename: f.originalname })) : undefined)
+    let sentInternetMessageId: string | null = null
 
     if (mailbox) {
       // storedToResendAttachments()/pièces jointes manuelles produisent déjà {path|content, filename},
@@ -244,7 +264,7 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
         // et l'envoi échouerait silencieusement contre les serveurs Google.
         auth: 'accessToken' in mailboxAuth ? { type: 'OAuth2', ...mailboxAuth } : mailboxAuth,
       })
-      await transporter.sendMail({
+      const sent = await transporter.sendMail({
         from: `${senderName} <${fromEmail}>`,
         replyTo: replyToAddr,
         to,
@@ -253,10 +273,12 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
         subject: emailSubject,
         html,
         attachments: emailAttachments,
+        headers: threadingHeaders,
       })
+      sentInternetMessageId = normalizeMessageId(sent?.messageId)
     } else {
       const resend = buildResendClient(getDecryptedResendKey(org))
-      await resend.emails.send({
+      const sent = await resend.emails.send({
         from: `${senderName} <${fromEmail}>`,
         replyTo: replyToAddr,
         to,
@@ -265,7 +287,9 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
         subject: emailSubject,
         html,
         attachments: emailAttachments,
+        headers: threadingHeaders,
       })
+      if (sent.error) throw new Error(sent.error.message)
     }
 
     if (effectiveThreadId) {
@@ -282,6 +306,9 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
             bccEmails: bcc.length ? bcc.join(',') : null,
             body: html,
             sentById: req.user!.id,
+            internetMessageId: sentInternetMessageId,
+            inReplyTo: outboundInReplyTo,
+            references: outboundReferences,
           },
         })
 
@@ -381,6 +408,9 @@ export async function processInboundEmail(org: Organization, payload: unknown, i
   const fromAddr = extractEmail(fromRaw)
   const subject = (data.subject as string) || '(Sans sujet)'
   const emailId = data.email_id as string | undefined
+  let internetMessageId = normalizeMessageId(data.message_id)
+  let inReplyTo = normalizeMessageId(getEmailHeader(data.headers, 'in-reply-to'))
+  let references = parseMessageIdList(getEmailHeader(data.headers, 'references'))
 
   console.log(`[INBOUND] Org ${org.id} : de=${fromRaw} -> à=${toAddr} (id=${emailId})`)
 
@@ -392,9 +422,18 @@ export async function processInboundEmail(org: Organization, payload: unknown, i
         headers: { Authorization: `Bearer ${resendApiKey}` },
       })
       if (emailRes.ok) {
-        const emailData = (await emailRes.json()) as { html?: string; text?: string }
+        const emailData = (await emailRes.json()) as {
+          html?: string
+          text?: string
+          message_id?: string
+          headers?: Record<string, unknown>
+        }
         htmlBody = emailData.html || ''
         textBody = emailData.text || ''
+        internetMessageId = normalizeMessageId(emailData.message_id) ?? internetMessageId
+        inReplyTo = normalizeMessageId(getEmailHeader(emailData.headers, 'in-reply-to')) ?? inReplyTo
+        const fetchedReferences = parseMessageIdList(getEmailHeader(emailData.headers, 'references'))
+        if (fetchedReferences.length) references = fetchedReferences
       } else {
         console.warn(`[INBOUND] Corps impossible à récupérer (${emailRes.status})`)
       }
@@ -480,6 +519,9 @@ export async function processInboundEmail(org: Organization, payload: unknown, i
             fromEmail: fromAddr,
             body: cleanHtml,
             inboundEventId,
+            internetMessageId,
+            inReplyTo,
+            references,
           },
         })
         await saveAttachmentRecords(db, msg.id, storedAttachments)
@@ -513,11 +555,20 @@ export async function processInboundEmail(org: Organization, payload: unknown, i
     storedAttachments
   )
 
-  const activeThread = await db.thread.findFirst({
-    where: { externalEmail: fromAddr, canal, sourceId: null, status: { not: 'resolu' } },
-    orderBy: { createdAt: 'desc' },
-    include: { assignedTo: { select: { id: true, email: true, nom: true } } },
+  const correlatedThread = await findCorrelatedThread(db, {
+    externalEmail: fromAddr,
+    canal,
+    sourceId: null,
+    subject,
+    inReplyTo,
+    references,
   })
+  const activeThread = correlatedThread
+    ? await db.thread.findUnique({
+        where: { id: correlatedThread.id },
+        include: { assignedTo: { select: { id: true, email: true, nom: true } } },
+      })
+    : null
 
   let threadId: string
   if (activeThread) {
@@ -530,6 +581,9 @@ export async function processInboundEmail(org: Organization, payload: unknown, i
         fromEmail: fromAddr,
         body: inboundHtml,
         inboundEventId,
+        internetMessageId,
+        inReplyTo,
+        references,
       },
     })
     await saveAttachmentRecords(db, msg.id, storedAttachments)
@@ -561,6 +615,9 @@ export async function processInboundEmail(org: Organization, payload: unknown, i
       toEmail: toAddr,
       bodyHtml: inboundHtml,
       inboundEventId,
+      internetMessageId,
+      inReplyTo,
+      references,
     })
     const firstMessageId = newThread.messages?.[0]?.id
     if (firstMessageId) await saveAttachmentRecords(db, firstMessageId, storedAttachments)

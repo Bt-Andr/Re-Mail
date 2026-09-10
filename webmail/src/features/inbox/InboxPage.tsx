@@ -224,9 +224,10 @@ export function InboxPage({ folder }: { folder: Folder }) {
         request={composerRequest}
         onClose={() => setComposerRequest(null)}
         onSent={threadId => {
+          const targetFolder = composerRequest?.mode === 'new' ? 'sent' : folder
           setComposerRequest(null)
           void loadFirstPage()
-          navigate(`/${folder}/${threadId}`)
+          navigate(`/${targetFolder}/${threadId}`)
         }}
       />
     </div>

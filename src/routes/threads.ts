@@ -18,6 +18,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const db = forOrg(req.user!.organizationId)
     const { canal, status, folder, q, take, skip, account } = req.query
     const where: Record<string, unknown> = {}
+    const andFilters: Record<string, unknown>[] = []
     const ownedMailboxes = await db.externalMailboxConnection.findMany({
       where: { userId: req.user!.id },
       select: { id: true },
@@ -27,7 +28,8 @@ router.get('/', authenticateToken, async (req, res) => {
     // Les fils Resend (sourceId null) sont des ressources d'equipe. Un fil lie a
     // une boite externe reste strictement personnel a son proprietaire, y compris
     // face a un OWNER/ADMIN de la meme organisation.
-    where.AND = [{ OR: [{ sourceId: null }, { sourceId: { in: ownedMailboxIds } }] }]
+    andFilters.push({ OR: [{ sourceId: null }, { sourceId: { in: ownedMailboxIds } }] })
+    where.AND = andFilters
     if (status) where.status = status
     // Switcher de compte (voir routes/accounts.ts) : 'resend' = fils sans boîte externe
     // d'origine (sourceId null, webhook Resend/compose sortant) ; sinon un
@@ -48,7 +50,10 @@ router.get('/', authenticateToken, async (req, res) => {
     } else {
       where.deletedAt = null
       where.archivedAt = null
-      where.origin = folder === 'sent' ? 'outbound' : 'inbound'
+      const direction = folder === 'sent' ? 'outbound' : 'inbound'
+      // Un fil mixte appartient aux deux dossiers. `origin` garde les rares fils
+      // historiques sans message visibles dans leur dossier d'origine.
+      andFilters.push({ OR: [{ messages: { some: { direction } } }, { origin: direction }] })
     }
 
     if (!isManager(req.user!.orgRole)) {
@@ -72,12 +77,14 @@ router.get('/', authenticateToken, async (req, res) => {
     // top-level en AND, seul le contenu du OR ci-dessous porte la recherche elle-même.
     if (typeof q === 'string' && q.trim()) {
       const query = q.trim()
-      where.OR = [
-        { sujet: { contains: query, mode: 'insensitive' } },
-        { externalFrom: { contains: query, mode: 'insensitive' } },
-        { externalEmail: { contains: query, mode: 'insensitive' } },
-        { messages: { some: { body: { contains: query, mode: 'insensitive' } } } },
-      ]
+      andFilters.push({
+        OR: [
+          { sujet: { contains: query, mode: 'insensitive' } },
+          { externalFrom: { contains: query, mode: 'insensitive' } },
+          { externalEmail: { contains: query, mode: 'insensitive' } },
+          { messages: { some: { body: { contains: query, mode: 'insensitive' } } } },
+        ],
+      })
     }
 
     // Pagination optionnelle (rétrocompatible : sans `take`, comportement inchangé —
@@ -111,7 +118,7 @@ router.get('/', authenticateToken, async (req, res) => {
       threads.map(t => ({
         ...t,
         lastMessage: t.messages[0] ?? null,
-        unreadCount: t._count.messages,
+        unreadCount: folder === 'sent' ? 0 : t._count.messages,
         messages: undefined,
         _count: undefined,
       }))

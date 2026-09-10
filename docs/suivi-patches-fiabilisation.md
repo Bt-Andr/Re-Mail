@@ -109,26 +109,26 @@ Validation :
 
 ## Lot 3 — Comptes et dossiers
 
-Statut : **En cours — classement SMTP et confidentialité des boîtes personnelles corrigés**
+Statut : **En cours — classement, confidentialité et dossiers mixtes corrigés**
 
 - [x] Enregistrer `sourceId` lors d’un envoi SMTP.
 - [x] Enregistrer `sourceType` lors d’un envoi SMTP.
 - [x] Réserver `sourceId = null` à Resend pour les nouveaux fils sortants.
 - [x] Restreindre les fils d’une boîte externe à son propriétaire, y compris face aux managers de l’organisation.
-- [ ] Valider la sémantique produit de Réception/Envoyés.
-- [ ] Implémenter le retour visible d’une réponse sur un fil sortant.
-- [ ] Aligner les compteurs non lus.
-- [ ] Aligner les filtres backend.
-- [ ] Invalider les caches webmail concernés.
-- [ ] Invalider les caches mobiles concernés.
+- [x] Valider la sémantique produit de Réception/Envoyés — un fil mixte apparaît dans les deux vues.
+- [x] Implémenter le retour visible d’une réponse sur un fil sortant.
+- [x] Aligner les compteurs non lus — affichés dans Réception, neutralisés dans Envoyés.
+- [x] Aligner les filtres backend sur la direction réelle des messages, avec compatibilité des fils historiques.
+- [x] Rafraîchir le webmail et ouvrir un nouveau message dans Envoyés après envoi.
+- [x] Invalider les caches mobiles concernés — la clé racine `threads` couvre tous les dossiers.
 
 Validation :
 
 - [x] Envoi Gmail/IMAP classé dans la boîte sélectionnée au niveau backend.
 - [x] Envoi Resend classé dans Resend au niveau backend.
-- [ ] Réponse entrante visible et non lue.
-- [ ] Filtres multi-boîtes cohérents.
-- [ ] Comportement identique sur web et mobile.
+- [x] Réponse entrante visible et non lue dans Réception, sans badge non-lu dans Envoyés.
+- [x] Filtres multi-boîtes cohérents avec les dossiers mixtes.
+- [x] Contrôles TypeScript réussis sur webmail et mobile.
 
 ## Lot 4 — Intégrité tenant et validation
 
@@ -265,7 +265,7 @@ Sous Windows avec une politique PowerShell restrictive, utiliser `npm.cmd` et `n
 |---|---|---|---|---|
 | D-01 | Technologie de file durable | Table PostgreSQL / service de queue | À décider | — |
 | D-02 | Verrou multi-instance du poller | Verrou PostgreSQL / worker unique / queue | À décider | — |
-| D-03 | Sémantique Réception/Envoyés | Fils dans plusieurs vues / emplacement principal | À décider | — |
+| D-03 | Sémantique Réception/Envoyés | Fils dans plusieurs vues / emplacement principal | Fils dans plusieurs vues selon les directions présentes | 2026-09-10 |
 | D-04 | Durée de conservation des événements entrants | 30 / 90 / 180 jours | À décider | — |
 | D-05 | Politique de mot de passe | Minimum simple / règles renforcées | À décider | — |
 | D-06 | Stockage et révocation des sessions | Version utilisateur / table de sessions | À décider | — |
@@ -285,6 +285,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | 4 | Validation préalable de l’envoi, limites de sujet/corps, réponses HTTP 400/413 et pagination bornée | Typecheck/build backend, 187/187 tests | Centraliser les schémas de validation des autres routes | Codex |
 | 2026-09-09 | 2 | Ajout systématique de la boîte source à la recherche d’un fil actif, avec séparation explicite de Resend | Tests ciblés IMAP et webhook réussis | Ajouter `Message-ID`, `In-Reply-To` et `References` | Codex |
 | 2026-09-10 | 2 | Métadonnées RFC 5322, corrélation ordonnée, fallback par sujet normalisé et en-têtes de réponse SMTP | 13 migrations depuis zéro, typecheck/build backend, 196/196 tests | Typage des tokens puis finalisation Réception/Envoyés | Codex |
+| 2026-09-10 | 3 | Dossiers calculés depuis les messages du fil, non-lus limités à Réception et navigation post-envoi corrigée | Typecheck/build backend, 197/197 tests, builds webmail et mobile valides | Finaliser les tokens de réponse et les scénarios de transfert | Codex |
 
 ## Journal des validations
 
@@ -299,6 +300,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-07 | Lot 4 — tranche 2 | 187/187 | Backend typecheck et build valides | Sans migration | Entrées email et pagination couvertes par intégration | Les rejets ont lieu avant création de fil et avant appel au fournisseur |
 | 2026-09-09 | Lot 2 — tranche 1 | 189/189 | Backend typecheck et build valides | Sans migration | Collisions IMAP/IMAP et IMAP/Resend couvertes | La corrélation reste imparfaite sans en-têtes standards, mais ne traverse plus les boîtes |
 | 2026-09-10 | Lot 2 — tranche 2 | 196/196 | Backend typecheck et build valides | 13/13 migrations rejouées depuis zéro | `In-Reply-To`, `References`, sujets indépendants et fallback historique couverts | Les réponses SMTP émettent et conservent les en-têtes de threading |
+| 2026-09-10 | Lot 3 — tranche 2 | 197/197 | Backend, webmail et mobile valides | 13/13 déjà validées | Fil mixte visible dans Réception et Envoyés | Le webmail ouvre les nouveaux fils directement dans Envoyés |
 
 ## Journal des incidents et régressions
 

@@ -78,6 +78,51 @@ describe('GET /api/threads — recherche, pagination, non-lu', () => {
     await cleanupOrg(fresh.organizationId)
   })
 
+  it('lists mixed conversations in both inbox and sent, with unread counts only in inbox', async () => {
+    const outboundStarted = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'contact',
+        sujet: 'Conversation initiée en sortie',
+        externalFrom: 'Client mixte',
+        externalEmail: `mixed-out-${Date.now()}@example.com`,
+        origin: 'outbound',
+        messages: {
+          create: [
+            { organizationId: org.organizationId, direction: 'outbound', fromName: 'Test User', fromEmail: 'contact@example.com', body: 'Bonjour' },
+            { organizationId: org.organizationId, direction: 'inbound', fromName: 'Client mixte', fromEmail: 'mixed@example.com', body: 'Réponse' },
+          ],
+        },
+      },
+    })
+    const inboundStarted = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'contact',
+        sujet: 'Conversation initiée en entrée',
+        externalFrom: 'Autre client',
+        externalEmail: `mixed-in-${Date.now()}@example.com`,
+        origin: 'inbound',
+        messages: {
+          create: [
+            { organizationId: org.organizationId, direction: 'inbound', fromName: 'Autre client', fromEmail: 'other@example.com', body: 'Question' },
+            { organizationId: org.organizationId, direction: 'outbound', fromName: 'Test User', fromEmail: 'contact@example.com', body: 'Réponse' },
+          ],
+        },
+      },
+    })
+
+    const inbox = await request(app).get('/api/threads?folder=inbox').set('Authorization', `Bearer ${org.token}`)
+    const sent = await request(app).get('/api/threads?folder=sent').set('Authorization', `Bearer ${org.token}`)
+    const inboxIds = inbox.body.map((thread: { id: string }) => thread.id)
+    const sentIds = sent.body.map((thread: { id: string }) => thread.id)
+
+    expect(inboxIds).toEqual(expect.arrayContaining([outboundStarted.id, inboundStarted.id]))
+    expect(sentIds).toEqual(expect.arrayContaining([outboundStarted.id, inboundStarted.id]))
+    expect(inbox.body.find((thread: { id: string }) => thread.id === outboundStarted.id).unreadCount).toBe(1)
+    expect(sent.body.find((thread: { id: string }) => thread.id === outboundStarted.id).unreadCount).toBe(0)
+  })
+
   it('marque un fil comme non lu, et respecte le contrôle d\'accès', async () => {
     const thread = await createThread(org)
     await prisma.threadMessage.create({

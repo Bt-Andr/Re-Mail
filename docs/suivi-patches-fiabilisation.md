@@ -58,7 +58,7 @@ Validation :
 
 ## Lot 1 — Réception durable et idempotente
 
-Statut : **En cours — persistance Resend et verrou local livrés**
+Statut : **En cours — durabilité et reprise validées, extraction métier restante**
 
 - [x] Définir le schéma `InboundEvent`.
 - [x] Créer la migration et régénérer Prisma Client.
@@ -77,9 +77,9 @@ Validation :
 
 - [x] Test de webhook dupliqué.
 - [x] Test de concurrence sur la création et la revendication.
-- [ ] Test de panne avant accusé de réception.
+- [x] Test de panne de persistance avant accusé de réception — réponse `500`, aucun faux ACK.
 - [x] Test de reprise après panne du handler.
-- [ ] Test de redémarrage.
+- [x] Test de redémarrage avec reprise d’un événement `pending`.
 - [x] Test de chevauchement du poller local.
 
 ## Lot 2 — Corrélation des conversations

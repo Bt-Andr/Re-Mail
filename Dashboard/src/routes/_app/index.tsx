@@ -4,6 +4,81 @@ import { Building2, MailCheck, Mailbox, MessageSquare, Users } from "lucide-reac
 import { PageHeader } from "@/components/app/page-header";
 import { KpiCard } from "@/components/app/kpi-card";
 import { SectionCard } from "@/components/app/section-card";
-import { platformRequest, type Paginated, type PlatformOrganization, type PlatformSummary } from "@/lib/platform-api";
-export const Route=createFileRoute("/_app/")({component:Overview});
-function Overview(){ const [summary,setSummary]=useState<PlatformSummary|null>(null); const [recent,setRecent]=useState<PlatformOrganization[]>([]); const [error,setError]=useState(""); useEffect(()=>{Promise.all([platformRequest<PlatformSummary>("/platform/summary"),platformRequest<Paginated<PlatformOrganization>>("/platform/organizations?pageSize=5")]).then(([s,o])=>{setSummary(s);setRecent(o.items)}).catch(e=>setError(e.message));},[]); return <div className="mx-auto max-w-[1480px]"><PageHeader title="Pilotage Re-Mail" description="Vue consolidée et opérationnelle de la plateforme."/>{error&&<p className="mb-4 text-sm text-destructive">{error}</p>}<div className="grid grid-cols-2 gap-4 lg:grid-cols-5"><KpiCard label="Organisations" value={String(summary?.organizations??0)} icon={Building2}/><KpiCard label="Utilisateurs" value={String(summary?.users??0)} icon={Users}/><KpiCard label="Conversations" value={String(summary?.threads??0)} icon={MessageSquare}/><KpiCard label="Comptes Resend" value={String(summary?.connectedResend??0)} icon={MailCheck}/><KpiCard label="Boîtes externes" value={String(summary?.externalMailboxes??0)} icon={Mailbox}/></div><div className="mt-6"><SectionCard title="Organisations récentes" bodyClassName="p-0"><table className="w-full text-sm"><tbody>{recent.map(o=><tr key={o.id} className="border-b"><td className="px-5 py-3"><Link to="/organizations/$id" params={{id:o.id}} className="font-medium hover:underline">{o.companyName||o.name}</Link><div className="text-xs text-muted-foreground">{o.slug}</div></td><td className="px-5 py-3">{o._count.users} utilisateur(s)</td><td className="px-5 py-3">{o._count.threads} conversation(s)</td><td className="px-5 py-3">{o.resendConnectedAt?"Resend connecté":"Sans Resend"}</td></tr>)}</tbody></table></SectionCard></div></div> }
+import {
+  platformRequest,
+  type Paginated,
+  type PlatformOrganization,
+  type PlatformSummary,
+} from "@/lib/platform-api";
+export const Route = createFileRoute("/_app/")({ component: Overview });
+function Overview() {
+  const [summary, setSummary] = useState<PlatformSummary | null>(null);
+  const [recent, setRecent] = useState<PlatformOrganization[]>([]);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    Promise.all([
+      platformRequest<PlatformSummary>("/platform/summary"),
+      platformRequest<Paginated<PlatformOrganization>>("/platform/organizations?pageSize=5"),
+    ])
+      .then(([s, o]) => {
+        setSummary(s);
+        setRecent(o.items);
+      })
+      .catch((e) => setError(e.message));
+  }, []);
+  return (
+    <div className="mx-auto max-w-[1480px]">
+      <PageHeader
+        title="Pilotage Re-Mail"
+        description="Vue consolidée et opérationnelle de la plateforme."
+      />
+      {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <KpiCard
+          label="Organisations"
+          value={String(summary?.organizations ?? 0)}
+          icon={Building2}
+        />
+        <KpiCard label="Utilisateurs" value={String(summary?.users ?? 0)} icon={Users} />
+        <KpiCard label="Conversations" value={String(summary?.threads ?? 0)} icon={MessageSquare} />
+        <KpiCard
+          label="Comptes Resend"
+          value={String(summary?.connectedResend ?? 0)}
+          icon={MailCheck}
+        />
+        <KpiCard
+          label="Boîtes externes"
+          value={String(summary?.externalMailboxes ?? 0)}
+          icon={Mailbox}
+        />
+      </div>
+      <div className="mt-6">
+        <SectionCard title="Organisations récentes" bodyClassName="p-0">
+          <table className="w-full text-sm">
+            <tbody>
+              {recent.map((o) => (
+                <tr key={o.id} className="border-b">
+                  <td className="px-5 py-3">
+                    <Link
+                      to="/organizations/$id"
+                      params={{ id: o.id }}
+                      className="font-medium hover:underline"
+                    >
+                      {o.companyName || o.name}
+                    </Link>
+                    <div className="text-xs text-muted-foreground">{o.slug}</div>
+                  </td>
+                  <td className="px-5 py-3">{o._count.users} utilisateur(s)</td>
+                  <td className="px-5 py-3">{o._count.threads} conversation(s)</td>
+                  <td className="px-5 py-3">
+                    {o.resendConnectedAt ? "Resend connecté" : "Sans Resend"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </SectionCard>
+      </div>
+    </div>
+  );
+}

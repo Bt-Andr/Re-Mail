@@ -22,18 +22,46 @@ export const Route = createFileRoute("/_app/transactions/$id")({
 
 function TransactionDetail() {
   const __loading = useMountLoading();
-  if (__loading) return <GenericPageSkeleton kpis={0} maxWidth={1280} />;
   const { tx } = Route.useLoaderData();
+  if (__loading) return <GenericPageSkeleton kpis={0} maxWidth={1280} />;
   const timeline = [
     { t: tx.date, label: "Transaction initiée", actor: tx.counterparty, status: "info" as const },
-    { t: new Date(new Date(tx.date).getTime() + 2000).toISOString(), label: "Validation anti-fraude", actor: "Système", status: "info" as const },
-    { t: new Date(new Date(tx.date).getTime() + 5200).toISOString(), label: "Vérification AML", actor: "Système", status: "info" as const },
-    { t: new Date(new Date(tx.date).getTime() + 12000).toISOString(), label: tx.status === "completed" ? "Compensation réussie" : tx.status === "failed" ? "Échec compensation" : "En attente de compensation", actor: "BCE Net", status: tx.status === "completed" ? "success" as const : tx.status === "failed" ? "danger" as const : "warning" as const },
+    {
+      t: new Date(new Date(tx.date).getTime() + 2000).toISOString(),
+      label: "Validation anti-fraude",
+      actor: "Système",
+      status: "info" as const,
+    },
+    {
+      t: new Date(new Date(tx.date).getTime() + 5200).toISOString(),
+      label: "Vérification AML",
+      actor: "Système",
+      status: "info" as const,
+    },
+    {
+      t: new Date(new Date(tx.date).getTime() + 12000).toISOString(),
+      label:
+        tx.status === "completed"
+          ? "Compensation réussie"
+          : tx.status === "failed"
+            ? "Échec compensation"
+            : "En attente de compensation",
+      actor: "BCE Net",
+      status:
+        tx.status === "completed"
+          ? ("success" as const)
+          : tx.status === "failed"
+            ? ("danger" as const)
+            : ("warning" as const),
+    },
   ];
 
   return (
     <div className="mx-auto max-w-[1480px]">
-      <Link to="/transactions" className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link
+        to="/transactions"
+        className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
         <ArrowLeft className="h-4 w-4" /> Toutes les transactions
       </Link>
       <PageHeader
@@ -41,8 +69,12 @@ function TransactionDetail() {
         description={`${tx.counterparty} · ${formatDate(tx.date)}`}
         actions={
           <>
-            <Button variant="outline" className="h-10"><Download className="mr-1.5 h-4 w-4" /> Reçu PDF</Button>
-            <Button variant="outline" className="h-10"><RefreshCcw className="mr-1.5 h-4 w-4" /> Rembourser</Button>
+            <Button variant="outline" className="h-10">
+              <Download className="mr-1.5 h-4 w-4" /> Reçu PDF
+            </Button>
+            <Button variant="outline" className="h-10">
+              <RefreshCcw className="mr-1.5 h-4 w-4" /> Rembourser
+            </Button>
             <Button className="h-10 bg-[var(--danger)] text-white hover:bg-[var(--danger)]/90">
               <ShieldAlert className="mr-1.5 h-4 w-4" /> Marquer suspecte
             </Button>
@@ -53,7 +85,14 @@ function TransactionDetail() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <SectionCard className="lg:col-span-2" title="Détails de l'opération">
           <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
-            <Field label="Montant" value={<span className="tabular text-2xl font-semibold">{formatMoney(tx.amount, tx.currency)}</span>} />
+            <Field
+              label="Montant"
+              value={
+                <span className="tabular text-2xl font-semibold">
+                  {formatMoney(tx.amount, tx.currency)}
+                </span>
+              }
+            />
             <Field label="Statut" value={<StatusBadge value={tx.status} />} />
             <Field label="Type" value={tx.type} />
             <Field label="Canal" value={tx.channel} />
@@ -66,10 +105,18 @@ function TransactionDetail() {
 
         <SectionCard title="Anti-fraude" description="Signaux détectés">
           <div className="space-y-3">
-            <Signal label="Vélocité 24h" value={tx.risk > 60 ? "élevée" : "normale"} ok={tx.risk <= 60} />
+            <Signal
+              label="Vélocité 24h"
+              value={tx.risk > 60 ? "élevée" : "normale"}
+              ok={tx.risk <= 60}
+            />
             <Signal label="Liste sanctions OFAC" value="aucune correspondance" ok />
             <Signal label="Géolocalisation cohérente" value="oui" ok />
-            <Signal label="Pattern de structuration" value={tx.risk > 70 ? "suspect" : "non détecté"} ok={tx.risk <= 70} />
+            <Signal
+              label="Pattern de structuration"
+              value={tx.risk > 70 ? "suspect" : "non détecté"}
+              ok={tx.risk <= 70}
+            />
             <Signal label="KYC contrepartie" value="vérifié" ok />
           </div>
         </SectionCard>
@@ -82,7 +129,9 @@ function TransactionDetail() {
               <li key={i} className="pl-5">
                 <span className="absolute -left-1.5 mt-1 h-3 w-3 rounded-full bg-[var(--brand)] ring-4 ring-background" />
                 <div className="text-sm font-medium">{s.label}</div>
-                <div className="text-xs text-muted-foreground">{formatDate(s.t)} · {s.actor}</div>
+                <div className="text-xs text-muted-foreground">
+                  {formatDate(s.t)} · {s.actor}
+                </div>
               </li>
             ))}
           </ol>
@@ -90,7 +139,7 @@ function TransactionDetail() {
 
         <SectionCard title="Payload technique" bodyClassName="p-0">
           <pre className="overflow-x-auto rounded-b-2xl bg-[var(--navy)] p-5 text-[11px] leading-relaxed text-[var(--brand)]">
-{JSON.stringify(tx, null, 2)}
+            {JSON.stringify(tx, null, 2)}
           </pre>
         </SectionCard>
       </div>
@@ -111,7 +160,13 @@ function Signal({ label, value, ok }: { label: string; value: string; ok: boolea
   return (
     <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2 text-sm">
       <span className="text-muted-foreground">{label}</span>
-      <span className={ok ? "font-medium text-[var(--success)]" : "inline-flex items-center gap-1 font-medium text-[var(--danger)]"}>
+      <span
+        className={
+          ok
+            ? "font-medium text-[var(--success)]"
+            : "inline-flex items-center gap-1 font-medium text-[var(--danger)]"
+        }
+      >
         {!ok && <AlertTriangle className="h-3.5 w-3.5" />}
         {value}
       </span>

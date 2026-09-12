@@ -1,8 +1,10 @@
 import { cn } from "@/lib/utils";
 
 const STYLES: Record<string, string> = {
-  success: "bg-[var(--success-soft)] text-[var(--success)] ring-1 ring-inset ring-[var(--success)]/20",
-  warning: "bg-[var(--warning-soft)] text-[var(--warning)] ring-1 ring-inset ring-[var(--warning)]/25",
+  success:
+    "bg-[var(--success-soft)] text-[var(--success)] ring-1 ring-inset ring-[var(--success)]/20",
+  warning:
+    "bg-[var(--warning-soft)] text-[var(--warning)] ring-1 ring-inset ring-[var(--warning)]/25",
   danger: "bg-[var(--danger-soft)] text-[var(--danger)] ring-1 ring-inset ring-[var(--danger)]/25",
   info: "bg-[var(--info-soft)] text-[var(--info)] ring-1 ring-inset ring-[var(--info)]/20",
   neutral: "bg-muted text-muted-foreground ring-1 ring-inset ring-border",

@@ -7,7 +7,16 @@ import { ALERTS, CUSTOMERS, kycMonthlySeries } from "@/lib/mock/data";
 import { formatDateShort, relativeTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, ShieldAlert, FileSearch, FileWarning } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { GenericPageSkeleton } from "@/components/app/page-skeletons";
 import { useMountLoading } from "@/hooks/use-simulated-loading";
@@ -21,7 +30,9 @@ function CompliancePage() {
   const __loading = useMountLoading();
   if (__loading) return <GenericPageSkeleton kpis={4} withChart maxWidth={1480} />;
   const kycQueue = CUSTOMERS.filter((c) => c.kyc === "pending" || c.kyc === "review").slice(0, 12);
-  const alerts = ALERTS.filter((a) => a.type === "aml" || a.type === "sanction" || a.type === "kyc").slice(0, 10);
+  const alerts = ALERTS.filter(
+    (a) => a.type === "aml" || a.type === "sanction" || a.type === "kyc",
+  ).slice(0, 10);
   const kycData = kycMonthlySeries();
 
   return (
@@ -32,8 +43,18 @@ function CompliancePage() {
         actions={<Button>Lancer un screening</Button>}
       />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="KYC à traiter" value={String(kycQueue.length)} icon={FileSearch} hint="Délai moyen 18 min" />
-        <KpiCard label="Alertes AML ouvertes" value={String(alerts.filter((a) => a.status === "open").length)} icon={ShieldAlert} delta={-4.2} />
+        <KpiCard
+          label="KYC à traiter"
+          value={String(kycQueue.length)}
+          icon={FileSearch}
+          hint="Délai moyen 18 min"
+        />
+        <KpiCard
+          label="Alertes AML ouvertes"
+          value={String(alerts.filter((a) => a.status === "open").length)}
+          icon={ShieldAlert}
+          delta={-4.2}
+        />
         <KpiCard label="Hits sanctions" value="6" icon={FileWarning} delta={1.0} />
         <KpiCard label="Taux conformité" value="98,7 %" icon={ShieldCheck} delta={0.3} />
       </div>
@@ -47,11 +68,29 @@ function CompliancePage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
                   <YAxis tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "1px solid var(--border)",
+                      fontSize: 12,
+                    }}
+                  />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="verified" stackId="a" fill="var(--brand)" name="Validés" radius={[0, 0, 0, 0]} />
+                  <Bar
+                    dataKey="verified"
+                    stackId="a"
+                    fill="var(--brand)"
+                    name="Validés"
+                    radius={[0, 0, 0, 0]}
+                  />
                   <Bar dataKey="pending" stackId="a" fill="var(--warning)" name="En attente" />
-                  <Bar dataKey="rejected" stackId="a" fill="var(--danger)" name="Refusés" radius={[6, 6, 0, 0]} />
+                  <Bar
+                    dataKey="rejected"
+                    stackId="a"
+                    fill="var(--danger)"
+                    name="Refusés"
+                    radius={[6, 6, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -64,7 +103,9 @@ function CompliancePage() {
               <li key={c.id} className="flex items-center justify-between px-5 py-3 text-sm">
                 <div>
                   <div className="font-medium">{c.name}</div>
-                  <div className="text-xs text-muted-foreground">{c.id} · depuis {formatDateShort(c.joined)}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {c.id} · depuis {formatDateShort(c.joined)}
+                  </div>
                 </div>
                 <StatusBadge value={c.kyc} />
               </li>
@@ -95,8 +136,12 @@ function CompliancePage() {
                   </td>
                   <td className="px-5 py-3">{a.customer}</td>
                   <td className="px-5 py-3 uppercase text-muted-foreground">{a.type}</td>
-                  <td className="px-5 py-3"><StatusBadge value={a.severity} /></td>
-                  <td className="px-5 py-3"><StatusBadge value={a.status} /></td>
+                  <td className="px-5 py-3">
+                    <StatusBadge value={a.severity} />
+                  </td>
+                  <td className="px-5 py-3">
+                    <StatusBadge value={a.status} />
+                  </td>
                   <td className="px-5 py-3 text-muted-foreground">{relativeTime(a.date)}</td>
                 </tr>
               ))}

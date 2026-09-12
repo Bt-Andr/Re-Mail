@@ -23,16 +23,27 @@ function AuditPage() {
   const errors = AUDIT_LOGS.filter((l) => l.outcome === "error").length;
   return (
     <div className="mx-auto max-w-[1480px]">
-      <PageHeader title="Journal d'audit" description="Traçabilité complète des actions du back-office." />
+      <PageHeader
+        title="Journal d'audit"
+        description="Traçabilité complète des actions du back-office."
+      />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Événements 24h" value={String(AUDIT_LOGS.length)} icon={ScrollText} />
-        <KpiCard label="Succès" value={String(AUDIT_LOGS.length - denied - errors)} icon={ShieldCheck} delta={0.4} />
+        <KpiCard
+          label="Succès"
+          value={String(AUDIT_LOGS.length - denied - errors)}
+          icon={ShieldCheck}
+          delta={0.4}
+        />
         <KpiCard label="Refusés" value={String(denied)} icon={AlertOctagon} delta={1.1} />
         <KpiCard label="Acteurs actifs" value="24" icon={UserCheck} />
       </div>
 
       <div className="mt-6">
-        <SectionCard action={<DataTableFilters placeholder="Acteur, action, cible…" />} bodyClassName="p-0">
+        <SectionCard
+          action={<DataTableFilters placeholder="Acteur, action, cible…" />}
+          bodyClassName="p-0"
+        >
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
@@ -54,7 +65,9 @@ function AuditPage() {
                   <td className="px-5 py-3">{l.action}</td>
                   <td className="px-5 py-3 tabular text-muted-foreground">{l.target}</td>
                   <td className="px-5 py-3 tabular text-muted-foreground">{l.ip}</td>
-                  <td className="px-5 py-3"><StatusBadge value={l.outcome} /></td>
+                  <td className="px-5 py-3">
+                    <StatusBadge value={l.outcome} />
+                  </td>
                 </tr>
               ))}
             </tbody>

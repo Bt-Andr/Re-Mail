@@ -6,7 +6,15 @@ import { KpiCard } from "@/components/app/kpi-card";
 import { ALERTS, TRANSACTIONS } from "@/lib/mock/data";
 import { formatMoney, relativeTime } from "@/lib/format";
 import { AlertTriangle, ShieldAlert, TrendingDown, Activity } from "lucide-react";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import {
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts";
 
 import { GenericPageSkeleton } from "@/components/app/page-skeletons";
 import { useMountLoading } from "@/hooks/use-simulated-loading";
@@ -23,15 +31,23 @@ function RiskPage() {
   const flagged = TRANSACTIONS.filter((t) => t.status === "flagged" || t.risk > 75).slice(0, 10);
   const series = Array.from({ length: 14 }, (_, i) => ({
     day: `J-${13 - i}`,
-    score: Math.round(40 + Math.sin(i) * 12 + (i / 3)),
+    score: Math.round(40 + Math.sin(i) * 12 + i / 3),
     blocked: Math.round(8 + Math.cos(i / 2) * 4 + (i % 3)),
   }));
 
   return (
     <div className="mx-auto max-w-[1480px]">
-      <PageHeader title="Risque & Fraude" description="Détection en temps réel et scoring comportemental." />
+      <PageHeader
+        title="Risque & Fraude"
+        description="Détection en temps réel et scoring comportemental."
+      />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Alertes fraude" value={String(fraudAlerts.length)} icon={ShieldAlert} delta={5.3} />
+        <KpiCard
+          label="Alertes fraude"
+          value={String(fraudAlerts.length)}
+          icon={ShieldAlert}
+          delta={5.3}
+        />
         <KpiCard label="Tx bloquées 24h" value="42" icon={AlertTriangle} delta={-2.1} />
         <KpiCard label="Perte évitée" value="€ 384k" icon={TrendingDown} delta={12.4} />
         <KpiCard label="Score risque moyen" value="38/100" icon={Activity} />
@@ -46,9 +62,29 @@ function RiskPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
                   <YAxis tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 12 }} />
-                  <Line type="monotone" dataKey="score" stroke="var(--warning)" strokeWidth={2} dot={false} name="Score moyen" />
-                  <Line type="monotone" dataKey="blocked" stroke="var(--danger)" strokeWidth={2} dot={false} name="Blocages" />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "1px solid var(--border)",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="score"
+                    stroke="var(--warning)"
+                    strokeWidth={2}
+                    dot={false}
+                    name="Score moyen"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="blocked"
+                    stroke="var(--danger)"
+                    strokeWidth={2}
+                    dot={false}
+                    name="Blocages"
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -64,7 +100,10 @@ function RiskPage() {
               { name: "Multiples cartes même device", state: "active" },
               { name: "Pays liste FATF gris", state: "active" },
             ].map((r) => (
-              <li key={r.name} className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2">
+              <li
+                key={r.name}
+                className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2"
+              >
                 <span>{r.name}</span>
                 <StatusBadge value="active" />
               </li>
@@ -95,13 +134,20 @@ function RiskPage() {
                   <td className="px-5 py-3">
                     <span className="inline-flex items-center gap-2">
                       <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full bg-[var(--danger)]" style={{ width: `${t.risk}%` }} />
+                        <div
+                          className="h-full bg-[var(--danger)]"
+                          style={{ width: `${t.risk}%` }}
+                        />
                       </div>
                       <span className="tabular text-xs">{t.risk}</span>
                     </span>
                   </td>
-                  <td className="px-5 py-3"><StatusBadge value={t.status} /></td>
-                  <td className="px-5 py-3 text-right tabular font-medium">{formatMoney(t.amount, t.currency)}</td>
+                  <td className="px-5 py-3">
+                    <StatusBadge value={t.status} />
+                  </td>
+                  <td className="px-5 py-3 text-right tabular font-medium">
+                    {formatMoney(t.amount, t.currency)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -116,7 +162,9 @@ function RiskPage() {
               <li key={a.id} className="flex items-center justify-between px-5 py-3 text-sm">
                 <div>
                   <div className="font-medium">{a.reason}</div>
-                  <div className="text-xs text-muted-foreground">{a.customer} · {relativeTime(a.date)}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {a.customer} · {relativeTime(a.date)}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusBadge value={a.severity} />

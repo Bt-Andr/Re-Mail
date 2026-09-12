@@ -14,12 +14,36 @@ export const Route = createFileRoute("/_app/reports")({
 });
 
 const REPORTS = [
-  { id: "RPT-2024-06", name: "Reporting prudentiel COREP", period: "Juin 2026", size: "4,2 Mo", format: "XBRL" },
-  { id: "RPT-AML-06", name: "Déclarations TRACFIN", period: "Juin 2026", size: "812 ko", format: "PDF" },
+  {
+    id: "RPT-2024-06",
+    name: "Reporting prudentiel COREP",
+    period: "Juin 2026",
+    size: "4,2 Mo",
+    format: "XBRL",
+  },
+  {
+    id: "RPT-AML-06",
+    name: "Déclarations TRACFIN",
+    period: "Juin 2026",
+    size: "812 ko",
+    format: "PDF",
+  },
   { id: "RPT-IFRS9", name: "Provisions IFRS 9", period: "Q2 2026", size: "2,1 Mo", format: "XLSX" },
-  { id: "RPT-LIQ", name: "Ratio LCR quotidien", period: "31 mai 2026", size: "126 ko", format: "CSV" },
+  {
+    id: "RPT-LIQ",
+    name: "Ratio LCR quotidien",
+    period: "31 mai 2026",
+    size: "126 ko",
+    format: "CSV",
+  },
   { id: "RPT-FATCA", name: "FATCA / CRS", period: "Annuel 2025", size: "8,4 Mo", format: "XML" },
-  { id: "RPT-PNB", name: "Produit net bancaire", period: "Mai 2026", size: "640 ko", format: "PDF" },
+  {
+    id: "RPT-PNB",
+    name: "Produit net bancaire",
+    period: "Mai 2026",
+    size: "640 ko",
+    format: "PDF",
+  },
 ];
 
 const PNB = [
@@ -36,7 +60,11 @@ function ReportsPage() {
   if (__loading) return <GenericPageSkeleton kpis={4} maxWidth={1480} />;
   return (
     <div className="mx-auto max-w-[1480px]">
-      <PageHeader title="Rapports" description="Rapports réglementaires, financiers et exports comptables." actions={<Button>Nouveau rapport</Button>} />
+      <PageHeader
+        title="Rapports"
+        description="Rapports réglementaires, financiers et exports comptables."
+        actions={<Button>Nouveau rapport</Button>}
+      />
 
       <SectionCard title="Produit net bancaire" description="En millions d'€ — 6 derniers mois">
         <div className="h-[280px]">
@@ -45,10 +73,18 @@ function ReportsPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="mois" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
               <YAxis tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
-              <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 12 }} />
+              <Tooltip
+                contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 12 }}
+              />
               <Bar dataKey="marge" stackId="a" fill="var(--navy)" name="Marge nette" />
               <Bar dataKey="commissions" stackId="a" fill="var(--brand)" name="Commissions" />
-              <Bar dataKey="divers" stackId="a" fill="var(--info)" name="Divers" radius={[6, 6, 0, 0]} />
+              <Bar
+                dataKey="divers"
+                stackId="a"
+                fill="var(--info)"
+                name="Divers"
+                radius={[6, 6, 0, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -65,12 +101,18 @@ function ReportsPage() {
                   </div>
                   <div>
                     <div className="text-sm font-medium">{r.name}</div>
-                    <div className="text-xs text-muted-foreground">{r.id} · {r.period} · {r.size}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {r.id} · {r.period} · {r.size}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="rounded-md border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{r.format}</span>
-                  <Button variant="outline" size="sm"><Download className="mr-1.5 h-3.5 w-3.5" /> Télécharger</Button>
+                  <span className="rounded-md border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    {r.format}
+                  </span>
+                  <Button variant="outline" size="sm">
+                    <Download className="mr-1.5 h-3.5 w-3.5" /> Télécharger
+                  </Button>
                 </div>
               </li>
             ))}

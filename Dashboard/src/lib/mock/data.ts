@@ -31,18 +31,97 @@ export interface Transaction {
   risk: number;
 }
 
-const FIRST = ["Léa", "Marc", "Sofia", "Adama", "Yuki", "Hugo", "Amina", "Noah", "Clara", "Omar", "Inès", "Lucas", "Fatou", "Mateo", "Zara", "Elias"];
-const LAST = ["Martin", "Diallo", "Petit", "Garcia", "Nakamura", "Touré", "Lambert", "Silva", "Bernard", "Okafor", "Rossi", "Dubois", "Mendes", "Kovač"];
-const COMPANIES = ["Lumen SAS", "Aether Capital", "Solaris Trade", "Northwind Bank", "Helios Logistics", "Vega Imports", "Atlas Cloud", "Borealis Energy"];
-const COUNTRIES = ["FR", "DE", "ES", "GB", "US", "SN", "CI", "MA", "BE", "NL", "IT", "PT", "JP", "BR"];
-const CITIES: Record<string, string> = { FR: "Paris", DE: "Berlin", ES: "Madrid", GB: "Londres", US: "New York", SN: "Dakar", CI: "Abidjan", MA: "Casablanca", BE: "Bruxelles", NL: "Amsterdam", IT: "Milan", PT: "Lisbonne", JP: "Tokyo", BR: "São Paulo" };
+const FIRST = [
+  "Léa",
+  "Marc",
+  "Sofia",
+  "Adama",
+  "Yuki",
+  "Hugo",
+  "Amina",
+  "Noah",
+  "Clara",
+  "Omar",
+  "Inès",
+  "Lucas",
+  "Fatou",
+  "Mateo",
+  "Zara",
+  "Elias",
+];
+const LAST = [
+  "Martin",
+  "Diallo",
+  "Petit",
+  "Garcia",
+  "Nakamura",
+  "Touré",
+  "Lambert",
+  "Silva",
+  "Bernard",
+  "Okafor",
+  "Rossi",
+  "Dubois",
+  "Mendes",
+  "Kovač",
+];
+const COMPANIES = [
+  "Lumen SAS",
+  "Aether Capital",
+  "Solaris Trade",
+  "Northwind Bank",
+  "Helios Logistics",
+  "Vega Imports",
+  "Atlas Cloud",
+  "Borealis Energy",
+];
+const COUNTRIES = [
+  "FR",
+  "DE",
+  "ES",
+  "GB",
+  "US",
+  "SN",
+  "CI",
+  "MA",
+  "BE",
+  "NL",
+  "IT",
+  "PT",
+  "JP",
+  "BR",
+];
+const CITIES: Record<string, string> = {
+  FR: "Paris",
+  DE: "Berlin",
+  ES: "Madrid",
+  GB: "Londres",
+  US: "New York",
+  SN: "Dakar",
+  CI: "Abidjan",
+  MA: "Casablanca",
+  BE: "Bruxelles",
+  NL: "Amsterdam",
+  IT: "Milan",
+  PT: "Lisbonne",
+  JP: "Tokyo",
+  BR: "São Paulo",
+};
 
 function randomName() {
   return rand() > 0.4 ? `${pick(FIRST)} ${pick(LAST)}` : pick(COMPANIES);
 }
 
 function genTx(i: number): Transaction {
-  const status = pick<TxStatus>(["completed", "completed", "completed", "completed", "pending", "failed", "flagged"]);
+  const status = pick<TxStatus>([
+    "completed",
+    "completed",
+    "completed",
+    "completed",
+    "pending",
+    "failed",
+    "flagged",
+  ]);
   const type = pick<TxType>(["transfer", "card", "direct_debit", "swift", "fx", "deposit"]);
   const channel = pick<TxChannel>(["mobile", "web", "api", "agency", "card"]);
   const currency = pick<"EUR" | "USD" | "XOF" | "GBP">(["EUR", "EUR", "EUR", "USD", "XOF", "GBP"]);
@@ -297,7 +376,20 @@ export const TX_TYPE_BREAKDOWN = [
 ];
 
 export function kycMonthlySeries() {
-  const months = ["Juil", "Août", "Sep", "Oct", "Nov", "Déc", "Jan", "Fév", "Mar", "Avr", "Mai", "Juin"];
+  const months = [
+    "Juil",
+    "Août",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Déc",
+    "Jan",
+    "Fév",
+    "Mar",
+    "Avr",
+    "Mai",
+    "Juin",
+  ];
   return months.map((m, i) => {
     const base = 320 + i * 12;
     return {
@@ -344,9 +436,44 @@ export const TOP_CORRIDORS = [
 ];
 
 export const NOTIFICATIONS = [
-  { id: "N1", title: "Alerte AML critique", body: "Pattern de structuration détecté sur CUS-1042", time: new Date(Date.now() - 5 * 60000).toISOString(), unread: true, severity: "critical" as const },
-  { id: "N2", title: "SLA support dépassé", body: "12 tickets ouverts depuis +24h", time: new Date(Date.now() - 28 * 60000).toISOString(), unread: true, severity: "high" as const },
-  { id: "N3", title: "Nouveau virement SWIFT > 100k€", body: "Approbation requise — REF-394820", time: new Date(Date.now() - 2 * 3600000).toISOString(), unread: true, severity: "medium" as const },
-  { id: "N4", title: "Rapport mensuel conformité prêt", body: "Export disponible dans Reports", time: new Date(Date.now() - 5 * 3600000).toISOString(), unread: false, severity: "low" as const },
-  { id: "N5", title: "Maintenance planifiée", body: "Dimanche 02:00 — passerelle SWIFT", time: new Date(Date.now() - 26 * 3600000).toISOString(), unread: false, severity: "low" as const },
+  {
+    id: "N1",
+    title: "Alerte AML critique",
+    body: "Pattern de structuration détecté sur CUS-1042",
+    time: new Date(Date.now() - 5 * 60000).toISOString(),
+    unread: true,
+    severity: "critical" as const,
+  },
+  {
+    id: "N2",
+    title: "SLA support dépassé",
+    body: "12 tickets ouverts depuis +24h",
+    time: new Date(Date.now() - 28 * 60000).toISOString(),
+    unread: true,
+    severity: "high" as const,
+  },
+  {
+    id: "N3",
+    title: "Nouveau virement SWIFT > 100k€",
+    body: "Approbation requise — REF-394820",
+    time: new Date(Date.now() - 2 * 3600000).toISOString(),
+    unread: true,
+    severity: "medium" as const,
+  },
+  {
+    id: "N4",
+    title: "Rapport mensuel conformité prêt",
+    body: "Export disponible dans Reports",
+    time: new Date(Date.now() - 5 * 3600000).toISOString(),
+    unread: false,
+    severity: "low" as const,
+  },
+  {
+    id: "N5",
+    title: "Maintenance planifiée",
+    body: "Dimanche 02:00 — passerelle SWIFT",
+    time: new Date(Date.now() - 26 * 3600000).toISOString(),
+    unread: false,
+    severity: "low" as const,
+  },
 ];

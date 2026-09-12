@@ -33,7 +33,10 @@ function SupportPage() {
       </div>
 
       <div className="mt-6">
-        <SectionCard action={<DataTableFilters placeholder="Sujet, client, ID…" />} bodyClassName="p-0">
+        <SectionCard
+          action={<DataTableFilters placeholder="Sujet, client, ID…" />}
+          bodyClassName="p-0"
+        >
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
@@ -55,8 +58,12 @@ function SupportPage() {
                   </td>
                   <td className="px-5 py-3">{t.customer}</td>
                   <td className="px-5 py-3 capitalize text-muted-foreground">{t.channel}</td>
-                  <td className="px-5 py-3"><StatusBadge value={t.priority} /></td>
-                  <td className="px-5 py-3"><StatusBadge value={t.status} /></td>
+                  <td className="px-5 py-3">
+                    <StatusBadge value={t.priority} />
+                  </td>
+                  <td className="px-5 py-3">
+                    <StatusBadge value={t.status} />
+                  </td>
                   <td className="px-5 py-3 text-muted-foreground">{t.assignee}</td>
                   <td className="px-5 py-3 text-muted-foreground">{relativeTime(t.date)}</td>
                 </tr>

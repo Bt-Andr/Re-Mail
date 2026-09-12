@@ -1,7 +1,7 @@
 # Re-Mail — Admin (back-office plateforme)
 
 Dashboard d'administration **cross-tenant** de la plateforme Re-Mail (à distinguer
-de `web/`, qui est le dashboard *par organisation*). Il n'existait jusqu'ici
+de `web/`, qui est le dashboard _par organisation_). Il n'existait jusqu'ici
 aucun outil pour opérer la plateforme au-delà d'une organisation — c'est le rôle
 de cette app une fois branchée.
 

@@ -37,7 +37,11 @@ export function CardsPage() {
       <PageHeader
         title="Cartes"
         description="Émission, plafonds et gestion des cartes bancaires."
-        actions={<Button><Plus className="mr-2 h-4 w-4" /> Émettre une carte</Button>}
+        actions={
+          <Button>
+            <Plus className="mr-2 h-4 w-4" /> Émettre une carte
+          </Button>
+        }
       />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Cartes émises" value={String(CARDS.length)} icon={CreditCard} />
@@ -48,9 +52,14 @@ export function CardsPage() {
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {CARDS.slice(0, 6).map((c) => (
-          <div key={c.id} className="rounded-2xl border bg-[var(--navy)] p-5 text-[var(--navy-foreground)]">
+          <div
+            key={c.id}
+            className="rounded-2xl border bg-[var(--navy)] p-5 text-[var(--navy-foreground)]"
+          >
             <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wider text-white/60">{c.scheme} · {c.type}</span>
+              <span className="text-xs uppercase tracking-wider text-white/60">
+                {c.scheme} · {c.type}
+              </span>
               <Wifi className="h-4 w-4 text-white/70" />
             </div>
             <p className="mt-8 tabular text-lg font-medium">•••• •••• •••• {c.last4}</p>
@@ -81,13 +90,23 @@ export function CardsPage() {
             <tbody>
               {CARDS.map((c) => (
                 <tr key={c.id} className="border-b hover:bg-muted/30">
-                  <td className="px-5 py-3 tabular">{c.id} · •••{c.last4}</td>
+                  <td className="px-5 py-3 tabular">
+                    {c.id} · •••{c.last4}
+                  </td>
                   <td className="px-5 py-3">{c.holder}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{c.scheme} {c.type}</td>
-                  <td className="px-5 py-3"><StatusBadge value={c.status} /></td>
-                  <td className="px-5 py-3 text-right tabular">{c.monthly} € / {c.limit} €</td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    {c.scheme} {c.type}
+                  </td>
+                  <td className="px-5 py-3">
+                    <StatusBadge value={c.status} />
+                  </td>
+                  <td className="px-5 py-3 text-right tabular">
+                    {c.monthly} € / {c.limit} €
+                  </td>
                   <td className="px-5 py-3 text-right">
-                    <Button size="sm" variant="ghost"><Lock className="h-3.5 w-3.5" /></Button>
+                    <Button size="sm" variant="ghost">
+                      <Lock className="h-3.5 w-3.5" />
+                    </Button>
                   </td>
                 </tr>
               ))}

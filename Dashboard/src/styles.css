@@ -78,25 +78,25 @@
   --radius: 0.75rem; /* 12px -> cards 16px via radius-xl */
 
   /* Surfaces */
-  --background: oklch(0.985 0.002 247);   /* neutral.50 #F9FAFB */
-  --foreground: oklch(0.18 0.03 260);     /* neutral.900 #101828 */
+  --background: oklch(0.985 0.002 247); /* neutral.50 #F9FAFB */
+  --foreground: oklch(0.18 0.03 260); /* neutral.900 #101828 */
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.18 0.03 260);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.18 0.03 260);
 
   /* Brand */
-  --navy: oklch(0.24 0.09 268);           /* #0D2251 */
+  --navy: oklch(0.24 0.09 268); /* #0D2251 */
   --navy-foreground: oklch(0.985 0.002 247);
-  --brand: oklch(0.82 0.22 153);          /* #02ED77 */
+  --brand: oklch(0.82 0.22 153); /* #02ED77 */
   --brand-foreground: oklch(0.18 0.03 260);
-  --brand-soft: oklch(0.97 0.05 153);     /* #E8FFF3 */
+  --brand-soft: oklch(0.97 0.05 153); /* #E8FFF3 */
 
   /* Primary = navy (used by shadcn defaults) */
   --primary: oklch(0.24 0.09 268);
   --primary-foreground: oklch(0.985 0.002 247);
 
-  --secondary: oklch(0.97 0.005 247);     /* neutral.100 */
+  --secondary: oklch(0.97 0.005 247); /* neutral.100 */
   --secondary-foreground: oklch(0.27 0.03 260);
 
   --muted: oklch(0.97 0.005 247);
@@ -106,35 +106,35 @@
   --accent-foreground: oklch(0.24 0.09 268);
 
   /* Semantics */
-  --success: oklch(0.7 0.17 152);         /* #12B76A */
+  --success: oklch(0.7 0.17 152); /* #12B76A */
   --success-foreground: oklch(1 0 0);
-  --success-soft: oklch(0.97 0.05 152);   /* #ECFDF3 */
-  --warning: oklch(0.77 0.17 65);         /* #F79009 */
+  --success-soft: oklch(0.97 0.05 152); /* #ECFDF3 */
+  --warning: oklch(0.77 0.17 65); /* #F79009 */
   --warning-foreground: oklch(0.2 0.05 65);
-  --warning-soft: oklch(0.98 0.04 80);    /* #FFFAEB */
-  --danger: oklch(0.65 0.22 25);          /* #F04438 */
+  --warning-soft: oklch(0.98 0.04 80); /* #FFFAEB */
+  --danger: oklch(0.65 0.22 25); /* #F04438 */
   --danger-foreground: oklch(1 0 0);
-  --danger-soft: oklch(0.97 0.03 25);     /* #FEF3F2 */
-  --info: oklch(0.66 0.17 245);           /* #2E90FA */
+  --danger-soft: oklch(0.97 0.03 25); /* #FEF3F2 */
+  --info: oklch(0.66 0.17 245); /* #2E90FA */
   --info-foreground: oklch(1 0 0);
-  --info-soft: oklch(0.97 0.03 245);      /* #EFF8FF */
+  --info-soft: oklch(0.97 0.03 245); /* #EFF8FF */
 
   --destructive: var(--danger);
   --destructive-foreground: var(--danger-foreground);
 
-  --border: oklch(0.92 0.005 247);        /* neutral.200 */
+  --border: oklch(0.92 0.005 247); /* neutral.200 */
   --input: oklch(0.92 0.005 247);
   --ring: oklch(0.7 0.18 152);
 
   /* Charts — navy → green → semantic mix */
-  --chart-1: oklch(0.7 0.18 152);   /* green */
-  --chart-2: oklch(0.45 0.13 268);  /* indigo navy */
-  --chart-3: oklch(0.66 0.17 245);  /* info blue */
-  --chart-4: oklch(0.77 0.17 65);   /* amber */
-  --chart-5: oklch(0.65 0.22 25);   /* danger red */
+  --chart-1: oklch(0.7 0.18 152); /* green */
+  --chart-2: oklch(0.45 0.13 268); /* indigo navy */
+  --chart-3: oklch(0.66 0.17 245); /* info blue */
+  --chart-4: oklch(0.77 0.17 65); /* amber */
+  --chart-5: oklch(0.65 0.22 25); /* danger red */
 
   /* Sidebar */
-  --sidebar: oklch(0.24 0.09 268);              /* navy */
+  --sidebar: oklch(0.24 0.09 268); /* navy */
   --sidebar-foreground: oklch(0.96 0.01 247);
   --sidebar-primary: oklch(0.82 0.22 153);
   --sidebar-primary-foreground: oklch(0.18 0.03 260);
@@ -163,7 +163,11 @@
     font-feature-settings: "cv11", "ss01";
   }
 
-  h1, h2, h3, h4, h5 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5 {
     letter-spacing: -0.01em;
   }
 

@@ -49,7 +49,9 @@ function RolesPage() {
               <tr>
                 <th className="px-5 py-3 font-medium">Permission</th>
                 {ROLES.map((r) => (
-                  <th key={r.id} className="px-3 py-3 text-center font-medium">{r.label}</th>
+                  <th key={r.id} className="px-3 py-3 text-center font-medium">
+                    {r.label}
+                  </th>
                 ))}
               </tr>
             </thead>

@@ -6,7 +6,15 @@ import { KpiCard } from "@/components/app/kpi-card";
 import { CUSTOMERS, ACCOUNTS, TRANSACTIONS } from "@/lib/mock/data";
 import { formatMoney, formatDate, formatDateShort } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Wallet, ShieldCheck, AlertTriangle, ArrowLeftRight, Mail, Phone, MapPin } from "lucide-react";
+import {
+  Wallet,
+  ShieldCheck,
+  AlertTriangle,
+  ArrowLeftRight,
+  Mail,
+  Phone,
+  MapPin,
+} from "lucide-react";
 
 import { GenericPageSkeleton } from "@/components/app/page-skeletons";
 import { useMountLoading } from "@/hooks/use-simulated-loading";
@@ -18,8 +26,8 @@ export const Route = createFileRoute("/_app/customers/$id")({
 
 function CustomerDetail() {
   const __loading = useMountLoading();
-  if (__loading) return <GenericPageSkeleton kpis={0} maxWidth={1280} />;
   const { id } = Route.useParams();
+  if (__loading) return <GenericPageSkeleton kpis={0} maxWidth={1280} />;
   const c = CUSTOMERS.find((x) => x.id === id);
   if (!c) throw notFound();
   const accounts = ACCOUNTS.filter((a) => a.customerId === c.id);
@@ -43,7 +51,12 @@ function CustomerDetail() {
             <KpiCard label="Solde global" value={formatMoney(c.balance)} icon={Wallet} />
             <KpiCard label="Comptes" value={String(accounts.length)} icon={ArrowLeftRight} />
             <KpiCard label="KYC" value={c.kyc} icon={ShieldCheck} />
-            <KpiCard label="Score risque" value={`${c.riskScore}/100`} icon={AlertTriangle} delta={c.riskScore > 50 ? -1.2 : 0.5} />
+            <KpiCard
+              label="Score risque"
+              value={`${c.riskScore}/100`}
+              icon={AlertTriangle}
+              delta={c.riskScore > 50 ? -1.2 : 0.5}
+            />
           </div>
 
           <SectionCard title="Comptes du client" bodyClassName="p-0">
@@ -64,8 +77,12 @@ function CustomerDetail() {
                       <div className="tabular text-xs text-muted-foreground">{a.iban}</div>
                     </td>
                     <td className="px-5 py-3 capitalize text-muted-foreground">{a.type}</td>
-                    <td className="px-5 py-3"><StatusBadge value={a.status} /></td>
-                    <td className="px-5 py-3 text-right tabular font-medium">{formatMoney(a.balance, a.currency)}</td>
+                    <td className="px-5 py-3">
+                      <StatusBadge value={a.status} />
+                    </td>
+                    <td className="px-5 py-3 text-right tabular font-medium">
+                      {formatMoney(a.balance, a.currency)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -88,11 +105,21 @@ function CustomerDetail() {
                   <tr key={t.id} className="border-b hover:bg-muted/30">
                     <td className="px-5 py-3 text-muted-foreground">{formatDateShort(t.date)}</td>
                     <td className="px-5 py-3">
-                      <Link to="/transactions/$id" params={{ id: t.id }} className="hover:text-[var(--success)]">{t.counterparty}</Link>
+                      <Link
+                        to="/transactions/$id"
+                        params={{ id: t.id }}
+                        className="hover:text-[var(--success)]"
+                      >
+                        {t.counterparty}
+                      </Link>
                     </td>
                     <td className="px-5 py-3 capitalize text-muted-foreground">{t.type}</td>
-                    <td className="px-5 py-3"><StatusBadge value={t.status} /></td>
-                    <td className="px-5 py-3 text-right tabular font-medium">{formatMoney(t.amount, t.currency)}</td>
+                    <td className="px-5 py-3">
+                      <StatusBadge value={t.status} />
+                    </td>
+                    <td className="px-5 py-3 text-right tabular font-medium">
+                      {formatMoney(t.amount, t.currency)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -103,16 +130,24 @@ function CustomerDetail() {
         <div className="space-y-6">
           <SectionCard title="Contact">
             <ul className="space-y-3 text-sm">
-              <li className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /> {c.email}</li>
-              <li className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> {c.phone}</li>
-              <li className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground" /> {c.city}, {c.country}</li>
+              <li className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-muted-foreground" /> {c.email}
+              </li>
+              <li className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-muted-foreground" /> {c.phone}
+              </li>
+              <li className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" /> {c.city}, {c.country}
+              </li>
             </ul>
           </SectionCard>
 
           <SectionCard title="Conformité">
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <dt className="text-muted-foreground">Statut KYC</dt>
-              <dd><StatusBadge value={c.kyc} /></dd>
+              <dd>
+                <StatusBadge value={c.kyc} />
+              </dd>
               <dt className="text-muted-foreground">Segment</dt>
               <dd className="capitalize">{c.segment}</dd>
               <dt className="text-muted-foreground">Score risque</dt>

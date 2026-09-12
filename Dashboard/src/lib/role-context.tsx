@@ -1,13 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 
-export type Role =
-  | "admin"
-  | "operations"
-  | "compliance"
-  | "audit"
-  | "support"
-  | "risk"
-  | "finance";
+export type Role = "admin" | "operations" | "compliance" | "audit" | "support" | "risk" | "finance";
 
 export const ROLES: { id: Role; label: string; description: string }[] = [
   { id: "admin", label: "Administrateur", description: "Accès complet" },
@@ -36,7 +29,16 @@ export function useRole() {
 export function canAccess(role: Role, area: string): boolean {
   const map: Record<Role, string[]> = {
     admin: ["*"],
-    operations: ["overview", "transactions", "accounts", "customers", "transfers", "cards", "support", "notifications"],
+    operations: [
+      "overview",
+      "transactions",
+      "accounts",
+      "customers",
+      "transfers",
+      "cards",
+      "support",
+      "notifications",
+    ],
     compliance: ["overview", "compliance", "customers", "audit", "notifications"],
     audit: ["overview", "audit", "reports", "transactions", "users", "notifications"],
     support: ["overview", "support", "customers", "accounts", "notifications"],

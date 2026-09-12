@@ -25,14 +25,21 @@ export function KpiCard({
       )}
     >
       <div className="flex items-start justify-between">
-        <p className={cn("text-sm font-medium", tone === "navy" ? "text-white/70" : "text-muted-foreground")}>
+        <p
+          className={cn(
+            "text-sm font-medium",
+            tone === "navy" ? "text-white/70" : "text-muted-foreground",
+          )}
+        >
           {label}
         </p>
         {Icon && (
           <div
             className={cn(
               "flex h-9 w-9 items-center justify-center rounded-lg",
-              tone === "navy" ? "bg-white/10 text-[var(--brand)]" : "bg-[var(--brand-soft)] text-[var(--success)]",
+              tone === "navy"
+                ? "bg-white/10 text-[var(--brand)]"
+                : "bg-[var(--brand-soft)] text-[var(--success)]",
             )}
           >
             <Icon className="h-4 w-4" />
@@ -52,7 +59,11 @@ export function KpiCard({
                 : "bg-[var(--danger-soft)] text-[var(--danger)]",
             )}
           >
-            {positive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+            {positive ? (
+              <ArrowUpRight className="h-3 w-3" />
+            ) : (
+              <ArrowDownRight className="h-3 w-3" />
+            )}
             {positive ? "+" : ""}
             {delta.toFixed(1)}%
           </span>

@@ -34,10 +34,26 @@ function TransactionsPage() {
         description="Toutes les opérations passant par les passerelles bancaires."
       />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Total période" value={String(totals.count)} icon={ArrowLeftRight} hint="30 derniers jours" />
-        <KpiCard label="Réussies" value={String(totals.success)} icon={CheckCircle2} delta={2.1} hint="vs sem. -1" />
+        <KpiCard
+          label="Total période"
+          value={String(totals.count)}
+          icon={ArrowLeftRight}
+          hint="30 derniers jours"
+        />
+        <KpiCard
+          label="Réussies"
+          value={String(totals.success)}
+          icon={CheckCircle2}
+          delta={2.1}
+          hint="vs sem. -1"
+        />
         <KpiCard label="En attente" value={String(totals.pending)} icon={Clock} hint="à traiter" />
-        <KpiCard label="À investiguer" value={String(totals.flagged)} icon={AlertTriangle} delta={-12.3} />
+        <KpiCard
+          label="À investiguer"
+          value={String(totals.flagged)}
+          icon={AlertTriangle}
+          delta={-12.3}
+        />
       </div>
 
       <div className="mt-6">
@@ -65,7 +81,13 @@ function TransactionsPage() {
                 {tx.slice(0, 40).map((t) => (
                   <tr key={t.id} className="border-b hover:bg-muted/30">
                     <td className="px-5 py-3 font-medium">
-                      <Link to="/transactions/$id" params={{ id: t.id }} className="hover:text-[var(--success)]">{t.id}</Link>
+                      <Link
+                        to="/transactions/$id"
+                        params={{ id: t.id }}
+                        className="hover:text-[var(--success)]"
+                      >
+                        {t.id}
+                      </Link>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">{formatDate(t.date)}</td>
                     <td className="px-5 py-3">{t.counterparty}</td>
@@ -75,8 +97,12 @@ function TransactionsPage() {
                     <td className="px-5 py-3">
                       <RiskBar value={t.risk} />
                     </td>
-                    <td className="px-5 py-3"><StatusBadge value={t.status} /></td>
-                    <td className="px-5 py-3 text-right tabular font-medium">{formatMoney(t.amount, t.currency)}</td>
+                    <td className="px-5 py-3">
+                      <StatusBadge value={t.status} />
+                    </td>
+                    <td className="px-5 py-3 text-right tabular font-medium">
+                      {formatMoney(t.amount, t.currency)}
+                    </td>
                   </tr>
                 ))}
               </tbody>

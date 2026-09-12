@@ -50,7 +50,10 @@ function SettingsPage() {
               { k: "sessions", label: "Déconnexion automatique après 15 min", on: true },
               { k: "passwordrot", label: "Rotation mot de passe tous les 90 jours", on: false },
             ].map((s) => (
-              <div key={s.k} className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
+              <div
+                key={s.k}
+                className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3"
+              >
                 <span className="text-sm">{s.label}</span>
                 <Switch defaultChecked={s.on} />
               </div>

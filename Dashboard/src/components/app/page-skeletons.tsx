@@ -4,10 +4,7 @@ export function KpiRowSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       {Array.from({ length: count }).map((_, i) => (
-        <div
-          key={i}
-          className="rounded-2xl border bg-card p-5"
-        >
+        <div key={i} className="rounded-2xl border bg-card p-5">
           <div className="flex items-start justify-between">
             <Skeleton className="h-4 w-32" />
             <Skeleton className="h-9 w-9 rounded-lg" />
@@ -45,7 +42,10 @@ export function TableSkeleton({ rows = 6, cols = 6 }: { rows?: number; cols?: nu
           <tr key={r} className="border-b">
             {Array.from({ length: cols }).map((_, c) => (
               <td key={c} className="px-5 py-3">
-                <Skeleton className="h-3 w-full" style={{ maxWidth: c === 0 ? 120 : c === cols - 1 ? 80 : "100%" }} />
+                <Skeleton
+                  className="h-3 w-full"
+                  style={{ maxWidth: c === 0 ? 120 : c === cols - 1 ? 80 : "100%" }}
+                />
               </td>
             ))}
           </tr>

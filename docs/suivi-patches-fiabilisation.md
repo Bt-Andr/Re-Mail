@@ -10,7 +10,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Statut | En cours — lots 2 et 3 terminés, lots 1 et 4 actifs |
 | Dernière mise à jour | 2026-09-10 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 28 fichiers de tests, 167 tests réussis |
+| Baseline fonctionnelle | 30 fichiers de tests, 199 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -223,7 +223,7 @@ Statut : **À faire**
 Validation :
 
 - [ ] Tests end-to-end critiques verts.
-- [ ] Contrôle TypeScript des quatre applications vert.
+- [x] Contrôle TypeScript des quatre applications vert.
 - [ ] Builds de production verts.
 - [ ] Aucun écran factice accessible depuis la navigation de production.
 
@@ -239,6 +239,7 @@ Validation :
 | Webmail | `npm run build --workspace=webmail` | Succès |
 | Mobile | `npx tsc --noEmit -p mobile/tsconfig.json` | Succès |
 | Dashboard types | `npm run typecheck` dans `Dashboard/` | Succès |
+| Dashboard lint | `npm run lint` dans `Dashboard/` | Succès sans erreur ni avertissement |
 | Dashboard build | `npm run build` dans `Dashboard/` | Succès |
 | Migrations | `prisma migrate status` | Schéma à jour |
 | Parcours ciblé | Test manuel ou end-to-end | Critères du lot validés |
@@ -287,6 +288,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-10 | 2 | Métadonnées RFC 5322, corrélation ordonnée, fallback par sujet normalisé et en-têtes de réponse SMTP | 13 migrations depuis zéro, typecheck/build backend, 196/196 tests | Typage des tokens puis finalisation Réception/Envoyés | Codex |
 | 2026-09-10 | 3 | Dossiers calculés depuis les messages du fil, non-lus limités à Réception et navigation post-envoi corrigée | Typecheck/build backend, 197/197 tests, builds webmail et mobile valides | Finaliser les tokens de réponse et les scénarios de transfert | Codex |
 | 2026-09-10 | 2 | Typage des tokens de conversation et de pont, suppression de l’écho client et conservation du relais collaborateur | 14 migrations depuis zéro, typecheck/build backend, 199/199 tests | Reprendre les dernières garanties du lot 1 | Codex |
+| 2026-09-10 | — | Remise au vert du quality gate Dashboard : ordre stable des hooks, formatage et configuration explicite des exports Fast Refresh | Lint, typecheck et build Dashboard | Reprendre le lot 4 | Codex |
 
 ## Journal des validations
 
@@ -303,12 +305,13 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-10 | Lot 2 — tranche 2 | 196/196 | Backend typecheck et build valides | 13/13 migrations rejouées depuis zéro | `In-Reply-To`, `References`, sujets indépendants et fallback historique couverts | Les réponses SMTP émettent et conservent les en-têtes de threading |
 | 2026-09-10 | Lot 3 — tranche 2 | 197/197 | Backend, webmail et mobile valides | 13/13 déjà validées | Fil mixte visible dans Réception et Envoyés | Le webmail ouvre les nouveaux fils directement dans Envoyés |
 | 2026-09-10 | Lot 2 — tranche 3 | 199/199 | Backend typecheck et build valides | 14/14 migrations rejouées depuis zéro | Conversation sans écho et pont de transfert couverts | Les anciens tokens conservent temporairement leur comportement `legacy` jusqu’à expiration |
+| 2026-09-10 | Passe globale | 199/199, dont 58/58 scénarios courrier ciblés | Web, webmail, mobile et dashboard valides | 14/14 appliquées sur la base Docker locale | Non exécuté, tests end-to-end encore absents | Worktree propre avant correction ; dette lint Dashboard identifiée puis corrigée |
 
 ## Journal des incidents et régressions
 
 | Date | Lot | Symptôme | Cause | Correction | Test ajouté |
 |---|---:|---|---|---|---|
-| — | — | — | — | — | — |
+| 2026-09-10 | 7 | Trois pages de détail Dashboard appelaient un hook de route après un retour conditionnel | Le squelette de chargement précédait le hook TanStack Router | Hooks déplacés avant le retour conditionnel | Lint React Hooks |
 
 ## Notes de livraison
 

@@ -7,7 +7,7 @@ export function useMountLoading(delay = 600) {
     setIsLoading(true);
     const timer = setTimeout(() => setIsLoading(false), delay);
     return () => clearTimeout(timer);
-  }, []);
+  }, [delay]);
 
   return isLoading;
 }

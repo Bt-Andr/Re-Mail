@@ -17,19 +17,12 @@ export function SectionCard({
   bodyClassName?: string;
 }) {
   return (
-    <section
-      className={cn(
-        "rounded-2xl border bg-card",
-        className,
-      )}
-    >
+    <section className={cn("rounded-2xl border bg-card", className)}>
       {(title || action) && (
         <header className="flex items-start justify-between gap-4 border-b px-5 py-4">
           <div>
             {title && <h3 className="text-sm font-semibold text-foreground">{title}</h3>}
-            {description && (
-              <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-            )}
+            {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
           </div>
           {action}
         </header>

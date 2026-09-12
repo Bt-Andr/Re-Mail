@@ -9,7 +9,9 @@ export function formatMoney(value: number, currency: "EUR" | "USD" | "XOF" | "GB
 }
 
 export function formatCompact(n: number) {
-  return new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+  return new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 }).format(
+    n,
+  );
 }
 
 export function formatDate(d: Date | string) {

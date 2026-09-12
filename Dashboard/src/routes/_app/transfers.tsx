@@ -24,7 +24,11 @@ function TransfersPage() {
       <PageHeader
         title="Virements"
         description="Pilotage des virements SEPA, SWIFT et instantanés."
-        actions={<Button><Send className="mr-2 h-4 w-4" /> Initier un virement</Button>}
+        actions={
+          <Button>
+            <Send className="mr-2 h-4 w-4" /> Initier un virement
+          </Button>
+        }
       />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Virements 24h" value="3 842" icon={Send} delta={4.8} />
@@ -66,8 +70,12 @@ function TransfersPage() {
                           <td className="px-5 py-3 tabular">{t.reference}</td>
                           <td className="px-5 py-3">{t.counterparty}</td>
                           <td className="px-5 py-3 text-muted-foreground">{formatDate(t.date)}</td>
-                          <td className="px-5 py-3"><StatusBadge value={t.status} /></td>
-                          <td className="px-5 py-3 text-right tabular font-medium">{formatMoney(t.amount, t.currency)}</td>
+                          <td className="px-5 py-3">
+                            <StatusBadge value={t.status} />
+                          </td>
+                          <td className="px-5 py-3 text-right tabular font-medium">
+                            {formatMoney(t.amount, t.currency)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -81,7 +89,10 @@ function TransfersPage() {
         <SectionCard title="Top corridors" description="Volume sur 30 jours">
           <ul className="space-y-3">
             {TOP_CORRIDORS.map((c) => (
-              <li key={c.flag} className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3 text-sm">
+              <li
+                key={c.flag}
+                className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3 text-sm"
+              >
                 <div>
                   <div className="flex items-center gap-1.5 font-medium">
                     {c.from} <ArrowRight className="h-3 w-3 text-muted-foreground" /> {c.to}

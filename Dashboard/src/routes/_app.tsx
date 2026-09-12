@@ -13,7 +13,9 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
   const navigate = useNavigate();
-  useEffect(() => { if (!hasPlatformToken()) navigate({ to: "/login" }); }, [navigate]);
+  useEffect(() => {
+    if (!hasPlatformToken()) navigate({ to: "/login" });
+  }, [navigate]);
   const key = useRouterState({ select: (s) => s.location.pathname });
 
   return (

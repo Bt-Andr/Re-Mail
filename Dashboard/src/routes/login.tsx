@@ -11,7 +11,10 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
       { title: "Connexion — Northwind Bank Back-Office" },
-      { name: "description", content: "Espace sécurisé réservé aux collaborateurs Northwind Bank." },
+      {
+        name: "description",
+        content: "Espace sécurisé réservé aux collaborateurs Northwind Bank.",
+      },
     ],
   }),
   component: LoginPage,
@@ -34,7 +37,10 @@ function LoginPage() {
     }
     setLoading(true);
     try {
-      const result = await platformRequest<{ token: string }>("/platform/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+      const result = await platformRequest<{ token: string }>("/platform/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
       savePlatformToken(result.token);
       setLoading(false);
       navigate({ to: "/" });
@@ -87,7 +93,9 @@ function LoginPage() {
                 <button
                   type="button"
                   className="text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setError("Contactez votre administrateur pour réinitialiser le mot de passe.")}
+                  onClick={() =>
+                    setError("Contactez votre administrateur pour réinitialiser le mot de passe.")
+                  }
                 >
                   Mot de passe oublié ?
                 </button>
@@ -140,13 +148,21 @@ function LoginPage() {
           </form>
 
           <div className="mt-8 flex items-center justify-between border-t pt-4 text-xs text-muted-foreground">
-            <span>Besoin d'aide ? <a className="text-foreground hover:underline" href="mailto:it@northwind-bank.io">it@northwind-bank.io</a></span>
-            <Link to="/" className="hover:text-foreground">Retour au site</Link>
+            <span>
+              Besoin d'aide ?{" "}
+              <a className="text-foreground hover:underline" href="mailto:it@northwind-bank.io">
+                it@northwind-bank.io
+              </a>
+            </span>
+            <Link to="/" className="hover:text-foreground">
+              Retour au site
+            </Link>
           </div>
         </div>
 
         <div className="mt-6 text-[11px] text-muted-foreground">
-          © {new Date().getFullYear()} Northwind Bank · Agrément ACPR n°12345 · Tous droits réservés.
+          © {new Date().getFullYear()} Northwind Bank · Agrément ACPR n°12345 · Tous droits
+          réservés.
         </div>
       </div>
 

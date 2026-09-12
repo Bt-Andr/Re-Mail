@@ -1,3 +1,66 @@
-import { Link,useRouterState } from "@tanstack/react-router"; import { Banknote,Building2,LayoutDashboard,UserCog } from "lucide-react"; import { Sidebar,SidebarContent,SidebarGroup,SidebarGroupContent,SidebarGroupLabel,SidebarHeader,SidebarMenu,SidebarMenuButton,SidebarMenuItem,useSidebar } from "@/components/ui/sidebar";
-const items=[{title:"Tableau de bord",url:"/",icon:LayoutDashboard},{title:"Organisations",url:"/organizations",icon:Building2},{title:"Utilisateurs",url:"/users",icon:UserCog}];
-export function AppSidebar(){const {state}=useSidebar();const collapsed=state==="collapsed";const path=useRouterState({select:s=>s.location.pathname});return <Sidebar collapsible="icon" className="border-r-0"><SidebarHeader className="border-b border-sidebar-border/60 px-4 py-4"><div className="flex items-center gap-2.5"><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--brand)] text-[var(--navy)]"><Banknote className="h-4 w-4"/></div>{!collapsed&&<div><div className="text-sm font-semibold">Re-Mail</div><div className="text-[11px] text-sidebar-foreground/60">Administration plateforme</div></div>}</div></SidebarHeader><SidebarContent className="px-2 py-3"><SidebarGroup>{!collapsed&&<SidebarGroupLabel>Pilotage</SidebarGroupLabel>}<SidebarGroupContent><SidebarMenu>{items.map(item=><SidebarMenuItem key={item.url}><SidebarMenuButton asChild isActive={item.url==="/"?path==="/":path.startsWith(item.url)} tooltip={item.title}><Link to={item.url}><item.icon/><span>{item.title}</span></Link></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent></Sidebar>}
+import { Link, useRouterState } from "@tanstack/react-router";
+import { Banknote, Building2, LayoutDashboard, UserCog } from "lucide-react";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from "@/components/ui/sidebar";
+const items = [
+  { title: "Tableau de bord", url: "/", icon: LayoutDashboard },
+  { title: "Organisations", url: "/organizations", icon: Building2 },
+  { title: "Utilisateurs", url: "/users", icon: UserCog },
+];
+export function AppSidebar() {
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  return (
+    <Sidebar collapsible="icon" className="border-r-0">
+      <SidebarHeader className="border-b border-sidebar-border/60 px-4 py-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--brand)] text-[var(--navy)]">
+            <Banknote className="h-4 w-4" />
+          </div>
+          {!collapsed && (
+            <div>
+              <div className="text-sm font-semibold">Re-Mail</div>
+              <div className="text-[11px] text-sidebar-foreground/60">
+                Administration plateforme
+              </div>
+            </div>
+          )}
+        </div>
+      </SidebarHeader>
+      <SidebarContent className="px-2 py-3">
+        <SidebarGroup>
+          {!collapsed && <SidebarGroupLabel>Pilotage</SidebarGroupLabel>}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {items.map((item) => (
+                <SidebarMenuItem key={item.url}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={item.url === "/" ? path === "/" : path.startsWith(item.url)}
+                    tooltip={item.title}
+                  >
+                    <Link to={item.url}>
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </Sidebar>
+  );
+}

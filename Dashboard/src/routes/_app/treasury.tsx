@@ -2,7 +2,17 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app/page-header";
 import { SectionCard } from "@/components/app/section-card";
 import { KpiCard } from "@/components/app/kpi-card";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Bar, BarChart } from "recharts";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  Bar,
+  BarChart,
+} from "recharts";
 import { Banknote, TrendingUp, ShieldCheck, Wallet } from "lucide-react";
 
 import { GenericPageSkeleton } from "@/components/app/page-skeletons";
@@ -32,7 +42,10 @@ function TreasuryPage() {
   if (__loading) return <GenericPageSkeleton kpis={4} withChart maxWidth={1480} />;
   return (
     <div className="mx-auto max-w-[1480px]">
-      <PageHeader title="Trésorerie" description="Liquidité, ratios prudentiels et positions de change." />
+      <PageHeader
+        title="Trésorerie"
+        description="Liquidité, ratios prudentiels et positions de change."
+      />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="HQLA" value="€ 1,28 Md" icon={Wallet} delta={1.2} />
         <KpiCard label="Ratio LCR" value="142 %" icon={ShieldCheck} delta={2.4} hint="Min. 100 %" />
@@ -42,7 +55,10 @@ function TreasuryPage() {
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <SectionCard title="Liquidité HQLA vs sorties nettes" description="30 derniers jours, en M€">
+          <SectionCard
+            title="Liquidité HQLA vs sorties nettes"
+            description="30 derniers jours, en M€"
+          >
             <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={LIQUIDITY}>
@@ -59,9 +75,27 @@ function TreasuryPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="d" tick={{ fontSize: 10 }} stroke="var(--muted-foreground)" />
                   <YAxis tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 12 }} />
-                  <Area type="monotone" dataKey="hqla" stroke="var(--brand)" fill="url(#hqla)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="outflows" stroke="var(--warning)" fill="url(#out)" strokeWidth={2} />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "1px solid var(--border)",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="hqla"
+                    stroke="var(--brand)"
+                    fill="url(#hqla)"
+                    strokeWidth={2}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="outflows"
+                    stroke="var(--warning)"
+                    fill="url(#out)"
+                    strokeWidth={2}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -82,8 +116,11 @@ function TreasuryPage() {
                 <tr key={p.devise} className="border-b">
                   <td className="px-5 py-3 font-medium">{p.devise}</td>
                   <td className="px-5 py-3 tabular text-muted-foreground">{p.change}</td>
-                  <td className={`px-5 py-3 text-right tabular font-medium ${p.net < 0 ? "text-[var(--danger)]" : ""}`}>
-                    {p.net > 0 ? "+" : ""}{p.net}
+                  <td
+                    className={`px-5 py-3 text-right tabular font-medium ${p.net < 0 ? "text-[var(--danger)]" : ""}`}
+                  >
+                    {p.net > 0 ? "+" : ""}
+                    {p.net}
                   </td>
                 </tr>
               ))}
@@ -100,7 +137,13 @@ function TreasuryPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="d" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
                 <YAxis tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
-                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: 12,
+                    border: "1px solid var(--border)",
+                    fontSize: 12,
+                  }}
+                />
                 <Bar dataKey="hqla" fill="var(--navy)" name="Entrées" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="outflows" fill="var(--info)" name="Sorties" radius={[4, 4, 0, 0]} />
               </BarChart>

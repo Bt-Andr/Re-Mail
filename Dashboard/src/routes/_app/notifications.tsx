@@ -23,12 +23,19 @@ function NotificationsPage() {
       <PageHeader
         title="Notifications"
         description="Centre d'alertes et événements système."
-        actions={<Button variant="outline"><CheckCheck className="mr-2 h-4 w-4" /> Tout marquer comme lu</Button>}
+        actions={
+          <Button variant="outline">
+            <CheckCheck className="mr-2 h-4 w-4" /> Tout marquer comme lu
+          </Button>
+        }
       />
       <SectionCard bodyClassName="p-0">
         <ul className="divide-y">
           {NOTIFICATIONS.map((n) => (
-            <li key={n.id} className={`flex items-start gap-3 px-5 py-4 ${n.unread ? "bg-[var(--brand-soft)]/30" : ""}`}>
+            <li
+              key={n.id}
+              className={`flex items-start gap-3 px-5 py-4 ${n.unread ? "bg-[var(--brand-soft)]/30" : ""}`}
+            >
               <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-card ring-1 ring-border">
                 <Bell className="h-4 w-4 text-muted-foreground" />
               </div>

@@ -1,2 +1,23 @@
-import { LogOut,ShieldCheck } from "lucide-react"; import { SidebarTrigger } from "@/components/ui/sidebar"; import { Button } from "@/components/ui/button"; import { clearPlatformSession } from "@/lib/platform-api";
-export function AppHeader(){function logout(){clearPlatformSession();window.location.assign("/login")}return <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur sm:px-6"><SidebarTrigger/><div className="flex items-center gap-2 text-sm"><ShieldCheck className="h-4 w-4 text-[var(--brand)]"/><span className="font-medium">Session administrateur plateforme</span></div><Button variant="outline" size="sm" className="ml-auto" onClick={logout}><LogOut className="mr-2 h-4 w-4"/>Déconnexion</Button></header>}
+import { LogOut, ShieldCheck } from "lucide-react";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { clearPlatformSession } from "@/lib/platform-api";
+export function AppHeader() {
+  function logout() {
+    clearPlatformSession();
+    window.location.assign("/login");
+  }
+  return (
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur sm:px-6">
+      <SidebarTrigger />
+      <div className="flex items-center gap-2 text-sm">
+        <ShieldCheck className="h-4 w-4 text-[var(--brand)]" />
+        <span className="font-medium">Session administrateur plateforme</span>
+      </div>
+      <Button variant="outline" size="sm" className="ml-auto" onClick={logout}>
+        <LogOut className="mr-2 h-4 w-4" />
+        Déconnexion
+      </Button>
+    </header>
+  );
+}

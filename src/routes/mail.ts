@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import nodemailer from 'nodemailer'
-import type { Organization } from '@prisma/client'
+import type { Organization, Prisma } from '@prisma/client'
 import prisma from '../lib/prisma'
 import { forOrg } from '../middleware/scopedPrisma'
 import { authenticateToken } from '../middleware/auth'
@@ -35,6 +35,8 @@ const MAX_RECIPIENTS = 20
 const MAX_EMAIL_LENGTH = 320
 const MAX_SUBJECT_LENGTH = 998
 const MAX_MESSAGE_LENGTH = 100_000
+
+type ForwardSourceMessage = Prisma.ThreadMessageGetPayload<{ include: { attachments: true } }>
 
 function parseEmailList(raw: unknown): string[] {
   if (typeof raw !== 'string' || !raw.trim()) return []
@@ -74,6 +76,7 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
   const bcc = parseEmailList(req.body.bcc)
   const files = (req.files as Express.Multer.File[] | undefined) ?? []
   const isForward = mode === 'forward'
+  let forwardSource: ForwardSourceMessage | null = null
 
   const org = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
   if (!org) return res.status(404).json({ error: 'Organisation introuvable.' })
@@ -121,6 +124,16 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
         if (route?.displayName) senderName = `${route.displayName} · ${org.companyName || org.name}`
       } catch (e) {
         console.error('[REPLY] MailRoute lookup:', (e as Error).message)
+      }
+    }
+
+    if (isForward) {
+      forwardSource = await db.threadMessage.findFirst({
+        where: { id: sourceMessageId, threadId },
+        include: { attachments: true },
+      })
+      if (!forwardSource) {
+        return res.status(404).json({ error: 'Message à transférer introuvable.' })
       }
     }
   }
@@ -209,14 +222,8 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
   // message d'origine, pas besoin de re-télécharger quoi que ce soit depuis Resend.
   let html = `<p>${message.replace(/\n/g, '<br/>')}</p>`
   let forwardAttachments: ReturnType<typeof storedToResendAttachments> | undefined
-  if (isForward) {
-    const source = await db.threadMessage.findUnique({
-      where: { id: sourceMessageId },
-      include: { attachments: true },
-    })
-    if (!source || source.threadId !== effectiveThreadId) {
-      return res.status(404).json({ error: 'Message à transférer introuvable.' })
-    }
+  if (forwardSource) {
+    const source = forwardSource
     html = `${html}
       <hr/>
       <p>---------- Message transféré ----------<br/>

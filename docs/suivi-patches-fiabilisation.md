@@ -8,9 +8,9 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
 | Statut | En cours — lots 2 et 3 terminés, lots 1 et 4 actifs |
-| Dernière mise à jour | 2026-09-10 |
+| Dernière mise à jour | 2026-09-15 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 30 fichiers de tests, 199 tests réussis |
+| Baseline fonctionnelle | 30 fichiers de tests, 201 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -139,7 +139,7 @@ Statut : **En cours — relations utilisateur critiques et entrées de messageri
 - [x] Vérifier le tenant de l’utilisateur assigné à une règle.
 - [x] Vérifier le tenant du bénéficiaire d’un `SenderGrant`.
 - [x] Refuser une réponse associée à un fil absent, cross-tenant ou lié à la boîte personnelle d’un autre utilisateur avant tout envoi.
-- [ ] Vérifier le fil du message source d’un transfert.
+- [x] Vérifier le fil du message source d’un transfert avant tout effet de bord.
 - [x] Borner la pagination des fils (`take` 1–100, `skip` 0–100000).
 - [x] Valider le destinataire principal avant tout effet de bord.
 - [x] Valider les longueurs du sujet et du corps avant tout effet de bord.
@@ -152,7 +152,7 @@ Statut : **En cours — relations utilisateur critiques et entrées de messageri
 
 Validation :
 
-- [~] Tests cross-tenant négatifs — affectation, routage, autorisation d’expéditeur et réponse couverts ; inventaire restant à poursuivre.
+- [~] Tests cross-tenant négatifs — affectation, routage, autorisation d’expéditeur, réponse et source de transfert couverts ; inventaire restant à poursuivre.
 - [~] Tests de payloads malformés — envoi et identifiants relationnels couverts ; autres routes à inventorier.
 - [x] Tests de limites de taille de l’envoi et de pagination des fils.
 - [ ] Tests de domaine et alias.
@@ -289,6 +289,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-10 | 3 | Dossiers calculés depuis les messages du fil, non-lus limités à Réception et navigation post-envoi corrigée | Typecheck/build backend, 197/197 tests, builds webmail et mobile valides | Finaliser les tokens de réponse et les scénarios de transfert | Codex |
 | 2026-09-10 | 2 | Typage des tokens de conversation et de pont, suppression de l’écho client et conservation du relais collaborateur | 14 migrations depuis zéro, typecheck/build backend, 199/199 tests | Reprendre les dernières garanties du lot 1 | Codex |
 | 2026-09-10 | — | Remise au vert du quality gate Dashboard : ordre stable des hooks, formatage et configuration explicite des exports Fast Refresh | Lint, typecheck et build Dashboard | Reprendre le lot 4 | Codex |
+| 2026-09-15 | 4 | Validation anticipée du message source d’un transfert, avec contrôle du tenant et de l’appartenance au fil avant création du token | Typecheck/build backend, 201/201 tests | Centraliser les schémas de validation | Codex |
 
 ## Journal des validations
 
@@ -306,6 +307,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-10 | Lot 3 — tranche 2 | 197/197 | Backend, webmail et mobile valides | 13/13 déjà validées | Fil mixte visible dans Réception et Envoyés | Le webmail ouvre les nouveaux fils directement dans Envoyés |
 | 2026-09-10 | Lot 2 — tranche 3 | 199/199 | Backend typecheck et build valides | 14/14 migrations rejouées depuis zéro | Conversation sans écho et pont de transfert couverts | Les anciens tokens conservent temporairement leur comportement `legacy` jusqu’à expiration |
 | 2026-09-10 | Passe globale | 199/199, dont 58/58 scénarios courrier ciblés | Web, webmail, mobile et dashboard valides | 14/14 appliquées sur la base Docker locale | Non exécuté, tests end-to-end encore absents | Worktree propre avant correction ; dette lint Dashboard identifiée puis corrigée |
+| 2026-09-15 | Lot 4 — transfert | 201/201, dont 14/14 tests réponse/isolation ciblés | Backend typecheck et build valides | Sans migration | Transferts inter-fil et inter-tenant couverts par intégration | Aucun token, message sortant, appel fournisseur ou événement d’activité avant rejet |
 
 ## Journal des incidents et régressions
 

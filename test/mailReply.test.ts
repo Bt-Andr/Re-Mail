@@ -134,4 +134,113 @@ describe('POST /api/emails/reply — cc/bcc/forward', () => {
     const activity = await prisma.threadActivity.findFirst({ where: { threadId: thread.id, type: 'forwarded' } })
     expect(activity).not.toBeNull()
   })
+
+  it('rejects a source message belonging to another thread before creating side effects', async () => {
+    const targetThread = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'contact',
+        sujet: 'Fil cible',
+        externalFrom: 'Client cible',
+        externalEmail: 'target@example.com',
+        toEmail: 'owner@testco.example',
+        origin: 'inbound',
+      },
+    })
+    const otherThread = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'contact',
+        sujet: 'Autre fil',
+        externalFrom: 'Autre client',
+        externalEmail: 'other@example.com',
+        origin: 'inbound',
+      },
+    })
+    const otherMessage = await prisma.threadMessage.create({
+      data: {
+        organizationId: org.organizationId,
+        threadId: otherThread.id,
+        direction: 'inbound',
+        fromName: 'Autre client',
+        fromEmail: 'other@example.com',
+        body: '<p>Message hors fil</p>',
+      },
+    })
+
+    const response = await request(app)
+      .post('/api/emails/reply')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({
+        to: 'third-party@example.com',
+        subject: 'Tentative de transfert',
+        message: 'Pour information.',
+        threadId: targetThread.id,
+        sourceMessageId: otherMessage.id,
+        mode: 'forward',
+      })
+
+    expect(response.status).toBe(404)
+    expect(sendCalls).toHaveLength(0)
+    expect(await prisma.mailReplyToken.count({ where: { threadId: targetThread.id } })).toBe(0)
+    expect(await prisma.threadMessage.count({ where: { threadId: targetThread.id, direction: 'outbound' } })).toBe(0)
+    expect(await prisma.threadActivity.count({ where: { threadId: targetThread.id, type: 'forwarded' } })).toBe(0)
+  })
+
+  it('rejects a source message belonging to another tenant before creating side effects', async () => {
+    const foreignOrg = await seedOrg('reply-foreign-source')
+    try {
+      const targetThread = await prisma.thread.create({
+        data: {
+          organizationId: org.organizationId,
+          canal: 'contact',
+          sujet: 'Fil du tenant courant',
+          externalFrom: 'Client courant',
+          externalEmail: 'current@example.com',
+          toEmail: 'owner@testco.example',
+          origin: 'inbound',
+        },
+      })
+      const foreignThread = await prisma.thread.create({
+        data: {
+          organizationId: foreignOrg.organizationId,
+          canal: 'contact',
+          sujet: 'Fil étranger',
+          externalFrom: 'Client étranger',
+          externalEmail: 'foreign@example.com',
+          origin: 'inbound',
+        },
+      })
+      const foreignMessage = await prisma.threadMessage.create({
+        data: {
+          organizationId: foreignOrg.organizationId,
+          threadId: foreignThread.id,
+          direction: 'inbound',
+          fromName: 'Client étranger',
+          fromEmail: 'foreign@example.com',
+          body: '<p>Message confidentiel</p>',
+        },
+      })
+
+      const response = await request(app)
+        .post('/api/emails/reply')
+        .set('Authorization', `Bearer ${org.token}`)
+        .send({
+          to: 'third-party@example.com',
+          subject: 'Tentative inter-tenant',
+          message: 'Pour information.',
+          threadId: targetThread.id,
+          sourceMessageId: foreignMessage.id,
+          mode: 'forward',
+        })
+
+      expect(response.status).toBe(404)
+      expect(sendCalls).toHaveLength(0)
+      expect(await prisma.mailReplyToken.count({ where: { threadId: targetThread.id } })).toBe(0)
+      expect(await prisma.threadMessage.count({ where: { threadId: targetThread.id, direction: 'outbound' } })).toBe(0)
+      expect(await prisma.threadActivity.count({ where: { threadId: targetThread.id, type: 'forwarded' } })).toBe(0)
+    } finally {
+      await cleanupOrg(foreignOrg.organizationId)
+    }
+  })
 })

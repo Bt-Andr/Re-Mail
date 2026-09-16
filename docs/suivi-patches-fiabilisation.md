@@ -7,7 +7,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Champ | Valeur |
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
-| Statut | En cours — lots 2, 3, 4 et 5 terminés, lot 1 actif |
+| Statut | En cours — lots 0 à 5 terminés, lot 6 à démarrer |
 | Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
 | Baseline fonctionnelle | 40 fichiers de tests, 265 tests réussis |
@@ -27,7 +27,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Lot | Sujet | Priorité | Statut | Dépend de | Critère de sortie principal |
 |---:|---|---|---|---|---|
 | 0 | Baseline des migrations | Bloquante | Terminé | — | Base reconstruite uniquement par migrations |
-| 1 | Réception durable et idempotente | Critique | En cours | 0 | Aucun événement perdu ou traité deux fois |
+| 1 | Réception durable et idempotente | Critique | Terminé | 0 | Aucun événement perdu ou traité deux fois |
 | 2 | Corrélation des conversations | Critique | Terminé | 0, 1 | Aucun regroupement fondé seulement sur l’expéditeur |
 | 3 | Classement comptes et dossiers | Haute | Terminé | 2 | Fils visibles dans la bonne boîte et le bon dossier |
 | 4 | Intégrité tenant et validation | Critique | Terminé | 0 | Aucune relation cross-tenant acceptée |
@@ -58,11 +58,11 @@ Validation :
 
 ## Lot 1 — Réception durable et idempotente
 
-Statut : **En cours — durabilité et reprise validées, extraction métier restante**
+Statut : **Terminé — 2026-09-16**
 
 - [x] Définir le schéma `InboundEvent`.
 - [x] Créer la migration et régénérer Prisma Client.
-- [~] Extraire le traitement entrant dans un service — orchestration extraite, traitement métier Resend encore dans `routes/mail.ts`.
+- [x] Extraire le traitement entrant dans un service — `services/inboundEmail.ts` est partagé par le webhook et le worker de reprise ; la route HTTP ne porte plus le métier.
 - [x] Persister avant l’accusé de réception HTTP.
 - [x] Ajouter la revendication atomique d’un événement.
 - [x] Ajouter les statuts et compteurs de tentatives.
@@ -250,26 +250,26 @@ Sous Windows avec une politique PowerShell restrictive, utiliser `npm.cmd` et `n
 
 | ID | Risque | Impact | Probabilité | Réduction prévue | État |
 |---|---|---|---|---|---|
-| R-01 | Perte d’un webhook après réponse `200` | Critique | Moyenne | Lot 1, persistance avant ACK | Ouvert |
-| R-02 | Double traitement d’un email | Haute | Moyenne | Lots 1 et 2, idempotence | Ouvert |
+| R-01 | Perte d’un webhook après réponse `200` | Critique | Moyenne | Lot 1, persistance avant ACK | Réduit et couvert |
+| R-02 | Double traitement d’un email | Haute | Moyenne | Lots 1 et 2, idempotence | Réduit et couvert |
 | R-03 | Fusion de conversations indépendantes | Haute | Haute | Lot 2, en-têtes email | Réduit et couvert |
 | R-04 | Mauvaise boîte ou mauvais dossier | Haute | Haute | Lot 3 | Réduit et couvert |
 | R-05 | Relation cross-tenant forgée | Critique | Faible à moyenne | Lot 4 | Réduit et couvert |
 | R-06 | Organisation sans propriétaire | Haute | Moyenne | Lot 5 | Réduit et couvert |
 | R-07 | Configuration déclarée terminée mais inactive | Haute | Haute | Lot 6, tests réels | Ouvert |
 | R-08 | Régression non détectée dans les interfaces | Moyenne | Haute | Lot 7, end-to-end | Ouvert |
-| R-09 | Migration impossible sur certains environnements | Haute | Moyenne | Lot 0 | Ouvert |
+| R-09 | Migration impossible sur certains environnements | Haute | Moyenne | Lot 0 | Réduit et couvert localement |
 
 ## Décisions à prendre
 
 | ID | Décision | Options | Choix | Date |
 |---|---|---|---|---|
-| D-01 | Technologie de file durable | Table PostgreSQL / service de queue | À décider | — |
-| D-02 | Verrou multi-instance du poller | Verrou PostgreSQL / worker unique / queue | À décider | — |
+| D-01 | Technologie de file durable | Table PostgreSQL / service de queue | Table PostgreSQL `InboundEvent` | 2026-09-07 |
+| D-02 | Verrou multi-instance du poller | Verrou PostgreSQL / worker unique / queue | Revendication atomique PostgreSQL par événement | 2026-09-07 |
 | D-03 | Sémantique Réception/Envoyés | Fils dans plusieurs vues / emplacement principal | Fils dans plusieurs vues selon les directions présentes | 2026-09-10 |
 | D-04 | Durée de conservation des événements entrants | 30 / 90 / 180 jours | À décider | — |
-| D-05 | Politique de mot de passe | Minimum simple / règles renforcées | À décider | — |
-| D-06 | Stockage et révocation des sessions | Version utilisateur / table de sessions | À décider | — |
+| D-05 | Politique de mot de passe | Minimum simple / règles renforcées | Minimum de 8 caractères | 2026-09-16 |
+| D-06 | Stockage et révocation des sessions | Version utilisateur / table de sessions | Version portée par l’utilisateur et le JWT | 2026-09-16 |
 
 ## Journal d’avancement
 
@@ -302,6 +302,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | 5 | Matrice OWNER/ADMIN/MEMBER, rôles relus en base, protection des propriétaires et transfert atomique avec concurrence contrôlée | Typecheck/build backend, 259/259 tests | Ajouter changement de mot de passe et révocation complète des sessions | Codex |
 | 2026-09-16 | 5 | Changement et réinitialisation de mot de passe, jeton SHA-256 expirant/usage unique, version de session et email transactionnel central | Typecheck/build backend, 265/265 tests, 15/15 migrations locales | Ajouter les interfaces web et mobile du lot 5 | Codex |
 | 2026-09-16 | 5 | Interfaces webmail et mobile de changement/réinitialisation du mot de passe ; transfert de propriété dans les consoles web et mobile avec confirmation et actualisation du rôle | Builds web/webmail et typecheck mobile | Reprendre l’extraction métier restante du lot 1 | Codex |
+| 2026-09-16 | 1 | Extraction du traitement Resend dans un service indépendant d’Express, utilisé à la fois après persistance du webhook et par la reprise au démarrage | Typecheck/build backend, 21/21 tests entrants ciblés, 265/265 tests complets | Démarrer le lot 6 sur l’onboarding vérifié | Codex |
 
 ## Journal des validations
 
@@ -332,6 +333,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | Lot 5 — rôles et propriété | 259/259, dont 46/46 tests comptes/import/invitations/auth ciblés | Backend typecheck et build valides | Sans migration | Création, invitation, import, mise à jour, suppression, JWT obsolètes et transferts concurrents couverts | Un seul transfert concurrent aboutit et l’organisation conserve exactement un propriétaire |
 | 2026-09-16 | Lot 5 — mots de passe et sessions | 265/265, dont 24/24 tests auth/rôles/mots de passe ciblés | Backend typecheck et build valides | 15/15 migrations appliquées sur Docker local | Changement, demande non énumérable, email, expiration, rejeu, concurrence et révocation couverts | Configurer `SYSTEM_RESEND_API_KEY` et `SYSTEM_EMAIL_FROM` au déploiement |
 | 2026-09-16 | Lot 5 — interfaces | 265/265 (backend inchangé) | Web et webmail en build de production, mobile en typecheck | 15/15 déjà validées | Parcours exposés sur webmail/mobile ; transfert exposé aux propriétaires sur web/mobile | Le lien reçu par email ouvre la page webmail de réinitialisation ; les deux variables email système restent requises au déploiement |
+| 2026-09-16 | Lot 1 — clôture | 265/265, dont 21/21 scénarios entrants ciblés | Backend typecheck et build valides | 15/15 appliquées sur Docker local | Webhook, revendication, reprise et poller couverts par intégration | Le traitement entrant ne dépend plus du routeur HTTP ; aucun changement fonctionnel du contrat webhook |
 
 ## Journal des incidents et régressions
 

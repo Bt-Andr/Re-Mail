@@ -1,14 +1,40 @@
-import { FormEvent, useState } from 'react'
-import { apiFetch, parseError } from '../../../lib/apiClient'
-import { Input } from '../../../components/ui/Input'
+import { FormEvent, useCallback, useEffect, useState } from 'react'
+import { apiFetch, networkErrorMessage, parseError } from '../../../lib/apiClient'
 import { Select } from '../../../components/ui/Select'
 import { Button } from '../../../components/ui/Button'
 import { Callout } from '../../../components/ui/Callout'
 
 export function SelectDomainStep({ verifiedDomains, onDone }: { verifiedDomains: string[] | null; onDone: () => void }) {
   const [domain, setDomain] = useState(verifiedDomains?.[0] ?? '')
+  const [domains, setDomains] = useState<string[]>(verifiedDomains ?? [])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingDomains, setLoadingDomains] = useState(verifiedDomains === null)
+
+  const refreshDomains = useCallback(async () => {
+    setError('')
+    setLoadingDomains(true)
+    try {
+      const res = await apiFetch('/organizations/me/resend/domains')
+      if (!res.ok) {
+        setError(await parseError(res, 'Impossible de relire les domaines Resend.'))
+        setDomains([])
+        return
+      }
+      const data = (await res.json()) as { verifiedDomains: string[] }
+      setDomains(data.verifiedDomains)
+      setDomain(current => (data.verifiedDomains.includes(current) ? current : (data.verifiedDomains[0] ?? '')))
+    } catch (err) {
+      setDomains([])
+      setError(networkErrorMessage(err))
+    } finally {
+      setLoadingDomains(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (verifiedDomains === null) void refreshDomains()
+  }, [refreshDomains, verifiedDomains])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -37,34 +63,25 @@ export function SelectDomainStep({ verifiedDomains, onDone }: { verifiedDomains:
         Si ce domaine a déjà des emails ailleurs (Gmail, Outlook, un autre hébergeur...), la réception Resend entrera en conflit avec les enregistrements MX existants — un domaine ne peut avoir qu'un seul jeu de MX actif. Utilisez plutôt un sous-domaine dédié (ex. mail.votredomaine.com) pour ne pas perturber vos boîtes actuelles.
       </Callout>
 
-      {verifiedDomains && verifiedDomains.length > 0 ? (
+      {domains.length > 0 ? (
         <Select label="Domaine vérifié" value={domain} onChange={e => setDomain(e.target.value)} required>
-          {verifiedDomains.map(d => (
+          {domains.map(d => (
             <option key={d} value={d}>{d}</option>
           ))}
         </Select>
       ) : (
-        <>
-          {verifiedDomains && verifiedDomains.length === 0 && (
-            <Callout icon={false}>
-              Aucun domaine vérifié trouvé dans votre compte Resend. Vérifiez-en un dans votre dashboard Resend, puis revenez ici.
-            </Callout>
-          )}
-          <Input
-            label="Nom de domaine"
-            placeholder="mail.votredomaine.com"
-            value={domain}
-            onChange={e => setDomain(e.target.value)}
-            required
-          />
-          <p className="text-xs text-muted-foreground">
-            {verifiedDomains === null && 'Page rechargée : saisissez à nouveau le domaine déjà vérifié dans Resend.'}
-          </p>
-        </>
+        <Callout icon={false}>
+          Aucun domaine vérifié trouvé dans votre compte Resend. Vérifiez-en un dans le dashboard Resend, puis actualisez cette liste.
+        </Callout>
       )}
 
       {error && <p className="text-xs text-destructive">{error}</p>}
-      <Button type="submit" loading={loading} disabled={!domain.trim()}>Continuer</Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" loading={loading} disabled={!domain}>Continuer</Button>
+        <Button type="button" variant="secondary" loading={loadingDomains} onClick={() => void refreshDomains()}>
+          Actualiser les domaines
+        </Button>
+      </div>
     </form>
   )
 }

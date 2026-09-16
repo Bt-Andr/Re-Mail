@@ -28,6 +28,23 @@ describe('Mail configuration validation', () => {
     await cleanupOrg(org.organizationId)
   })
 
+  it('exposes a detailed setup state derived from persisted proofs', async () => {
+    const response = await request(app)
+      .get('/api/organizations/me')
+      .set('Authorization', `Bearer ${org.token}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.setupStatus).toEqual({
+      resendConnected: true,
+      domainSelected: false,
+      webhookConfigured: false,
+      firstAddressConfigured: false,
+      firstOutboundAt: null,
+      firstInboundAt: null,
+      operational: false,
+    })
+  })
+
   it('only selects a domain currently verified in the connected Resend account', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -45,6 +62,28 @@ describe('Mail configuration validation', () => {
     expect(fetchMock).toHaveBeenCalledWith('https://api.resend.com/domains', {
       headers: { Authorization: 'Bearer re_test_fake_key' },
     })
+  })
+
+  it('lists only verified Resend domains when the onboarding resumes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          { id: 'domain-1', name: 'Mail.Example.com', status: 'verified' },
+          { id: 'domain-2', name: 'pending.example.com', status: 'pending' },
+          { id: 'domain-3', name: 'READY.EXAMPLE.COM', status: 'VERIFIED' },
+        ],
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const response = await request(app)
+      .get('/api/organizations/me/resend/domains')
+      .set('Authorization', `Bearer ${org.token}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body).toEqual({ verifiedDomains: ['mail.example.com', 'ready.example.com'] })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('rejects an unknown or unverified domain without changing the organization', async () => {

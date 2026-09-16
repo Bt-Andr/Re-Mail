@@ -281,4 +281,15 @@ export interface OrgSummary {
   webhookConfigured: boolean;
   webhookUrl: string;
   mailRoutesCount: number;
+  setupStatus: OrganizationSetupStatus;
+}
+
+export interface OrganizationSetupStatus {
+  resendConnected: boolean;
+  domainSelected: boolean;
+  webhookConfigured: boolean;
+  firstAddressConfigured: boolean;
+  firstOutboundAt: string | null;
+  firstInboundAt: string | null;
+  operational: boolean;
 }

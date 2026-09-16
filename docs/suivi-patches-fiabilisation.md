@@ -7,10 +7,10 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Champ | Valeur |
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
-| Statut | En cours — lots 0 à 5 terminés, lot 6 à démarrer |
+| Statut | En cours — lots 0 à 5 terminés, lot 6 actif |
 | Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 40 fichiers de tests, 265 tests réussis |
+| Baseline fonctionnelle | 40 fichiers de tests, 267 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -32,7 +32,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | 3 | Classement comptes et dossiers | Haute | Terminé | 2 | Fils visibles dans la bonne boîte et le bon dossier |
 | 4 | Intégrité tenant et validation | Critique | Terminé | 0 | Aucune relation cross-tenant acceptée |
 | 5 | Comptes et rôles | Haute | Terminé | 0, 4 | Dernier propriétaire protégé et récupération disponible |
-| 6 | Onboarding vérifié | Haute | À faire | 1–5 | Test réel d’envoi/réception réussi dans l’assistant |
+| 6 | Onboarding vérifié | Haute | En cours | 1–5 | Test réel d’envoi/réception réussi dans l’assistant |
 | 7 | Finition des clients | Moyenne | À faire | 3–6 | Parcours critiques couverts en end-to-end |
 
 ## Lot 0 — Baseline des migrations
@@ -182,10 +182,10 @@ Validation :
 
 ## Lot 6 — Onboarding vérifié
 
-Statut : **À faire**
+Statut : **En cours — état détaillé et sélection des domaines vérifiés disponibles**
 
-- [ ] Concevoir l’état détaillé de configuration.
-- [ ] Afficher uniquement les domaines vérifiés.
+- [x] Concevoir l’état détaillé de configuration — preuves persistées pour clé, domaine, webhook, première adresse, premier envoi et première réception.
+- [x] Afficher uniquement les domaines vérifiés — relecture Resend disponible après rechargement sur web et mobile, sans saisie libre.
 - [ ] Ajouter les instructions DNS/MX contextualisées.
 - [ ] Ajouter le test du webhook.
 - [ ] Ajouter la création guidée de la première adresse.
@@ -303,6 +303,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | 5 | Changement et réinitialisation de mot de passe, jeton SHA-256 expirant/usage unique, version de session et email transactionnel central | Typecheck/build backend, 265/265 tests, 15/15 migrations locales | Ajouter les interfaces web et mobile du lot 5 | Codex |
 | 2026-09-16 | 5 | Interfaces webmail et mobile de changement/réinitialisation du mot de passe ; transfert de propriété dans les consoles web et mobile avec confirmation et actualisation du rôle | Builds web/webmail et typecheck mobile | Reprendre l’extraction métier restante du lot 1 | Codex |
 | 2026-09-16 | 1 | Extraction du traitement Resend dans un service indépendant d’Express, utilisé à la fois après persistance du webhook et par la reprise au démarrage | Typecheck/build backend, 21/21 tests entrants ciblés, 265/265 tests complets | Démarrer le lot 6 sur l’onboarding vérifié | Codex |
+| 2026-09-16 | 6 | État d’installation détaillé calculé depuis les preuves persistées et relecture des seuls domaines vérifiés chez Resend sur web/mobile | Typecheck/build backend, builds web/webmail, typecheck mobile, 267/267 tests | Ajouter les instructions DNS/MX contextualisées et le test du webhook | Codex |
 
 ## Journal des validations
 
@@ -334,6 +335,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | Lot 5 — mots de passe et sessions | 265/265, dont 24/24 tests auth/rôles/mots de passe ciblés | Backend typecheck et build valides | 15/15 migrations appliquées sur Docker local | Changement, demande non énumérable, email, expiration, rejeu, concurrence et révocation couverts | Configurer `SYSTEM_RESEND_API_KEY` et `SYSTEM_EMAIL_FROM` au déploiement |
 | 2026-09-16 | Lot 5 — interfaces | 265/265 (backend inchangé) | Web et webmail en build de production, mobile en typecheck | 15/15 déjà validées | Parcours exposés sur webmail/mobile ; transfert exposé aux propriétaires sur web/mobile | Le lien reçu par email ouvre la page webmail de réinitialisation ; les deux variables email système restent requises au déploiement |
 | 2026-09-16 | Lot 1 — clôture | 265/265, dont 21/21 scénarios entrants ciblés | Backend typecheck et build valides | 15/15 appliquées sur Docker local | Webhook, revendication, reprise et poller couverts par intégration | Le traitement entrant ne dépend plus du routeur HTTP ; aucun changement fonctionnel du contrat webhook |
+| 2026-09-16 | Lot 6 — état et domaines | 267/267, dont 9/9 validations de configuration ciblées | Backend, web et webmail en build de production ; mobile en typecheck | 15/15 déjà validées | Reprise du parcours après rechargement couverte ; liste filtrée côté serveur | L’état opérationnel reste faux tant qu’une adresse, un envoi Resend et une réception durable ne sont pas observés |
 
 ## Journal des incidents et régressions
 

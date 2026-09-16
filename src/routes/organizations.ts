@@ -37,11 +37,30 @@ router.get('/me', authenticateToken, async (req, res) => {
   const org = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
   if (!org) return res.status(404).json({ error: 'Organisation introuvable.' })
 
-  const [mailRoutesCount, memberCount, externalMailboxCount] = await Promise.all([
+  const [mailRoutesCount, routingRulesCount, memberCount, externalMailboxCount, currentUser, firstOutbound, firstInbound] = await Promise.all([
     prisma.mailRoute.count({ where: { organizationId: org.id } }),
+    prisma.threadRoutingRule.count({ where: { organizationId: org.id, active: true } }),
     prisma.user.count({ where: { organizationId: org.id } }),
     prisma.externalMailboxConnection.count({ where: { organizationId: org.id, status: 'connected' } }),
+    prisma.user.findUnique({ where: { id: req.user!.id }, select: { proEmail: true } }),
+    prisma.threadMessage.findFirst({
+      where: { organizationId: org.id, direction: 'outbound', thread: { sourceId: null } },
+      orderBy: { sentAt: 'asc' },
+      select: { sentAt: true },
+    }),
+    prisma.inboundEvent.findFirst({
+      where: { organizationId: org.id, provider: 'resend', status: 'completed' },
+      orderBy: { processedAt: 'asc' },
+      select: { processedAt: true },
+    }),
   ])
+
+  const resendConnected = !!org.resendApiKeyEnc
+  const domainSelected = !!org.resendVerifiedDomain
+  const webhookConfigured = !!org.webhookSecretEnc
+  const firstAddressConfigured = mailRoutesCount > 0 || routingRulesCount > 0 || !!currentUser?.proEmail
+  const firstOutboundAt = firstOutbound?.sentAt ?? null
+  const firstInboundAt = firstInbound?.processedAt ?? null
 
   res.json({
     id: org.id,
@@ -49,15 +68,30 @@ router.get('/me', authenticateToken, async (req, res) => {
     slug: org.slug,
     companyName: org.companyName,
     emailContact: org.emailContact,
-    resendConnected: !!org.resendApiKeyEnc,
+    resendConnected,
     resendApiKeyLast4: org.resendApiKeyLast4,
     resendVerifiedDomain: org.resendVerifiedDomain,
-    webhookConfigured: !!org.webhookSecretEnc,
+    webhookConfigured,
     webhookUrl: webhookUrlFor(org.webhookToken),
     mailRoutesCount,
     externalMailboxCount,
     isPersonal: org.isPersonal,
     memberCount,
+    setupStatus: {
+      resendConnected,
+      domainSelected,
+      webhookConfigured,
+      firstAddressConfigured,
+      firstOutboundAt,
+      firstInboundAt,
+      operational:
+        resendConnected &&
+        domainSelected &&
+        webhookConfigured &&
+        firstAddressConfigured &&
+        firstOutboundAt !== null &&
+        firstInboundAt !== null,
+    },
   })
 })
 
@@ -92,11 +126,32 @@ router.post('/me/resend/connect', authenticateToken, requireOrgRole(['OWNER', 'A
     })
 
     res.json({
-      verifiedDomains: domains.filter(d => d.status === 'verified').map(d => d.name),
+      verifiedDomains: domains.filter(d => d.status.toLowerCase() === 'verified').map(d => d.name.toLowerCase()),
       webhookUrl: webhookUrlFor(org.webhookToken),
     })
   } catch (e) {
     res.status(400).json({ error: (e as Error).message })
+  }
+})
+
+// Recharge les domaines à chaque reprise du parcours. Les clients ne proposent
+// jamais une valeur libre : seul un domaine actuellement vérifié chez Resend peut
+// être sélectionné, y compris après un rechargement de page ou de l'application.
+router.get('/me/resend/domains', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
+  const org = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
+  if (!org?.resendApiKeyEnc) {
+    return res.status(400).json({ error: 'Connectez d’abord une clé API Resend.' })
+  }
+
+  try {
+    const domains = await listResendDomains(getDecryptedResendKey(org))
+    res.json({
+      verifiedDomains: domains
+        .filter(domain => domain.status.toLowerCase() === 'verified')
+        .map(domain => domain.name.toLowerCase()),
+    })
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message })
   }
 })
 

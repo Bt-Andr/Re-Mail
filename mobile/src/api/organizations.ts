@@ -15,6 +15,10 @@ export function connectResend(apiKey: string): Promise<{ verifiedDomains: string
   });
 }
 
+export function listVerifiedResendDomains(): Promise<{ verifiedDomains: string[] }> {
+  return apiFetch<{ verifiedDomains: string[] }>('/organizations/me/resend/domains');
+}
+
 export function selectResendDomain(domain: string): Promise<unknown> {
   return apiFetch('/organizations/me/resend/select-domain', { method: 'POST', body: JSON.stringify({ domain }) });
 }

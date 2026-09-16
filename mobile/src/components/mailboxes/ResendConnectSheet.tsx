@@ -1,8 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Check, CheckCircle2, Copy } from 'lucide-react-native';
-import { getOrgSummary, connectResend, selectResendDomain, setResendWebhookSecret } from '../../api/organizations';
+import {
+  getOrgSummary,
+  connectResend,
+  listVerifiedResendDomains,
+  selectResendDomain,
+  setResendWebhookSecret,
+} from '../../api/organizations';
 import { describeError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
@@ -27,6 +33,7 @@ export function ResendConnectSheet({ open, onClose, onConnected }: { open: boole
   const [org, setOrg] = useState<OrgSummary | null>(null);
   const [loadingOrg, setLoadingOrg] = useState(true);
   const [verifiedDomains, setVerifiedDomains] = useState<string[] | null>(null);
+  const [loadingDomains, setLoadingDomains] = useState(false);
 
   const [apiKey, setApiKey] = useState('');
   const [domain, setDomain] = useState('');
@@ -48,6 +55,25 @@ export function ResendConnectSheet({ open, onClose, onConnected }: { open: boole
   }, [open]);
 
   const step: Step = org ? stepFor(org) : 'connect';
+
+  const refreshDomains = useCallback(async () => {
+    setError('');
+    setLoadingDomains(true);
+    try {
+      const data = await listVerifiedResendDomains();
+      setVerifiedDomains(data.verifiedDomains);
+      setDomain(current => (data.verifiedDomains.includes(current) ? current : (data.verifiedDomains[0] ?? '')));
+    } catch (e) {
+      setVerifiedDomains([]);
+      setError(describeError(e));
+    } finally {
+      setLoadingDomains(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open && step === 'domain' && verifiedDomains === null) void refreshDomains();
+  }, [open, refreshDomains, step, verifiedDomains]);
 
   const submitConnect = async () => {
     if (!apiKey.trim()) return;
@@ -144,7 +170,7 @@ export function ResendConnectSheet({ open, onClose, onConnected }: { open: boole
               </Text>
             </View>
           )}
-          {verifiedDomains && verifiedDomains.length > 1 && (
+          {verifiedDomains && verifiedDomains.length > 0 && (
             <View className="flex-row flex-wrap gap-2">
               {verifiedDomains.map(d => (
                 <Pressable
@@ -159,15 +185,12 @@ export function ResendConnectSheet({ open, onClose, onConnected }: { open: boole
               ))}
             </View>
           )}
-          <Input label="Nom de domaine" placeholder="mail.votredomaine.com" value={domain} onChangeText={setDomain} autoCapitalize="none" />
-          {verifiedDomains === null && (
-            <Text className="text-xs text-neutral-400 dark:text-neutral-500">
-              Fenêtre rouverte : saisissez à nouveau le domaine déjà vérifié dans Resend.
-            </Text>
-          )}
           {error ? <Text className="text-xs text-red-600">{error}</Text> : null}
           <Button onPress={submitDomain} loading={loading} disabled={!domain.trim()}>
             Continuer
+          </Button>
+          <Button variant="secondary" onPress={() => void refreshDomains()} loading={loadingDomains}>
+            Actualiser les domaines
           </Button>
         </>
       ) : step === 'webhook' ? (

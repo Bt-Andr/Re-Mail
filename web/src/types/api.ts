@@ -18,6 +18,17 @@ export interface OrganizationSummary {
   slug: string
   isPersonal: boolean
   memberCount: number
+  setupStatus: OrganizationSetupStatus
+}
+
+export interface OrganizationSetupStatus {
+  resendConnected: boolean
+  domainSelected: boolean
+  webhookConfigured: boolean
+  firstAddressConfigured: boolean
+  firstOutboundAt: string | null
+  firstInboundAt: string | null
+  operational: boolean
 }
 
 export interface OrganizationStatus {

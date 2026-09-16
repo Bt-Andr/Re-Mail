@@ -2,11 +2,15 @@ import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ShieldCheck, Users as UsersIcon } from 'lucide-react-native';
-import { listOrgUsers } from '../../../src/api/users';
+import { Crown, ShieldCheck, Users as UsersIcon } from 'lucide-react-native';
+import { listOrgUsers, transferOwnership } from '../../../src/api/users';
+import { describeError } from '../../../src/api/client';
 import { useAdminGuard } from '../../../src/hooks/useAdminGuard';
+import { useSession } from '../../../src/context/SessionContext';
 import { Badge, type BadgeColor } from '../../../src/components/ui/Badge';
+import { Button } from '../../../src/components/ui/Button';
 import { ErrorState } from '../../../src/components/ui/EmptyState';
+import { Modal } from '../../../src/components/ui/Modal';
 import { SenderGrantsModal } from '../../../src/components/admin/SenderGrantsModal';
 import type { OrgRole, OrgUser } from '../../../src/types/api';
 
@@ -16,9 +20,32 @@ const ROLE_COLOR: Record<OrgRole, BadgeColor> = { OWNER: 'amber', ADMIN: 'blue',
 export default function UsersScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const { user: sessionUser } = useSession();
   const { data: users = [], isLoading, isError, refetch } = useQuery({ queryKey: ['org-users'], queryFn: listOrgUsers });
   const [grantsFor, setGrantsFor] = useState<OrgUser | null>(null);
+  const [ownerCandidate, setOwnerCandidate] = useState<OrgUser | null>(null);
+  const [transferring, setTransferring] = useState(false);
+  const [transferError, setTransferError] = useState('');
   const allowed = useAdminGuard();
+
+  const currentMembership = users.find(member => member.id === sessionUser?.id);
+  const canTransferOwnership = currentMembership?.orgRole === 'OWNER';
+
+  const confirmOwnershipTransfer = async () => {
+    if (!ownerCandidate) return;
+
+    setTransferring(true);
+    setTransferError('');
+    try {
+      await transferOwnership(ownerCandidate.id);
+      setOwnerCandidate(null);
+      await refetch();
+    } catch (error) {
+      setTransferError(describeError(error));
+    } finally {
+      setTransferring(false);
+    }
+  };
 
   if (!allowed) return null;
 
@@ -28,6 +55,7 @@ export default function UsersScreen() {
         <Text className="text-xs text-neutral-500 dark:text-neutral-400">
           Membres de l'organisation et permissions d'envoi par adresse.
         </Text>
+        {transferError ? <Text className="mt-2 text-xs text-red-600 dark:text-red-400">{transferError}</Text> : null}
       </View>
 
       {isLoading ? (
@@ -65,11 +93,33 @@ export default function UsersScreen() {
                     : `Accès à toutes les adresses (rôle ${ROLE_LABEL[item.orgRole].toLowerCase()})`}
                 </Text>
               </View>
-              {item.orgRole === 'MEMBER' && (
-                <Pressable onPress={() => setGrantsFor(item)} hitSlop={8} className="p-1.5">
-                  <ShieldCheck size={18} color="#9ca3af" />
-                </Pressable>
-              )}
+              <View className="flex-row items-center gap-1">
+                {canTransferOwnership && item.id !== sessionUser?.id && item.orgRole !== 'OWNER' && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Transférer la propriété à ${item.nom}`}
+                    onPress={() => {
+                      setTransferError('');
+                      setOwnerCandidate(item);
+                    }}
+                    hitSlop={8}
+                    className="p-1.5"
+                  >
+                    <Crown size={18} color="#d97706" />
+                  </Pressable>
+                )}
+                {item.orgRole === 'MEMBER' && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Gérer les permissions d'envoi de ${item.nom}`}
+                    onPress={() => setGrantsFor(item)}
+                    hitSlop={8}
+                    className="p-1.5"
+                  >
+                    <ShieldCheck size={18} color="#9ca3af" />
+                  </Pressable>
+                )}
+              </View>
             </View>
           )}
         />
@@ -83,6 +133,39 @@ export default function UsersScreen() {
           setGrantsFor(null);
         }}
       />
+      <Modal
+        open={ownerCandidate !== null}
+        title="Transférer la propriété"
+        onClose={() => {
+          if (!transferring) setOwnerCandidate(null);
+        }}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              className="flex-1"
+              disabled={transferring}
+              onPress={() => setOwnerCandidate(null)}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1"
+              loading={transferring}
+              onPress={() => void confirmOwnershipTransfer()}
+            >
+              Transférer
+            </Button>
+          </>
+        }
+      >
+        <Text className="text-sm leading-5 text-neutral-600 dark:text-neutral-300">
+          Confirmer le transfert à {ownerCandidate?.nom ?? ''} ? Vous deviendrez administrateur et cette personne sera
+          l'unique propriétaire de l'organisation.
+        </Text>
+        {transferError ? <Text className="text-xs text-red-600 dark:text-red-400">{transferError}</Text> : null}
+      </Modal>
     </View>
   );
 }

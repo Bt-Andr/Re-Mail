@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiFetch, parseError, networkErrorMessage } from '../../lib/apiClient'
 import { useSession } from '../../context/SessionContext'
 import { Input } from '../../components/ui/Input'
@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/Button'
 export function LoginPage() {
   const { login, connectOrganization } = useSession()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -69,6 +70,14 @@ export function LoginPage() {
         <form onSubmit={submit} className="space-y-4">
           <Input label="Nom d'utilisateur" value={username} onChange={e => setUsername(e.target.value)} autoFocus required />
           <Input label="Mot de passe" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          <div className="text-right">
+            <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+              Mot de passe oublié ?
+            </Link>
+          </div>
+          {searchParams.get('passwordChanged') === '1' && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400">Mot de passe mis à jour. Reconnectez-vous.</p>
+          )}
           {error && <p className="text-xs text-destructive">{error}</p>}
           <Button type="submit" loading={loading} className="w-full">Se connecter</Button>
         </form>

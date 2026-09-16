@@ -22,6 +22,18 @@ export function me(): Promise<{ user: User }> {
   return apiFetch<{ user: User }>('/auth/me');
 }
 
+export function requestPasswordReset(username: string): Promise<{ ok: true; message: string }> {
+  return apiFetch('/auth/password-reset/request', {
+    method: 'POST',
+    body: { username },
+    skipAuthRedirect: true,
+  });
+}
+
+export function changePassword(currentPassword: string, newPassword: string): Promise<{ ok: true; token: string }> {
+  return apiFetch('/auth/change-password', { method: 'POST', body: { currentPassword, newPassword } });
+}
+
 // Échange le jeton d'échange à usage unique posé par GET .../gmail/callback (intent
 // 'signin') contre une vraie session — voir (auth)/login.tsx, (auth)/signup.tsx,
 // (auth)/welcome.tsx et google-callback.tsx. skipAuthRedirect : endpoint public, un 401

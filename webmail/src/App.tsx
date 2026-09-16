@@ -10,6 +10,8 @@ import { GuestGuard } from './components/layout/GuestGuard'
 import { AppShell } from './components/layout/AppShell'
 import { WelcomePage } from './features/auth/WelcomePage'
 import { LoginPage } from './features/auth/LoginPage'
+import { ForgotPasswordPage, ResetPasswordPage } from './features/auth/PasswordResetPages'
+import { SecurityPage } from './features/settings/SecurityPage'
 import { SignupPage } from './features/auth/SignupPage'
 import { GoogleCallbackPage } from './features/auth/GoogleCallbackPage'
 import { ActivatePage } from './features/activate/ActivatePage'
@@ -34,11 +36,13 @@ export default function App() {
             <AccountSwitcherProvider>
             <Routes>
               <Route path="/activate" element={<ActivatePage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
 
               <Route element={<GuestGuard />}>
                 <Route path="/welcome" element={<WelcomePage />} />
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/signup" element={<SignupPage />} />
               </Route>
 
@@ -61,6 +65,7 @@ export default function App() {
                     <Route path=":threadId" element={<ThreadDetailPane />} />
                   </Route>
                   <Route path="/mailboxes" element={<ExternalMailboxesPage />} />
+                  <Route path="/settings/security" element={<SecurityPage />} />
                 </Route>
               </Route>
 

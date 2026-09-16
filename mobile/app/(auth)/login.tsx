@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Image, Text, View, KeyboardAvoidingView, Platform } from 'react-native';
-import { Link, router } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { login as loginRequest, exchangeGoogleHandoff } from '../../src/api/auth';
@@ -11,6 +11,7 @@ import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
 
 export default function LoginScreen() {
+  const { passwordChanged } = useLocalSearchParams<{ passwordChanged?: string }>();
   const { login, connectOrganization } = useSession();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -100,6 +101,12 @@ export default function LoginScreen() {
             returnKeyType="done"
             onSubmitEditing={submit}
           />
+          <Link href="/(auth)/forgot-password" asChild>
+            <Text className="text-right text-xs font-medium text-neutral-500 dark:text-neutral-400">Mot de passe oublié ?</Text>
+          </Link>
+          {passwordChanged === '1' ? (
+            <Text className="text-xs text-emerald-600 dark:text-emerald-400">Mot de passe mis à jour. Reconnectez-vous.</Text>
+          ) : null}
           {error ? <Text className="text-xs text-red-600">{error}</Text> : null}
           <Button onPress={submit} loading={loading}>
             Se connecter

@@ -7,7 +7,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Champ | Valeur |
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
-| Statut | En cours — lots 2, 3 et 4 terminés, lots 1 et 5 actifs |
+| Statut | En cours — lots 2, 3, 4 et 5 terminés, lot 1 actif |
 | Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
 | Baseline fonctionnelle | 40 fichiers de tests, 265 tests réussis |
@@ -31,7 +31,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | 2 | Corrélation des conversations | Critique | Terminé | 0, 1 | Aucun regroupement fondé seulement sur l’expéditeur |
 | 3 | Classement comptes et dossiers | Haute | Terminé | 2 | Fils visibles dans la bonne boîte et le bon dossier |
 | 4 | Intégrité tenant et validation | Critique | Terminé | 0 | Aucune relation cross-tenant acceptée |
-| 5 | Comptes et rôles | Haute | En cours | 0, 4 | Dernier propriétaire protégé et récupération disponible |
+| 5 | Comptes et rôles | Haute | Terminé | 0, 4 | Dernier propriétaire protégé et récupération disponible |
 | 6 | Onboarding vérifié | Haute | À faire | 1–5 | Test réel d’envoi/réception réussi dans l’assistant |
 | 7 | Finition des clients | Moyenne | À faire | 3–6 | Parcours critiques couverts en end-to-end |
 
@@ -160,7 +160,7 @@ Validation :
 
 ## Lot 5 — Comptes et rôles
 
-Statut : **En cours — backend comptes, propriété, mots de passe et sessions validé ; interfaces restantes**
+Statut : **Terminé — 2026-09-16**
 
 - [x] Définir la matrice de permissions `OWNER`/`ADMIN`/`MEMBER` — voir [matrice-permissions-comptes.md](./matrice-permissions-comptes.md).
 - [x] Protéger le dernier propriétaire — aucun propriétaire ne peut être supprimé ou rétrogradé hors transfert.
@@ -169,7 +169,7 @@ Statut : **En cours — backend comptes, propriété, mots de passe et sessions 
 - [x] Ajouter la demande de réinitialisation non énumérable.
 - [x] Ajouter le jeton expirant à usage unique, stocké uniquement sous forme de hash.
 - [x] Ajouter la révocation des sessions — rôle/compte relus en base et `sessionVersion` incrémentée après tout changement de mot de passe.
-- [ ] Ajouter les interfaces web et mobile associées.
+- [x] Ajouter les interfaces web et mobile associées — demande/réinitialisation et changement de mot de passe, plus transfert explicite de propriété.
 
 Validation :
 
@@ -301,6 +301,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | 4 | Matrice négative cross-tenant étendue aux fils, routes mail, modèles, brouillons, boîtes, adresses pro, utilisateurs, autorisations, règles et révocation d’invitations | Typecheck/build backend, 254/254 tests | Démarrer le lot 5 sur les comptes et rôles | Codex |
 | 2026-09-16 | 5 | Matrice OWNER/ADMIN/MEMBER, rôles relus en base, protection des propriétaires et transfert atomique avec concurrence contrôlée | Typecheck/build backend, 259/259 tests | Ajouter changement de mot de passe et révocation complète des sessions | Codex |
 | 2026-09-16 | 5 | Changement et réinitialisation de mot de passe, jeton SHA-256 expirant/usage unique, version de session et email transactionnel central | Typecheck/build backend, 265/265 tests, 15/15 migrations locales | Ajouter les interfaces web et mobile du lot 5 | Codex |
+| 2026-09-16 | 5 | Interfaces webmail et mobile de changement/réinitialisation du mot de passe ; transfert de propriété dans les consoles web et mobile avec confirmation et actualisation du rôle | Builds web/webmail et typecheck mobile | Reprendre l’extraction métier restante du lot 1 | Codex |
 
 ## Journal des validations
 
@@ -330,6 +331,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | Lot 4 — clôture isolation | 254/254, dont 39/39 tests isolation/invitations/réponse/utilisateurs ciblés | Backend typecheck et build valides | Sans migration | Toutes les références relationnelles prévues et les ressources mutables recensées sont couvertes | Les tentatives inter-tenant restent invisibles et ne modifient aucune donnée |
 | 2026-09-16 | Lot 5 — rôles et propriété | 259/259, dont 46/46 tests comptes/import/invitations/auth ciblés | Backend typecheck et build valides | Sans migration | Création, invitation, import, mise à jour, suppression, JWT obsolètes et transferts concurrents couverts | Un seul transfert concurrent aboutit et l’organisation conserve exactement un propriétaire |
 | 2026-09-16 | Lot 5 — mots de passe et sessions | 265/265, dont 24/24 tests auth/rôles/mots de passe ciblés | Backend typecheck et build valides | 15/15 migrations appliquées sur Docker local | Changement, demande non énumérable, email, expiration, rejeu, concurrence et révocation couverts | Configurer `SYSTEM_RESEND_API_KEY` et `SYSTEM_EMAIL_FROM` au déploiement |
+| 2026-09-16 | Lot 5 — interfaces | 265/265 (backend inchangé) | Web et webmail en build de production, mobile en typecheck | 15/15 déjà validées | Parcours exposés sur webmail/mobile ; transfert exposé aux propriétaires sur web/mobile | Le lien reçu par email ouvre la page webmail de réinitialisation ; les deux variables email système restent requises au déploiement |
 
 ## Journal des incidents et régressions
 

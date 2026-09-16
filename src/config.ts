@@ -38,6 +38,12 @@ const config = {
   // organisation (voir routes/organizations.ts) à coller dans le dashboard Resend.
   backendUrl: process.env.BACKEND_URL || `http://localhost:${process.env.PORT || '3001'}`,
 
+  // Expéditeur transactionnel central pour les réinitialisations de mot de passe.
+  // Optionnel au démarrage pour préserver les environnements locaux ; en production,
+  // les deux valeurs doivent être définies ensemble pour que l'email soit délivré.
+  systemResendApiKey: process.env.SYSTEM_RESEND_API_KEY,
+  systemEmailFrom: process.env.SYSTEM_EMAIL_FROM,
+
   // Stockage des pièces jointes : un seul compte partagé pour tout le SaaS
   // (pas un secret par organisation — les fichiers sont rangés par dossier organizationId).
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,

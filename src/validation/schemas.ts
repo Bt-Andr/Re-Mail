@@ -69,6 +69,20 @@ export const loginSchema = z.object({
   password: loginPasswordSchema,
 })
 
+export const changePasswordSchema = z.object({
+  currentPassword: loginPasswordSchema,
+  newPassword: passwordSchema,
+})
+
+export const passwordResetRequestSchema = z.object({
+  username: usernameSchema,
+})
+
+export const passwordResetConfirmSchema = z.object({
+  token: z.string({ required_error: 'Token requis.', invalid_type_error: 'Token invalide.' }).trim().min(32, 'Token invalide.').max(512, 'Token invalide.'),
+  newPassword: passwordSchema,
+})
+
 export const googleExchangeSchema = z.object({
   handoff: resourceIdSchema,
 })

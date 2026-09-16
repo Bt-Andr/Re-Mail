@@ -32,10 +32,17 @@ Un import CSV applique les mêmes plafonds : un `ADMIN` ne peut importer que des
 
 Les fonctions de configuration d’organisation, des routes mail, des règles de routage et des modèles de réponse restent accessibles aux `OWNER` et `ADMIN`. Les `MEMBER` conservent l’accès à leur messagerie, à leurs brouillons, à leurs boîtes personnelles et aux fils qui leur sont accessibles.
 
+## Mot de passe et sessions
+
+- Un utilisateur authentifié change son mot de passe avec son mot de passe actuel et reçoit un nouveau JWT.
+- Chaque changement administratif ou personnel de mot de passe incrémente `sessionVersion` et invalide tous les JWT antérieurs.
+- Une réinitialisation publique répond toujours de façon identique, que le nom d’utilisateur existe ou non.
+- Le lien de réinitialisation expire après 30 minutes, n’est utilisable qu’une fois et n’est stocké qu’en SHA-256.
+- La délivrance du lien exige `SYSTEM_RESEND_API_KEY` et `SYSTEM_EMAIL_FROM` en production.
+
 ## Codes de réponse
 
 - `400` : opération incohérente sur son propre compte ou cible de transfert invalide ;
 - `403` : rôle insuffisant ;
 - `404` : cible absente ou appartenant à une autre organisation ;
 - `409` : propriétaire protégé, cible déjà propriétaire ou transfert concurrent déjà réalisé.
-

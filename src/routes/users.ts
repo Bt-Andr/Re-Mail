@@ -126,7 +126,10 @@ router.put('/:id', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async 
   if (orgRole) data.orgRole = orgRole
   if (proEmail !== undefined) data.proEmail = proEmail || null
   if (isDeptHead !== undefined) data.isDeptHead = isDeptHead
-  if (password) data.password = await bcrypt.hash(password, 12)
+  if (password) {
+    data.password = await bcrypt.hash(password, 12)
+    data.sessionVersion = { increment: 1 }
+  }
 
   try {
     await db.user.update({ where: { id: existing.id }, data, select: { id: true } })

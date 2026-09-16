@@ -30,13 +30,15 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     // ou rétrogradé perd donc immédiatement ses droits, même avec un JWT encore valide.
     const user = await prisma.user.findFirst({
       where: { id: decoded.id, organizationId: decoded.organizationId },
-      select: { id: true, organizationId: true, username: true, orgRole: true, nom: true },
+      select: { id: true, organizationId: true, username: true, orgRole: true, nom: true, sessionVersion: true },
     })
-    if (!user) {
+    const tokenSessionVersion = typeof decoded.sessionVersion === 'number' ? decoded.sessionVersion : 0
+    if (!user || user.sessionVersion !== tokenSessionVersion) {
       res.status(403).json({ error: 'Token invalide' })
       return
     }
-    req.user = user
+    const { sessionVersion: _sessionVersion, ...authenticatedUser } = user
+    req.user = authenticatedUser
     next()
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {

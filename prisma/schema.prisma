@@ -120,13 +120,14 @@ model User {
   // et mailboxConnections.ts, qui scopent désormais leur recherche à
   // organization.isPersonal). /auth/signup vérifie toujours l'unicité de l'email en
   // code (routes/auth.ts), volontairement globale — pas de contrainte DB derrière.
-  email      String
-  username   String  @unique
-  password   String
-  nom        String
-  proEmail   String?
-  orgRole    OrgRole @default(MEMBER)
-  isDeptHead Boolean @default(false)
+  email          String
+  username       String  @unique
+  password       String
+  sessionVersion Int     @default(0)
+  nom            String
+  proEmail       String?
+  orgRole        OrgRole @default(MEMBER)
+  isDeptHead     Boolean @default(false)
 
   senderGrants               SenderGrant[]
   mailDrafts                 MailDraft[]
@@ -138,6 +139,7 @@ model User {
   invitesCreated             UserInvite[]                @relation("InviteCreatedBy")
   externalMailboxConnections ExternalMailboxConnection[]
   loginHandoffs              LoginHandoff[]
+  passwordResetTokens        PasswordResetToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -147,6 +149,19 @@ model User {
   // performance des lookups par email (signin Google/IMAP, résolution assignToEmail),
   // fréquents malgré la levée de la contrainte d'unicité.
   @@index([email])
+}
+
+model PasswordResetToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 // Jeton d'échange unique et court (60s) entre la redirection OAuth publique (GET

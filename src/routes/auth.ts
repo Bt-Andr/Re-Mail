@@ -1,13 +1,24 @@
 import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
 import prisma from '../lib/prisma'
+import config from '../config'
 import { authenticateToken } from '../middleware/auth'
 import { signToken } from '../lib/jwt'
 import { createOrgAndOwner } from '../lib/personalAccountFactory'
 import { consumeLoginHandoff } from '../lib/loginHandoff'
+import { buildResendClient } from '../lib/resendClient'
+import { buildNotificationEmail, sendNotificationEmail } from '../lib/email'
 import { parseRequest } from '../validation/request'
-import { googleExchangeSchema, loginSchema, signupSchema } from '../validation/schemas'
+import {
+  changePasswordSchema,
+  googleExchangeSchema,
+  loginSchema,
+  passwordResetConfirmSchema,
+  passwordResetRequestSchema,
+  signupSchema,
+} from '../validation/schemas'
 
 const router = Router()
 
@@ -36,6 +47,26 @@ const googleExchangeLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Trop de tentatives. Réessayez dans quelques minutes.' },
 })
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives. Réessayez plus tard.' },
+})
+
+const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000
+const GENERIC_RESET_RESPONSE = {
+  ok: true,
+  message: 'Si ce compte existe, un lien de réinitialisation a été envoyé.',
+}
+
+function hashResetToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
+class InvalidResetTokenError extends Error {}
 
 // Crée une organisation + son premier utilisateur (OWNER) en une seule étape —
 // pattern "créez votre espace" volontairement simple pour la v1 (un utilisateur
@@ -120,7 +151,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     const token = signToken(user)
-    const { password: _password, organization, ...userWithoutPassword } = user
+    const { password: _password, sessionVersion: _sessionVersion, organization, ...userWithoutPassword } = user
     res.json({
       token,
       user: userWithoutPassword,
@@ -136,6 +167,110 @@ router.post('/login', loginLimiter, async (req, res) => {
     console.error('[POST /api/auth/login]', e)
     res.status(500).json({ error: 'Erreur serveur.' })
   }
+})
+
+router.post('/change-password', authenticateToken, async (req, res) => {
+  const input = parseRequest(changePasswordSchema, req.body, res)
+  if (!input) return
+
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } })
+  if (!user || !(await bcrypt.compare(input.currentPassword, user.password))) {
+    return res.status(400).json({ error: 'Mot de passe actuel incorrect.' })
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { password: await bcrypt.hash(input.newPassword, 12), sessionVersion: { increment: 1 } },
+    select: { id: true, organizationId: true, username: true, orgRole: true, nom: true, sessionVersion: true },
+  })
+  res.json({ ok: true, token: signToken(updated) })
+})
+
+router.post('/password-reset/request', passwordResetLimiter, async (req, res) => {
+  const input = parseRequest(passwordResetRequestSchema, req.body, res)
+  if (!input) return
+
+  // Réponse volontairement identique que le compte existe ou non. L'email système
+  // est optionnel en local, mais doit être configuré en production pour délivrer le lien.
+  if (!config.systemResendApiKey || !config.systemEmailFrom) return res.status(202).json(GENERIC_RESET_RESPONSE)
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { username: input.username },
+      select: { id: true, email: true, nom: true },
+    })
+    if (user) {
+      const token = crypto.randomBytes(32).toString('base64url')
+      const tokenHash = hashResetToken(token)
+      await prisma.$transaction([
+        prisma.passwordResetToken.updateMany({
+          where: { userId: user.id, consumedAt: null },
+          data: { consumedAt: new Date() },
+        }),
+        prisma.passwordResetToken.create({
+          data: { userId: user.id, tokenHash, expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS) },
+        }),
+      ])
+
+      const resetUrl = `${config.webmailUrl}/reset-password?token=${encodeURIComponent(token)}`
+      await sendNotificationEmail(
+        buildResendClient(config.systemResendApiKey),
+        config.systemEmailFrom,
+        'Re-Mail',
+        user.email,
+        'Réinitialisation de votre mot de passe Re-Mail',
+        buildNotificationEmail('Re-Mail', 'Réinitialiser votre mot de passe', [
+          { label: 'Compte', value: input.username },
+          { label: 'Validité', value: '30 minutes' },
+          { label: 'Action', link: { href: resetUrl, text: 'Choisir un nouveau mot de passe' } },
+        ])
+      )
+    }
+  } catch (error) {
+    // Ne jamais transformer une panne fournisseur en oracle d'existence de compte.
+    console.error('[POST /api/auth/password-reset/request]', error)
+  }
+
+  res.status(202).json(GENERIC_RESET_RESPONSE)
+})
+
+router.post('/password-reset/confirm', passwordResetLimiter, async (req, res) => {
+  const input = parseRequest(passwordResetConfirmSchema, req.body, res)
+  if (!input) return
+  const now = new Date()
+  const passwordHash = await bcrypt.hash(input.newPassword, 12)
+
+  try {
+    await prisma.$transaction(async tx => {
+      const reset = await tx.passwordResetToken.findUnique({
+        where: { tokenHash: hashResetToken(input.token) },
+        select: { id: true, userId: true },
+      })
+      if (!reset) throw new InvalidResetTokenError()
+
+      const consumed = await tx.passwordResetToken.updateMany({
+        where: { id: reset.id, consumedAt: null, expiresAt: { gt: now } },
+        data: { consumedAt: now },
+      })
+      if (consumed.count !== 1) throw new InvalidResetTokenError()
+
+      await tx.user.update({
+        where: { id: reset.userId },
+        data: { password: passwordHash, sessionVersion: { increment: 1 } },
+      })
+      await tx.passwordResetToken.updateMany({
+        where: { userId: reset.userId, consumedAt: null },
+        data: { consumedAt: now },
+      })
+    })
+  } catch (error) {
+    if (error instanceof InvalidResetTokenError) {
+      return res.status(400).json({ error: 'Ce lien de réinitialisation est invalide ou expiré.' })
+    }
+    throw error
+  }
+
+  res.json({ ok: true })
 })
 
 // Étape finale du flux "se connecter avec Google" (routes/gmailOAuth.ts, intent

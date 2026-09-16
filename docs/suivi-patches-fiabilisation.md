@@ -10,7 +10,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Statut | En cours — lots 2, 3 et 4 terminés, lots 1 et 5 actifs |
 | Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 38 fichiers de tests, 259 tests réussis |
+| Baseline fonctionnelle | 40 fichiers de tests, 265 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -160,15 +160,15 @@ Validation :
 
 ## Lot 5 — Comptes et rôles
 
-Statut : **En cours — gouvernance des rôles et transfert de propriété validés**
+Statut : **En cours — backend comptes, propriété, mots de passe et sessions validé ; interfaces restantes**
 
 - [x] Définir la matrice de permissions `OWNER`/`ADMIN`/`MEMBER` — voir [matrice-permissions-comptes.md](./matrice-permissions-comptes.md).
 - [x] Protéger le dernier propriétaire — aucun propriétaire ne peut être supprimé ou rétrogradé hors transfert.
 - [x] Ajouter un transfert de propriété atomique.
-- [ ] Ajouter le changement de mot de passe.
-- [ ] Ajouter la demande de réinitialisation.
-- [ ] Ajouter le jeton expirant à usage unique.
-- [~] Ajouter la révocation des sessions — suppression et changement de rôle immédiatement pris en compte ; révocation globale après mot de passe restante.
+- [x] Ajouter le changement de mot de passe.
+- [x] Ajouter la demande de réinitialisation non énumérable.
+- [x] Ajouter le jeton expirant à usage unique, stocké uniquement sous forme de hash.
+- [x] Ajouter la révocation des sessions — rôle/compte relus en base et `sessionVersion` incrémentée après tout changement de mot de passe.
 - [ ] Ajouter les interfaces web et mobile associées.
 
 Validation :
@@ -176,9 +176,9 @@ Validation :
 - [x] Dernier propriétaire impossible à supprimer.
 - [x] Dernier propriétaire impossible à rétrograder.
 - [x] Transfert concurrent sans organisation orpheline.
-- [ ] Réinitialisation non énumérable.
-- [ ] Jeton expiré ou rejoué refusé.
-- [ ] Anciennes sessions révoquées.
+- [x] Réinitialisation non énumérable.
+- [x] Jeton expiré ou rejoué refusé.
+- [x] Anciennes sessions révoquées.
 
 ## Lot 6 — Onboarding vérifié
 
@@ -300,6 +300,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | 4 | Suppression des captures trop larges sur les mutations de fils ; conservation des `404`/`403` explicites et propagation des incidents inattendus vers le filet global `500` | Typecheck/build backend, 251/251 tests | Poursuivre l’inventaire cross-tenant négatif du lot 4 | Codex |
 | 2026-09-16 | 4 | Matrice négative cross-tenant étendue aux fils, routes mail, modèles, brouillons, boîtes, adresses pro, utilisateurs, autorisations, règles et révocation d’invitations | Typecheck/build backend, 254/254 tests | Démarrer le lot 5 sur les comptes et rôles | Codex |
 | 2026-09-16 | 5 | Matrice OWNER/ADMIN/MEMBER, rôles relus en base, protection des propriétaires et transfert atomique avec concurrence contrôlée | Typecheck/build backend, 259/259 tests | Ajouter changement de mot de passe et révocation complète des sessions | Codex |
+| 2026-09-16 | 5 | Changement et réinitialisation de mot de passe, jeton SHA-256 expirant/usage unique, version de session et email transactionnel central | Typecheck/build backend, 265/265 tests, 15/15 migrations locales | Ajouter les interfaces web et mobile du lot 5 | Codex |
 
 ## Journal des validations
 
@@ -328,6 +329,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | Lot 4 — mutations de fils | 251/251, dont 35/35 tests fils/isolation/validation ciblés | Backend typecheck et build valides | Sans migration | Statut, non-lu, étoile, archive, corbeille, restauration, absences réelles et panne interne forcée couverts | Une erreur interne n’est plus présentée comme un fil inexistant |
 | 2026-09-16 | Lot 4 — clôture isolation | 254/254, dont 39/39 tests isolation/invitations/réponse/utilisateurs ciblés | Backend typecheck et build valides | Sans migration | Toutes les références relationnelles prévues et les ressources mutables recensées sont couvertes | Les tentatives inter-tenant restent invisibles et ne modifient aucune donnée |
 | 2026-09-16 | Lot 5 — rôles et propriété | 259/259, dont 46/46 tests comptes/import/invitations/auth ciblés | Backend typecheck et build valides | Sans migration | Création, invitation, import, mise à jour, suppression, JWT obsolètes et transferts concurrents couverts | Un seul transfert concurrent aboutit et l’organisation conserve exactement un propriétaire |
+| 2026-09-16 | Lot 5 — mots de passe et sessions | 265/265, dont 24/24 tests auth/rôles/mots de passe ciblés | Backend typecheck et build valides | 15/15 migrations appliquées sur Docker local | Changement, demande non énumérable, email, expiration, rejeu, concurrence et révocation couverts | Configurer `SYSTEM_RESEND_API_KEY` et `SYSTEM_EMAIL_FROM` au déploiement |
 
 ## Journal des incidents et régressions
 

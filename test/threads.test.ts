@@ -198,6 +198,66 @@ describe('GET /api/threads — filtre par compte (?account=)', () => {
   })
 })
 
+describe('PATCH /api/threads — mutations individuelles', () => {
+  let org: SeededOrg
+
+  beforeAll(async () => {
+    org = await seedOrg('threads-mutations')
+  })
+
+  afterAll(async () => {
+    await cleanupOrg(org.organizationId)
+  })
+
+  it('applique les changements de statut, étoile, archivage et corbeille', async () => {
+    const thread = await createThread(org)
+    const auth = { Authorization: `Bearer ${org.token}` }
+
+    const status = await request(app).patch(`/api/threads/${thread.id}/status`).set(auth).send({ status: 'en_cours' })
+    expect(status.status).toBe(200)
+    expect(status.body.status).toBe('en_cours')
+
+    const starred = await request(app).patch(`/api/threads/${thread.id}/star`).set(auth).send({ starred: true })
+    expect(starred.status).toBe(200)
+    expect(starred.body.starred).toBe(true)
+
+    const archived = await request(app).patch(`/api/threads/${thread.id}/archive`).set(auth)
+    expect(archived.status).toBe(200)
+    expect(archived.body.archivedAt).toBeTruthy()
+
+    const unarchived = await request(app).patch(`/api/threads/${thread.id}/unarchive`).set(auth)
+    expect(unarchived.status).toBe(200)
+    expect(unarchived.body.archivedAt).toBeNull()
+
+    const trashed = await request(app).patch(`/api/threads/${thread.id}/trash`).set(auth)
+    expect(trashed.status).toBe(200)
+    expect(trashed.body.deletedAt).toBeTruthy()
+    expect(trashed.body.archivedAt).toBeNull()
+
+    const restored = await request(app).patch(`/api/threads/${thread.id}/restore`).set(auth)
+    expect(restored.status).toBe(200)
+    expect(restored.body.deletedAt).toBeNull()
+  })
+
+  it.each([
+    { suffix: 'status', body: { status: 'resolu' } },
+    { suffix: 'unread' },
+    { suffix: 'trash' },
+    { suffix: 'archive' },
+    { suffix: 'unarchive' },
+    { suffix: 'star', body: { starred: true } },
+    { suffix: 'restore' },
+  ])('renvoie 404 pour /$suffix quand le fil est réellement absent', async ({ suffix, body }) => {
+    const response = await request(app)
+      .patch(`/api/threads/thread-inexistant/${suffix}`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send(body)
+
+    expect(response.status).toBe(404)
+    expect(response.body).toEqual({ error: 'Thread introuvable.' })
+  })
+})
+
 describe('GET /api/threads — bornes de pagination', () => {
   let org: SeededOrg
 

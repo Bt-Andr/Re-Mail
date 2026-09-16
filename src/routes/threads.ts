@@ -217,16 +217,12 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
   if (!input) return
   const { status } = input
 
-  try {
-    const db = forOrg(req.user!.organizationId)
-    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
-    const prev = await db.thread.findUnique({ where: { id: req.params.id }, select: { status: true } })
-    const thread = await db.thread.update({ where: { id: req.params.id }, data: { status } })
-    await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'status_changed', { from: prev?.status, to: status })
-    res.json(thread)
-  } catch {
-    res.status(404).json({ error: 'Thread introuvable.' })
-  }
+  const db = forOrg(req.user!.organizationId)
+  if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
+  const prev = await db.thread.findUnique({ where: { id: req.params.id }, select: { status: true } })
+  const thread = await db.thread.update({ where: { id: req.params.id }, data: { status } })
+  await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'status_changed', { from: prev?.status, to: status })
+  res.json(thread)
 })
 
 // Accès : OWNER/ADMIN ou utilisateur assigné au fil — SAUF si le fil vient d'une
@@ -275,57 +271,41 @@ async function denyThreadAccess(
 // Contrepartie explicite du "lu" automatique (effet de bord de GET /:id) : remet
 // tous les messages entrants du fil à non-lu, sur demande volontaire de l'utilisateur.
 router.patch('/:id/unread', authenticateToken, async (req, res) => {
-  try {
-    const db = forOrg(req.user!.organizationId)
-    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
-    await db.threadMessage.updateMany({
-      where: { threadId: req.params.id, direction: 'inbound' },
-      data: { readAt: null },
-    })
-    const thread = await db.thread.findUnique({ where: { id: req.params.id } })
-    if (!thread) return res.status(404).json({ error: 'Thread introuvable.' })
-    res.json(thread)
-  } catch {
-    res.status(404).json({ error: 'Thread introuvable.' })
-  }
+  const db = forOrg(req.user!.organizationId)
+  if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
+  await db.threadMessage.updateMany({
+    where: { threadId: req.params.id, direction: 'inbound' },
+    data: { readAt: null },
+  })
+  const thread = await db.thread.findUnique({ where: { id: req.params.id } })
+  if (!thread) return res.status(404).json({ error: 'Thread introuvable.' })
+  res.json(thread)
 })
 
 router.patch('/:id/trash', authenticateToken, async (req, res) => {
-  try {
-    const db = forOrg(req.user!.organizationId)
-    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
-    // archivedAt: null — un fil trashé sort aussi de l'archive, les deux dossiers
-    // restent mutuellement exclusifs (voir GET / plus haut).
-    const thread = await db.thread.update({ where: { id: req.params.id }, data: { deletedAt: new Date(), archivedAt: null } })
-    await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'trashed', {})
-    res.json(thread)
-  } catch {
-    res.status(404).json({ error: 'Thread introuvable.' })
-  }
+  const db = forOrg(req.user!.organizationId)
+  if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
+  // archivedAt: null — un fil trashé sort aussi de l'archive, les deux dossiers
+  // restent mutuellement exclusifs (voir GET / plus haut).
+  const thread = await db.thread.update({ where: { id: req.params.id }, data: { deletedAt: new Date(), archivedAt: null } })
+  await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'trashed', {})
+  res.json(thread)
 })
 
 router.patch('/:id/archive', authenticateToken, async (req, res) => {
-  try {
-    const db = forOrg(req.user!.organizationId)
-    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
-    const thread = await db.thread.update({ where: { id: req.params.id }, data: { archivedAt: new Date() } })
-    await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'archived', {})
-    res.json(thread)
-  } catch {
-    res.status(404).json({ error: 'Thread introuvable.' })
-  }
+  const db = forOrg(req.user!.organizationId)
+  if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
+  const thread = await db.thread.update({ where: { id: req.params.id }, data: { archivedAt: new Date() } })
+  await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'archived', {})
+  res.json(thread)
 })
 
 router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
-  try {
-    const db = forOrg(req.user!.organizationId)
-    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
-    const thread = await db.thread.update({ where: { id: req.params.id }, data: { archivedAt: null } })
-    await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'unarchived', {})
-    res.json(thread)
-  } catch {
-    res.status(404).json({ error: 'Thread introuvable.' })
-  }
+  const db = forOrg(req.user!.organizationId)
+  if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
+  const thread = await db.thread.update({ where: { id: req.params.id }, data: { archivedAt: null } })
+  await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'unarchived', {})
+  res.json(thread)
 })
 
 // Pas de journal d'activité pour l'étoile : comme /unread, c'est un simple
@@ -334,26 +314,18 @@ router.patch('/:id/star', authenticateToken, async (req, res) => {
   const input = parseRequest(threadStarSchema, req.body, res)
   if (!input) return
   const { starred } = input
-  try {
-    const db = forOrg(req.user!.organizationId)
-    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
-    const thread = await db.thread.update({ where: { id: req.params.id }, data: { starred } })
-    res.json(thread)
-  } catch {
-    res.status(404).json({ error: 'Thread introuvable.' })
-  }
+  const db = forOrg(req.user!.organizationId)
+  if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
+  const thread = await db.thread.update({ where: { id: req.params.id }, data: { starred } })
+  res.json(thread)
 })
 
 router.patch('/:id/restore', authenticateToken, async (req, res) => {
-  try {
-    const db = forOrg(req.user!.organizationId)
-    if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
-    const thread = await db.thread.update({ where: { id: req.params.id }, data: { deletedAt: null } })
-    await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'restored', {})
-    res.json(thread)
-  } catch {
-    res.status(404).json({ error: 'Thread introuvable.' })
-  }
+  const db = forOrg(req.user!.organizationId)
+  if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
+  const thread = await db.thread.update({ where: { id: req.params.id }, data: { deletedAt: null } })
+  await createActivity(db, req.user!.organizationId, thread.id, req.user!.id, 'restored', {})
+  res.json(thread)
 })
 
 // Actions groupées (sélection multiple liste web/mobile) : statut / archivage /

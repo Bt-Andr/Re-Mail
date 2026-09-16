@@ -10,7 +10,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Statut | En cours — lots 2 et 3 terminés, lots 1 et 4 actifs |
 | Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 36 fichiers de tests, 242 tests réussis |
+| Baseline fonctionnelle | 37 fichiers de tests, 251 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -148,7 +148,7 @@ Statut : **En cours — relations utilisateur critiques et entrées de messageri
 - [x] Valider les alias contre le domaine.
 - [x] Valider le format du secret webhook.
 - [x] Échapper les valeurs des notifications HTML.
-- [~] Uniformiser les réponses `400`, `404` et `500` — configuration, utilisateurs, appareils et connexions externes corrigés ; mutations historiques des fils restent à harmoniser.
+- [x] Uniformiser les réponses `400`, `404` et `500` — les absences et refus sont contrôlés explicitement ; les erreurs inattendues atteignent le filet global `500`.
 
 Validation :
 
@@ -297,6 +297,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | 4 | Validation Zod du profil, du routage, des modèles et des brouillons ; sémantique HTTP corrigée sur ces routes et les collisions d’alias | Typecheck/build backend, 232/232 tests | Harmoniser utilisateurs, appareils et connexions externes | Codex |
 | 2026-09-16 | 4 | Harmonisation utilisateurs/appareils : conflits `409`, alias d’envoi validés avant mutation et transfert inter-session des jetons push globaux | Typecheck/build backend, 238/238 tests | Harmoniser les connexions externes | Codex |
 | 2026-09-16 | 4 | Validation stricte IMAP/SMTP, blocage des hôtes locaux évidents, erreurs fournisseur opaques et import historique sans coercition | Typecheck/build backend, 242/242 tests | Corriger les faux `404` des mutations de fils | Codex |
+| 2026-09-16 | 4 | Suppression des captures trop larges sur les mutations de fils ; conservation des `404`/`403` explicites et propagation des incidents inattendus vers le filet global `500` | Typecheck/build backend, 251/251 tests | Poursuivre l’inventaire cross-tenant négatif du lot 4 | Codex |
 
 ## Journal des validations
 
@@ -322,6 +323,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | Lot 4 — configuration HTTP | 232/232, dont 42/42 tests configuration/routage/isolation ciblés | Backend typecheck et build valides | Sans migration | Profil, règles, modèles, brouillons, 400/404/409 et collisions d’alias couverts | Les erreurs base inattendues ne sont plus maquillées en ressources absentes |
 | 2026-09-16 | Lot 4 — utilisateurs et appareils | 238/238, dont 6/6 tests utilisateurs/appareils ciblés | Backend typecheck et build valides | Sans migration | Collisions, alias inconnus, suppression contrainte, payloads push et transfert inter-tenant couverts | Le jeton push global suit désormais la session courante sans duplication |
 | 2026-09-16 | Lot 4 — connexions externes | 242/242, dont 40/40 tests IMAP/SMTP/poller/isolation ciblés | Backend typecheck et build valides | Sans migration | Types, ports, hôtes privés, normalisation, conflits, erreurs fournisseur et historique couverts | Gmail OAuth était déjà protégé par état signé et liste de redirections autorisées |
+| 2026-09-16 | Lot 4 — mutations de fils | 251/251, dont 35/35 tests fils/isolation/validation ciblés | Backend typecheck et build valides | Sans migration | Statut, non-lu, étoile, archive, corbeille, restauration, absences réelles et panne interne forcée couverts | Une erreur interne n’est plus présentée comme un fil inexistant |
 
 ## Journal des incidents et régressions
 

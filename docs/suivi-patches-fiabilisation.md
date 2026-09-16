@@ -10,7 +10,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Statut | En cours — lots 2 et 3 terminés, lots 1 et 4 actifs |
 | Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 35 fichiers de tests, 232 tests réussis |
+| Baseline fonctionnelle | 36 fichiers de tests, 238 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -148,12 +148,12 @@ Statut : **En cours — relations utilisateur critiques et entrées de messageri
 - [x] Valider les alias contre le domaine.
 - [x] Valider le format du secret webhook.
 - [x] Échapper les valeurs des notifications HTML.
-- [~] Uniformiser les réponses `400`, `404` et `500` — routes de configuration corrigées ; utilisateurs, appareils et connexions externes restent à harmoniser.
+- [~] Uniformiser les réponses `400`, `404` et `500` — configuration, utilisateurs et appareils corrigés ; connexions externes restent à harmoniser.
 
 Validation :
 
 - [~] Tests cross-tenant négatifs — affectation, routage, autorisation d’expéditeur, réponse et source de transfert couverts ; inventaire restant à poursuivre.
-- [~] Tests de payloads malformés — parcours critiques, configuration et brouillons couverts ; connexions externes et administration secondaire restent à couvrir.
+- [~] Tests de payloads malformés — parcours critiques, configuration, brouillons, utilisateurs et appareils couverts ; connexions externes restent à couvrir.
 - [x] Tests de limites de taille de l’envoi et de pagination des fils.
 - [x] Tests de domaine et alias.
 - [x] Tests d’échappement HTML.
@@ -295,6 +295,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | 4 | Vérification du domaine auprès de Resend, verrouillage des alias sur ce domaine et validation du secret webhook | Typecheck/build backend, 220/220 tests | Échapper les valeurs des notifications HTML | Codex |
 | 2026-09-16 | 4 | Échappement systématique des notifications HTML et remplacement du HTML brut d’activation par un lien explicite | Typecheck backend, 223/223 tests | Uniformiser les réponses d’erreur des routes restantes | Codex |
 | 2026-09-16 | 4 | Validation Zod du profil, du routage, des modèles et des brouillons ; sémantique HTTP corrigée sur ces routes et les collisions d’alias | Typecheck/build backend, 232/232 tests | Harmoniser utilisateurs, appareils et connexions externes | Codex |
+| 2026-09-16 | 4 | Harmonisation utilisateurs/appareils : conflits `409`, alias d’envoi validés avant mutation et transfert inter-session des jetons push globaux | Typecheck/build backend, 238/238 tests | Harmoniser les connexions externes | Codex |
 
 ## Journal des validations
 
@@ -318,6 +319,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | Lot 4 — configuration mail | 220/220, dont 34/34 tests configuration/import/isolation ciblés | Backend typecheck et build valides | Sans migration | Domaine Resend, changement de domaine, alias unitaires/bulk/CSV et secret webhook couverts | Un changement de domaine est refusé s’il rendrait un alias existant inutilisable |
 | 2026-09-16 | Lot 4 — notifications HTML | 223/223, dont 36/36 tests notification/invitation/webhook/isolation ciblés | Backend typecheck et build valides | Sans migration | Société, titre, libellés, valeurs et lien d’activation couverts | Le rendu HTML volontaire passe désormais par un type de lien explicite |
 | 2026-09-16 | Lot 4 — configuration HTTP | 232/232, dont 42/42 tests configuration/routage/isolation ciblés | Backend typecheck et build valides | Sans migration | Profil, règles, modèles, brouillons, 400/404/409 et collisions d’alias couverts | Les erreurs base inattendues ne sont plus maquillées en ressources absentes |
+| 2026-09-16 | Lot 4 — utilisateurs et appareils | 238/238, dont 6/6 tests utilisateurs/appareils ciblés | Backend typecheck et build valides | Sans migration | Collisions, alias inconnus, suppression contrainte, payloads push et transfert inter-tenant couverts | Le jeton push global suit désormais la session courante sans duplication |
 
 ## Journal des incidents et régressions
 

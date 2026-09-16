@@ -2,6 +2,7 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
+import { hasPrismaErrorCode } from '../lib/prismaErrors'
 import { parseRequest } from '../validation/request'
 import { senderGrantCreateSchema, userCreateSchema, userUpdateSchema } from '../validation/schemas'
 
@@ -23,16 +24,23 @@ const userSelect = {
 // (MailRoute) actifs de SON organisation — contrairement à la référence
 // jeprogroup-website (liste fixe d'adresses de service), les alias disponibles
 // varient par organisation.
-async function syncSenderGrants(db: ReturnType<typeof forOrg>, organizationId: string, userId: string, emails: unknown, grantedBy: string): Promise<void> {
-  if (!Array.isArray(emails)) return
+async function resolveSenderGrants(
+  db: ReturnType<typeof forOrg>,
+  emails: string[]
+): Promise<{ wanted: string[]; invalid: string[] }> {
   const routes = await db.mailRoute.findMany({ where: { active: true }, select: { alias: true } })
-  const valid = routes.map(r => r.alias.toLowerCase())
-  const wanted = [...new Set(
-    emails
-      .filter((e): e is string => typeof e === 'string')
-      .map(e => e.toLowerCase().trim())
-      .filter(e => valid.includes(e))
-  )]
+  const valid = new Set(routes.map(route => route.alias.toLowerCase()))
+  const wanted = [...new Set(emails.map(email => email.toLowerCase()))]
+  return { wanted, invalid: wanted.filter(email => !valid.has(email)) }
+}
+
+async function syncSenderGrants(
+  db: ReturnType<typeof forOrg>,
+  organizationId: string,
+  userId: string,
+  wanted: string[],
+  grantedBy: string
+): Promise<void> {
   await db.senderGrant.deleteMany({ where: { userId, email: { notIn: wanted } } })
   for (const email of wanted) {
     const existing = await db.senderGrant.findFirst({ where: { userId, email } })
@@ -51,8 +59,13 @@ router.post('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (r
   if (!input) return
   const { username, nom, email, password, orgRole, proEmail, isDeptHead, grantedSenders } = input
 
+  const db = forOrg(req.user!.organizationId)
+  const resolvedGrants = grantedSenders ? await resolveSenderGrants(db, grantedSenders) : null
+  if (resolvedGrants?.invalid.length) {
+    return res.status(400).json({ error: `Alias inconnu ou inactif : ${resolvedGrants.invalid[0]}.` })
+  }
+
   try {
-    const db = forOrg(req.user!.organizationId)
     const hash = await bcrypt.hash(password, 12)
     const user = await db.user.create({
       data: {
@@ -67,23 +80,30 @@ router.post('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (r
       },
       select: userSelect,
     })
-    if (Array.isArray(grantedSenders) && grantedSenders.length) {
-      await syncSenderGrants(db, req.user!.organizationId, user.id, grantedSenders, req.user!.nom || req.user!.username)
+    if (resolvedGrants?.wanted.length) {
+      await syncSenderGrants(db, req.user!.organizationId, user.id, resolvedGrants.wanted, req.user!.nom || req.user!.username)
       const refreshed = await db.user.findUnique({ where: { id: user.id }, select: userSelect })
-      return res.json(refreshed)
+      return res.status(201).json(refreshed)
     }
-    res.json(user)
+    res.status(201).json(user)
   } catch (e) {
-    const err = e as { code?: string }
-    if (err.code === 'P2002') return res.status(400).json({ error: "Email ou nom d'utilisateur déjà utilisé" })
-    res.status(500).json({ error: 'Erreur serveur' })
+    if (hasPrismaErrorCode(e, 'P2002')) return res.status(409).json({ error: "Email ou nom d'utilisateur déjà utilisé." })
+    throw e
   }
 })
 
 router.put('/:id', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
+  const db = forOrg(req.user!.organizationId)
+  const existing = await db.user.findUnique({ where: { id: req.params.id }, select: { id: true } })
+  if (!existing) return res.status(404).json({ error: 'Utilisateur introuvable.' })
+
   const input = parseRequest(userUpdateSchema, req.body, res)
   if (!input) return
   const { nom, username, email, orgRole, proEmail, password, isDeptHead, grantedSenders } = input
+  const resolvedGrants = grantedSenders ? await resolveSenderGrants(db, grantedSenders) : null
+  if (resolvedGrants?.invalid.length) {
+    return res.status(400).json({ error: `Alias inconnu ou inactif : ${resolvedGrants.invalid[0]}.` })
+  }
   const data: Record<string, unknown> = {}
   if (nom) data.nom = nom
   if (username) data.username = username
@@ -94,17 +114,15 @@ router.put('/:id', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async 
   if (password) data.password = await bcrypt.hash(password, 12)
 
   try {
-    const db = forOrg(req.user!.organizationId)
-    await db.user.update({ where: { id: req.params.id }, data, select: { id: true } })
-    if (grantedSenders !== undefined) {
-      await syncSenderGrants(db, req.user!.organizationId, req.params.id, grantedSenders, req.user!.nom || req.user!.username)
+    await db.user.update({ where: { id: existing.id }, data, select: { id: true } })
+    if (resolvedGrants) {
+      await syncSenderGrants(db, req.user!.organizationId, existing.id, resolvedGrants.wanted, req.user!.nom || req.user!.username)
     }
-    const user = await db.user.findUnique({ where: { id: req.params.id }, select: userSelect })
+    const user = await db.user.findUnique({ where: { id: existing.id }, select: userSelect })
     res.json(user)
   } catch (e) {
-    const err = e as { code?: string }
-    if (err.code === 'P2002') return res.status(400).json({ error: "Email ou nom d'utilisateur déjà utilisé" })
-    res.status(404).json({ error: 'Utilisateur non trouvé' })
+    if (hasPrismaErrorCode(e, 'P2002')) return res.status(409).json({ error: "Email ou nom d'utilisateur déjà utilisé." })
+    throw e
   }
 })
 
@@ -112,21 +130,17 @@ router.post('/:id/sender-grants', authenticateToken, requireOrgRole(['OWNER', 'A
   const input = parseRequest(senderGrantCreateSchema, req.body, res)
   if (!input) return
   const { email } = input
-  try {
-    const db = forOrg(req.user!.organizationId)
-    const targetUser = await db.user.findUnique({ where: { id: req.params.id }, select: { id: true } })
-    if (!targetUser) return res.status(404).json({ error: 'Utilisateur introuvable.' })
-    const route = await db.mailRoute.findFirst({ where: { alias: email, active: true } })
-    if (!route) return res.status(400).json({ error: "Cet alias n'existe pas ou est inactif." })
+  const db = forOrg(req.user!.organizationId)
+  const targetUser = await db.user.findUnique({ where: { id: req.params.id }, select: { id: true } })
+  if (!targetUser) return res.status(404).json({ error: 'Utilisateur introuvable.' })
+  const route = await db.mailRoute.findFirst({ where: { alias: email, active: true } })
+  if (!route) return res.status(400).json({ error: "Cet alias n'existe pas ou est inactif." })
 
-    const existing = await db.senderGrant.findFirst({ where: { userId: req.params.id, email } })
-    const grant = existing ?? (await db.senderGrant.create({
-      data: { organizationId: req.user!.organizationId, userId: req.params.id, email, grantedBy: req.user!.nom || req.user!.username },
-    }))
-    res.status(201).json(grant)
-  } catch {
-    res.status(404).json({ error: 'Utilisateur introuvable.' })
-  }
+  const existingGrant = await db.senderGrant.findFirst({ where: { userId: targetUser.id, email } })
+  const grant = existingGrant ?? (await db.senderGrant.create({
+    data: { organizationId: req.user!.organizationId, userId: targetUser.id, email, grantedBy: req.user!.nom || req.user!.username },
+  }))
+  res.status(201).json(grant)
 })
 
 router.delete('/:id/sender-grants/:grantId', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
@@ -139,13 +153,18 @@ router.delete('/:id/sender-grants/:grantId', authenticateToken, requireOrgRole([
 
 router.delete('/:id', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
   if (req.params.id === req.user!.id)
-    return res.status(400).json({ error: 'Impossible de supprimer votre propre compte' })
+    return res.status(400).json({ error: 'Impossible de supprimer votre propre compte.' })
+  const db = forOrg(req.user!.organizationId)
+  const existing = await db.user.findUnique({ where: { id: req.params.id }, select: { id: true } })
+  if (!existing) return res.status(404).json({ error: 'Utilisateur introuvable.' })
   try {
-    const db = forOrg(req.user!.organizationId)
-    await db.user.delete({ where: { id: req.params.id } })
+    await db.user.delete({ where: { id: existing.id } })
     res.json({ ok: true })
-  } catch {
-    res.status(404).json({ error: 'Utilisateur non trouvé' })
+  } catch (error) {
+    if (hasPrismaErrorCode(error, 'P2003')) {
+      return res.status(409).json({ error: 'Cet utilisateur est encore référencé et ne peut pas être supprimé.' })
+    }
+    throw error
   }
 })
 

@@ -1,6 +1,9 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
+import prisma from '../lib/prisma'
+import { parseRequest } from '../validation/request'
+import { deviceRegistrationSchema, deviceTokenParamSchema } from '../validation/schemas'
 
 const router = Router()
 
@@ -9,36 +12,30 @@ const router = Router()
 // appareil ne peut appartenir qu'à un seul utilisateur à la fois) — un upsert
 // par ce champ est donc légitime ici (c'est un vrai @unique simple, pas composite).
 router.post('/', authenticateToken, async (req, res) => {
-  const { expoPushToken, platform } = req.body
-  if (!expoPushToken || typeof expoPushToken !== 'string') {
-    return res.status(400).json({ error: 'expoPushToken requis.' })
-  }
-  try {
-    const db = forOrg(req.user!.organizationId)
-    const device = await db.deviceToken.upsert({
-      where: { expoPushToken },
-      create: { expoPushToken, platform: platform || 'unknown', userId: req.user!.id, organizationId: req.user!.organizationId },
-      update: { userId: req.user!.id, platform: platform || 'unknown' },
-    })
-    res.status(201).json(device)
-  } catch (err) {
-    console.error('[POST /api/devices]', err)
-    res.status(500).json({ error: 'Erreur serveur.' })
-  }
+  const input = parseRequest(deviceRegistrationSchema, req.body, res)
+  if (!input) return
+  const { expoPushToken, platform } = input
+  // expoPushToken est unique globalement : l'appareil peut changer de compte ou
+  // d'organisation. Cet upsert doit donc utiliser Prisma global, avec une clé unique
+  // à haute entropie, et réaffecter explicitement tenant + utilisateur à la session.
+  const device = await prisma.deviceToken.upsert({
+    where: { expoPushToken },
+    create: { expoPushToken, platform, userId: req.user!.id, organizationId: req.user!.organizationId },
+    update: { organizationId: req.user!.organizationId, userId: req.user!.id, platform },
+  })
+  res.status(201).json(device)
 })
 
 router.delete('/:expoPushToken', authenticateToken, async (req, res) => {
-  try {
-    const db = forOrg(req.user!.organizationId)
-    const existing = await db.deviceToken.findUnique({ where: { expoPushToken: req.params.expoPushToken } })
-    if (!existing || existing.userId !== req.user!.id) {
-      return res.status(404).json({ error: 'Appareil introuvable.' })
-    }
-    await db.deviceToken.delete({ where: { expoPushToken: req.params.expoPushToken } })
-    res.json({ success: true })
-  } catch {
-    res.status(404).json({ error: 'Appareil introuvable.' })
+  const input = parseRequest(deviceTokenParamSchema, req.params, res)
+  if (!input) return
+  const db = forOrg(req.user!.organizationId)
+  const existing = await db.deviceToken.findUnique({ where: { expoPushToken: input.expoPushToken } })
+  if (!existing || existing.userId !== req.user!.id) {
+    return res.status(404).json({ error: 'Appareil introuvable.' })
   }
+  await db.deviceToken.delete({ where: { id: existing.id } })
+  res.json({ success: true })
 })
 
 export default router

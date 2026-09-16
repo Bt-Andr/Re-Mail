@@ -46,7 +46,7 @@ describe('user payload and password validation', () => {
         orgRole: 'MEMBER',
       })
 
-    expect(created.status).toBe(200)
+    expect(created.status).toBe(201)
 
     const rejected = await request(app)
       .put(`/api/users/${created.body.id}`)

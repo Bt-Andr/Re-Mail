@@ -277,6 +277,21 @@ export const draftUpdateSchema = z
   })
   .refine(value => Object.values(value).some(item => item !== undefined), { message: 'Aucune modification demandée.' })
 
+const expoPushTokenSchema = z
+  .string({ required_error: 'expoPushToken requis.', invalid_type_error: 'expoPushToken invalide.' })
+  .trim()
+  .min(1, 'expoPushToken requis.')
+  .max(512, 'expoPushToken invalide.')
+
+export const deviceRegistrationSchema = z.object({
+  expoPushToken: expoPushTokenSchema,
+  platform: z.string().trim().min(1).max(32).regex(/^[a-z0-9_-]+$/i, 'Plateforme invalide.').optional().default('unknown'),
+})
+
+export const deviceTokenParamSchema = z.object({
+  expoPushToken: expoPushTokenSchema,
+})
+
 const emailListSchema = z
   .string({ invalid_type_error: 'Liste de destinataires invalide.' })
   .optional()

@@ -72,7 +72,7 @@ async function sendInviteEmail(
         { label: 'Rôle', value: ORG_ROLE_LABEL[invite.orgRole] ?? invite.orgRole },
         {
           label: 'Activation',
-          value: `<a href="${activationUrl}" style="color:#0F70B7;font-weight:600;">Commencer l'activation →</a>`,
+          link: { href: activationUrl, text: "Commencer l'activation →" },
         },
       ])
     )

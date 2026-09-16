@@ -5,6 +5,7 @@ import config from '../config'
 import prisma from '../lib/prisma'
 import { forOrg } from '../middleware/scopedPrisma'
 import { getMailboxAuth } from '../lib/mailboxAuth'
+import { MailboxProviderError } from '../lib/mailboxErrors'
 import { createThread, createActivity, notifyUser, PERSONAL_MAILBOX_CANAL } from '../helpers/thread'
 import { findCorrelatedThread, normalizeMessageId, parseMessageIdList } from '../helpers/threadCorrelation'
 import { uploadBufferToCloudinary, buildOrgFolder, saveAttachmentRecords, StoredAttachment } from '../helpers/attachments'
@@ -12,6 +13,14 @@ import { enqueueInboundEvent, processInboundEvent } from './inboundEventProcesso
 
 let intervalHandle: NodeJS.Timeout | null = null
 let pollInProgress = false
+
+async function runImapOperation<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation()
+  } catch (error) {
+    throw new MailboxProviderError('IMAP', { cause: error })
+  }
+}
 
 // Appelée une seule fois depuis src/server.ts — jamais depuis src/app.ts (c'est ce
 // fichier que test/*.test.ts importe via supertest, donc les tests ne déclenchent
@@ -134,17 +143,17 @@ export async function importMailboxHistory(connection: ExternalMailboxConnection
   })
 
   let imported = 0
-  await client.connect()
+  await runImapOperation(() => client.connect())
   try {
-    await client.mailboxOpen('INBOX', { readOnly: true })
+    await runImapOperation(() => client.mailboxOpen('INBOX', { readOnly: true }))
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
-    const uids = await client.search({ since }, { uid: true })
+    const uids = await runImapOperation(() => client.search({ since }, { uid: true }))
     // Ne traite que ce que le polling normal ne traitera jamais (uid <= lastSeenUid) —
     // le reste (courrier arrivé depuis la connexion) est déjà géré au fil de l'eau.
     const historicalUids = (Array.isArray(uids) ? uids : []).filter(uid => uid <= connection.lastSeenUid).sort((a, b) => a - b)
 
     for (const uid of historicalUids) {
-      const message = await client.fetchOne(String(uid), { source: true }, { uid: true })
+      const message = await runImapOperation(() => client.fetchOne(String(uid), { source: true }, { uid: true }))
       if (!message || !message.source) continue
       const externalId = `${connection.id}:${connection.uidValidity?.toString() ?? 'unknown'}:${uid}`
       const event = await enqueueInboundEvent(connection.organizationId, 'imap-history', externalId, {

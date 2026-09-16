@@ -57,16 +57,52 @@ describe('POST /api/mailbox-connections', () => {
     expect(mockConnect).not.toHaveBeenCalled()
   })
 
-  it('tests IMAP and SMTP live before creating a row, never echoing the credential', async () => {
+  it('rejects coerced ports and booleans without probing providers', async () => {
     const res = await request(app)
       .post('/api/mailbox-connections')
       .set('Authorization', `Bearer ${org.token}`)
       .send({
         email: 'moi@example.com',
         imapHost: 'imap.example.com',
+        imapPort: '993',
+        imapSecure: 'false',
+        smtpHost: 'smtp.example.com',
+        smtpPort: 465,
+        password: 'secret',
+      })
+    expect(res.status).toBe(400)
+    expect(mockConnect).not.toHaveBeenCalled()
+    expect(mockVerify).not.toHaveBeenCalled()
+  })
+
+  it('rejects obvious local or private mail servers before any network call', async () => {
+    const res = await request(app)
+      .post('/api/mailbox-connections')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({
+        email: 'moi@example.com',
+        imapHost: '127.0.0.1',
         imapPort: 993,
         smtpHost: 'smtp.example.com',
         smtpPort: 465,
+        password: 'secret',
+      })
+    expect(res.status).toBe(400)
+    expect(mockConnect).not.toHaveBeenCalled()
+  })
+
+  it('tests IMAP and SMTP live before creating a row, never echoing the credential', async () => {
+    const res = await request(app)
+      .post('/api/mailbox-connections')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({
+        email: ' MOI@EXAMPLE.COM ',
+        imapHost: ' IMAP.Example.com ',
+        imapPort: 993,
+        imapSecure: false,
+        smtpHost: ' SMTP.Example.com ',
+        smtpPort: 465,
+        smtpSecure: false,
         password: 'super-secret',
       })
 
@@ -80,6 +116,7 @@ describe('POST /api/mailbox-connections', () => {
     const row = await prisma.externalMailboxConnection.findUnique({ where: { id: res.body.id } })
     expect(row?.credentialEnc).toBeTruthy()
     expect(row?.credentialEnc).not.toContain('super-secret')
+    expect(row).toMatchObject({ imapHost: 'imap.example.com', imapSecure: false, smtpHost: 'smtp.example.com', smtpSecure: false })
     // uidNext (50) - 1 : démarre le polling à partir de maintenant, pas un rapatriement complet.
     expect(row?.lastSeenUid).toBe(49)
   })
@@ -100,6 +137,8 @@ describe('POST /api/mailbox-connections', () => {
       })
 
     expect(res.status).toBe(400)
+    expect(res.body.error).toBe('Connexion IMAP impossible.')
+    expect(res.body.error).not.toContain('Invalid credentials')
     expect(mockVerify).not.toHaveBeenCalled()
     const row = await prisma.externalMailboxConnection.findFirst({ where: { email: 'bad@example.com' } })
     expect(row).toBeNull()
@@ -121,6 +160,7 @@ describe('POST /api/mailbox-connections', () => {
       })
 
     expect(res.status).toBe(400)
+    expect(res.body.error).toBe('Connexion SMTP impossible.')
     const row = await prisma.externalMailboxConnection.findFirst({ where: { email: 'imap-ok-smtp-bad@example.com' } })
     expect(row).toBeNull()
   })
@@ -276,6 +316,52 @@ describe('POST /api/mailbox-connections/imap/signin', () => {
     await cleanupOrg(proOrg.id)
     await cleanupOrg(res.body.organization.id)
   })
+
+  it('returns 409 when the address is already attached to another user in the personal organization', async () => {
+    const organization = await prisma.organization.create({
+      data: { name: 'Perso conflict', slug: `perso-conflict-${Date.now()}`, isPersonal: true },
+    })
+    const owner = await prisma.user.create({
+      data: {
+        organizationId: organization.id,
+        username: `perso-conflict-owner-${Date.now()}`,
+        email: signinBody.email,
+        password: 'unused-random-hash',
+        nom: 'Owner',
+        orgRole: 'OWNER',
+      },
+    })
+    const other = await prisma.user.create({
+      data: {
+        organizationId: organization.id,
+        username: `perso-conflict-other-${Date.now()}`,
+        email: `other-${Date.now()}@example.com`,
+        password: 'unused-random-hash',
+        nom: 'Other',
+        orgRole: 'MEMBER',
+      },
+    })
+    await prisma.externalMailboxConnection.create({
+      data: {
+        organizationId: organization.id,
+        userId: other.id,
+        provider: 'imap',
+        email: signinBody.email,
+        imapHost: signinBody.imapHost,
+        imapPort: signinBody.imapPort,
+        imapSecure: true,
+        smtpHost: signinBody.smtpHost,
+        smtpPort: signinBody.smtpPort,
+        smtpSecure: true,
+        credentialEnc: 'irrelevant',
+      },
+    })
+
+    const res = await request(app).post('/api/mailbox-connections/imap/signin').send(signinBody)
+    expect(res.status).toBe(409)
+    expect(res.body.token).toBeUndefined()
+    expect(owner.id).toBeTruthy()
+  })
 })
 
 function rawEmail(from: string, subject: string, body = 'Contenu.'): string {
@@ -426,5 +512,16 @@ describe('POST /api/mailbox-connections/:id/import-history', () => {
     const [query] = mockSearch.mock.calls[0]
     const daysRequested = (Date.now() - query.since.getTime()) / (24 * 60 * 60 * 1000)
     expect(daysRequested).toBeCloseTo(90, 0) // HISTORY_IMPORT_MAX_DAYS
+  })
+
+  it('rejects a string days value instead of coercing it', async () => {
+    const res = await request(app)
+      .post(`/api/mailbox-connections/${connectionId}/import-history`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ days: '30' })
+    expect(res.status).toBe(400)
+    expect(mockSearch).not.toHaveBeenCalled()
+    const connection = await prisma.externalMailboxConnection.findUnique({ where: { id: connectionId } })
+    expect(connection?.historyImportedAt).toBeNull()
   })
 })

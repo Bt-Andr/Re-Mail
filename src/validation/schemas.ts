@@ -292,6 +292,65 @@ export const deviceTokenParamSchema = z.object({
   expoPushToken: expoPushTokenSchema,
 })
 
+function isBlockedMailboxHost(host: string): boolean {
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return true
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
+  if (!match) return false
+  const octets = match.slice(1).map(Number)
+  if (octets.some(octet => octet > 255)) return true
+  const [a, b] = octets
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && (b === 0 || b === 168)) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    a >= 224
+  )
+}
+
+const mailboxHostSchema = z
+  .string({ required_error: 'Serveur requis.', invalid_type_error: 'Serveur invalide.' })
+  .trim()
+  .toLowerCase()
+  .min(1, 'Serveur requis.')
+  .max(253, 'Serveur invalide.')
+  .regex(
+    /^(?:(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?|(?:\d{1,3}\.){3}\d{1,3})$/,
+    'Serveur invalide.'
+  )
+  .refine(host => !isBlockedMailboxHost(host), 'Les serveurs locaux ou privés ne sont pas autorisés.')
+
+const mailboxPortSchema = z
+  .number({ required_error: 'Port requis.', invalid_type_error: 'Port invalide.' })
+  .int('Port invalide.')
+  .min(1, 'Port invalide.')
+  .max(65_535, 'Port invalide.')
+
+export const mailboxCredentialsSchema = z.object({
+  email: normalizedEmailSchema,
+  imapHost: mailboxHostSchema,
+  imapPort: mailboxPortSchema,
+  imapSecure: z.boolean().optional().default(true),
+  smtpHost: mailboxHostSchema,
+  smtpPort: mailboxPortSchema,
+  smtpSecure: z.boolean().optional().default(true),
+  password: z.string({ required_error: 'Mot de passe requis.', invalid_type_error: 'Mot de passe invalide.' }).min(1, 'Mot de passe requis.').max(MAX_PASSWORD_LENGTH, 'Mot de passe invalide.'),
+})
+
+export const mailboxConnectionIdParamSchema = z.object({ id: resourceIdSchema })
+
+export const mailboxHistoryImportSchema = z.object({
+  days: z
+    .number({ invalid_type_error: 'Le nombre de jours doit être numérique.' })
+    .optional()
+    .default(30)
+    .transform(days => Math.min(Math.max(Math.round(days), 1), 90)),
+})
+
 const emailListSchema = z
   .string({ invalid_type_error: 'Liste de destinataires invalide.' })
   .optional()

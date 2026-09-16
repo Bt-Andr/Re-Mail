@@ -6,13 +6,19 @@ import { authenticateToken } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
 import prisma from '../lib/prisma'
 import { encryptMailboxCredential } from '../lib/mailboxCredentialCrypto'
+import { MailboxProviderError } from '../lib/mailboxErrors'
+import { hasPrismaErrorCode } from '../lib/prismaErrors'
 import { signToken } from '../lib/jwt'
 import { createPersonalAccountFromMailbox } from '../lib/personalAccountFactory'
-import { importMailboxHistory, HISTORY_IMPORT_MIN_DAYS, HISTORY_IMPORT_MAX_DAYS } from '../jobs/mailboxPoller'
+import { importMailboxHistory } from '../jobs/mailboxPoller'
+import { parseRequest } from '../validation/request'
+import {
+  mailboxConnectionIdParamSchema,
+  mailboxCredentialsSchema,
+  mailboxHistoryImportSchema,
+} from '../validation/schemas'
 
 const router = Router()
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 interface ImapCredentials {
   email: string
@@ -47,7 +53,7 @@ async function probeImapMailbox(creds: ImapCredentials): Promise<{ uidValidity: 
     const box = await client.mailboxOpen('INBOX')
     return { uidValidity: box.uidValidity, uidNext: box.uidNext }
   } catch (e) {
-    throw new Error(`Connexion IMAP impossible : ${(e as Error).message}`)
+    throw new MailboxProviderError('IMAP', { cause: e })
   } finally {
     client.logout().catch(() => client.close())
   }
@@ -63,7 +69,7 @@ async function probeSmtp(creds: SmtpCredentials): Promise<void> {
     })
     await transporter.verify()
   } catch (e) {
-    throw new Error(`Connexion SMTP impossible : ${(e as Error).message}`)
+    throw new MailboxProviderError('SMTP', { cause: e })
   }
 }
 
@@ -98,38 +104,30 @@ router.get('/', authenticateToken, async (req, res) => {
 })
 
 // POST /api/mailbox-connections — teste la connexion IMAP ET SMTP en direct avant
-// d'enregistrer quoi que ce soit : mieux vaut un 400 immédiat avec l'erreur brute
-// qu'un identifiant mort stocké silencieusement.
+// d'enregistrer quoi que ce soit : mieux vaut un 400 immédiat et stable qu'un
+// identifiant mort stocké silencieusement. Le détail interne du fournisseur n'est
+// jamais renvoyé au client.
 router.post('/', authenticateToken, async (req, res) => {
-  const { email, imapHost, smtpHost, password } = req.body
-  const imapPort = Number(req.body.imapPort)
-  const smtpPort = Number(req.body.smtpPort)
-  const imapSecure = req.body.imapSecure !== false
-  const smtpSecure = req.body.smtpSecure !== false
-
-  if (
-    typeof email !== 'string' || !EMAIL_RE.test(email) ||
-    typeof imapHost !== 'string' || !imapHost.trim() || !Number.isFinite(imapPort) ||
-    typeof smtpHost !== 'string' || !smtpHost.trim() || !Number.isFinite(smtpPort) ||
-    typeof password !== 'string' || !password
-  ) {
-    return res.status(400).json({ error: 'Champs requis manquants ou invalides.' })
-  }
+  const input = parseRequest(mailboxCredentialsSchema, req.body, res)
+  if (!input) return
+  const { email, imapHost, imapPort, imapSecure, smtpHost, smtpPort, smtpSecure, password } = input
 
   let uidValidity: bigint
   let uidNext: number
   try {
-    const probe = await probeImapMailbox({ email, imapHost: imapHost.trim(), imapPort, imapSecure, password })
+    const probe = await probeImapMailbox({ email, imapHost, imapPort, imapSecure, password })
     uidValidity = probe.uidValidity
     uidNext = probe.uidNext
   } catch (e) {
-    return res.status(400).json({ error: (e as Error).message })
+    if (e instanceof MailboxProviderError) return res.status(400).json({ error: e.message })
+    throw e
   }
 
   try {
-    await probeSmtp({ email, smtpHost: smtpHost.trim(), smtpPort, smtpSecure, password })
+    await probeSmtp({ email, smtpHost, smtpPort, smtpSecure, password })
   } catch (e) {
-    return res.status(400).json({ error: (e as Error).message })
+    if (e instanceof MailboxProviderError) return res.status(400).json({ error: e.message })
+    throw e
   }
 
   try {
@@ -139,11 +137,11 @@ router.post('/', authenticateToken, async (req, res) => {
         organizationId: req.user!.organizationId,
         userId: req.user!.id,
         provider: 'imap',
-        email: email.toLowerCase().trim(),
-        imapHost: imapHost.trim(),
+        email,
+        imapHost,
         imapPort,
         imapSecure,
-        smtpHost: smtpHost.trim(),
+        smtpHost,
         smtpPort,
         smtpSecure,
         credentialEnc: encryptMailboxCredential(password),
@@ -157,10 +155,8 @@ router.post('/', authenticateToken, async (req, res) => {
     })
     res.status(201).json(connection)
   } catch (e) {
-    const err = e as { code?: string }
-    if (err.code === 'P2002') return res.status(409).json({ error: 'Cette adresse est déjà connectée.' })
-    console.error('[POST /api/mailbox-connections]', e)
-    res.status(500).json({ error: 'Erreur serveur.' })
+    if (hasPrismaErrorCode(e, 'P2002')) return res.status(409).json({ error: 'Cette adresse est déjà connectée.' })
+    throw e
   }
 })
 
@@ -186,28 +182,17 @@ const imapSigninLimiter = rateLimit({
 // existant (perso OU d'équipe) -> reconnexion, vraie session directement — voir la note
 // plus bas sur la décision produit qui a supprimé la distinction perso/équipe ici.
 router.post('/imap/signin', imapSigninLimiter, async (req, res) => {
-  const { imapHost, smtpHost, password } = req.body
-  const email = typeof req.body.email === 'string' ? req.body.email.toLowerCase().trim() : req.body.email
-  const imapPort = Number(req.body.imapPort)
-  const smtpPort = Number(req.body.smtpPort)
-  const imapSecure = req.body.imapSecure !== false
-  const smtpSecure = req.body.smtpSecure !== false
-
-  if (
-    typeof email !== 'string' || !EMAIL_RE.test(email) ||
-    typeof imapHost !== 'string' || !imapHost.trim() || !Number.isFinite(imapPort) ||
-    typeof smtpHost !== 'string' || !smtpHost.trim() || !Number.isFinite(smtpPort) ||
-    typeof password !== 'string' || !password
-  ) {
-    return res.status(400).json({ error: 'Champs requis manquants ou invalides.' })
-  }
+  const input = parseRequest(mailboxCredentialsSchema, req.body, res)
+  if (!input) return
+  const { email, imapHost, imapPort, imapSecure, smtpHost, smtpPort, smtpSecure, password } = input
 
   let uidNext: number
   try {
-    uidNext = (await probeImapMailbox({ email, imapHost: imapHost.trim(), imapPort, imapSecure, password })).uidNext
-    await probeSmtp({ email, smtpHost: smtpHost.trim(), smtpPort, smtpSecure, password })
+    uidNext = (await probeImapMailbox({ email, imapHost, imapPort, imapSecure, password })).uidNext
+    await probeSmtp({ email, smtpHost, smtpPort, smtpSecure, password })
   } catch (e) {
-    return res.status(400).json({ error: (e as Error).message })
+    if (e instanceof MailboxProviderError) return res.status(400).json({ error: e.message })
+    throw e
   }
 
   // Résout UNIQUEMENT un compte personnel existant (voir gmailOAuth.ts pour le même
@@ -227,10 +212,10 @@ router.post('/imap/signin', imapSigninLimiter, async (req, res) => {
     if (existingConnection && existingConnection.userId !== userId) return false
     const data = {
       provider: 'imap',
-      imapHost: imapHost.trim(),
+      imapHost,
       imapPort,
       imapSecure,
-      smtpHost: smtpHost.trim(),
+      smtpHost,
       smtpPort,
       smtpSecure,
       credentialEnc: encryptMailboxCredential(password),
@@ -258,7 +243,7 @@ router.post('/imap/signin', imapSigninLimiter, async (req, res) => {
   }
 
   const attached = await attachMailbox(organizationId, userId)
-  if (!attached) return res.status(400).json({ error: 'Cette adresse est déjà connectée par un autre membre de cette organisation.' })
+  if (!attached) return res.status(409).json({ error: 'Cette adresse est déjà connectée par un autre membre de cette organisation.' })
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -279,8 +264,10 @@ router.post('/imap/signin', imapSigninLimiter, async (req, res) => {
 })
 
 router.delete('/:id', authenticateToken, async (req, res) => {
+  const input = parseRequest(mailboxConnectionIdParamSchema, req.params, res)
+  if (!input) return
   const db = forOrg(req.user!.organizationId)
-  const deleted = await db.externalMailboxConnection.deleteMany({ where: { id: req.params.id, userId: req.user!.id } })
+  const deleted = await db.externalMailboxConnection.deleteMany({ where: { id: input.id, userId: req.user!.id } })
   if (deleted.count === 0) return res.status(404).json({ error: 'Connexion introuvable.' })
   res.status(204).end()
 })
@@ -289,9 +276,11 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // en `status: 'error'` et ne la retente plus jamais tout seul (coupe-circuit, voir
 // src/jobs/mailboxPoller.ts) ; ce endpoint est le seul moyen de la relancer.
 router.patch('/:id/retry', authenticateToken, async (req, res) => {
+  const input = parseRequest(mailboxConnectionIdParamSchema, req.params, res)
+  if (!input) return
   const db = forOrg(req.user!.organizationId)
   const updated = await db.externalMailboxConnection.updateMany({
-    where: { id: req.params.id, userId: req.user!.id },
+    where: { id: input.id, userId: req.user!.id },
     data: { status: 'connected', lastError: null },
   })
   if (updated.count === 0) return res.status(404).json({ error: 'Connexion introuvable.' })
@@ -304,22 +293,22 @@ router.patch('/:id/retry', authenticateToken, async (req, res) => {
 // `days` reste volontairement plafonné pour éviter une requête interminable ou un
 // import massif silencieux.
 router.post('/:id/import-history', authenticateToken, async (req, res) => {
+  const params = parseRequest(mailboxConnectionIdParamSchema, req.params, res)
+  if (!params) return
   const db = forOrg(req.user!.organizationId)
-  const connection = await db.externalMailboxConnection.findFirst({ where: { id: req.params.id, userId: req.user!.id } })
+  const connection = await db.externalMailboxConnection.findFirst({ where: { id: params.id, userId: req.user!.id } })
   if (!connection) return res.status(404).json({ error: 'Connexion introuvable.' })
   if (connection.historyImportedAt) return res.status(409).json({ error: 'Historique déjà importé pour cette boîte.' })
 
-  const daysRaw = Number(req.body?.days)
-  const days = Number.isFinite(daysRaw)
-    ? Math.min(Math.max(Math.round(daysRaw), HISTORY_IMPORT_MIN_DAYS), HISTORY_IMPORT_MAX_DAYS)
-    : 30
+  const input = parseRequest(mailboxHistoryImportSchema, req.body, res)
+  if (!input) return
 
   try {
-    const { imported } = await importMailboxHistory(connection, days)
+    const { imported } = await importMailboxHistory(connection, input.days)
     res.json({ imported })
   } catch (e) {
-    console.error('[POST /api/mailbox-connections/:id/import-history]', e)
-    res.status(400).json({ error: (e as Error).message || "Import de l'historique impossible." })
+    if (e instanceof MailboxProviderError) return res.status(400).json({ error: e.message })
+    throw e
   }
 })
 

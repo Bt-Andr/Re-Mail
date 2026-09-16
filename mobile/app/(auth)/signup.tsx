@@ -27,6 +27,10 @@ export default function SignupScreen() {
 
   const submit = async () => {
     setError('');
+    if (password.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.');
+      return;
+    }
     // L'accès organisation ne doit jamais être la toute première identité d'un compte
     // (décision produit — plan "Découpler l'identité personnelle de l'accès
     // organisation", Phase 2) : une identité perso doit exister avant de créer une
@@ -121,7 +125,7 @@ export default function SignupScreen() {
           <Button
             onPress={submit}
             loading={loading}
-            disabled={!nom.trim() || !username.trim() || !email.trim() || !password || (accountType === 'pro' && !orgName.trim())}
+            disabled={!nom.trim() || !username.trim() || !email.trim() || password.length < 8 || (accountType === 'pro' && !orgName.trim())}
           >
             Créer mon compte
           </Button>

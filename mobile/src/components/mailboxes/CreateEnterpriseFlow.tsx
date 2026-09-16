@@ -35,6 +35,10 @@ export function CreateEnterpriseFlow({ open, onClose }: { open: boolean; onClose
 
   const submit = async () => {
     setError('');
+    if (password.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.');
+      return;
+    }
     setLoading(true);
     try {
       const data = await signup({ accountType: 'pro', orgName, nom, username: username.trim(), email: email.trim(), password });
@@ -64,7 +68,7 @@ export function CreateEnterpriseFlow({ open, onClose }: { open: boolean; onClose
       <Button
         onPress={submit}
         loading={loading}
-        disabled={!nom.trim() || !username.trim() || !email.trim() || !password || !orgName.trim()}
+        disabled={!nom.trim() || !username.trim() || !email.trim() || password.length < 8 || !orgName.trim()}
       >
         Continuer
       </Button>

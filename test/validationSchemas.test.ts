@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
   emailReplySchema,
+  inviteActivationSchema,
+  loginSchema,
+  signupSchema,
   threadAssignmentSchema,
   threadBulkActionSchema,
   threadListQuerySchema,
   threadStarSchema,
   threadStatusSchema,
+  userCreateSchema,
+  userInviteCreateSchema,
+  userUpdateSchema,
 } from '../src/validation/schemas'
 
 describe('shared request validation schemas', () => {
@@ -61,5 +67,28 @@ describe('shared request validation schemas', () => {
     expect(threadBulkActionSchema.safeParse({ ids: ['thread-1'] }).success).toBe(false)
     expect(threadBulkActionSchema.safeParse({ ids: [], status: 'resolu' }).success).toBe(false)
     expect(threadBulkActionSchema.safeParse({ ids: Array.from({ length: 201 }, (_, index) => `thread-${index}`), status: 'resolu' }).success).toBe(false)
+  })
+
+  it('enforces password policy on account creation but not on legacy login', () => {
+    const signup = {
+      orgName: 'Organisation',
+      username: 'owner',
+      email: 'owner@example.com',
+      nom: 'Owner',
+    }
+    expect(signupSchema.safeParse({ ...signup, password: 'short' }).success).toBe(false)
+    expect(signupSchema.safeParse({ ...signup, password: 'long-enough' }).success).toBe(true)
+    expect(loginSchema.safeParse({ username: 'legacy', password: 'x' }).success).toBe(true)
+  })
+
+  it('applies the same password and identity contracts to users and invitations', () => {
+    const user = { username: 'member', nom: 'Member', email: 'member@example.com' }
+    expect(userCreateSchema.safeParse({ ...user, password: '1234567' }).success).toBe(false)
+    expect(userCreateSchema.safeParse({ ...user, password: '12345678' }).success).toBe(true)
+    expect(userUpdateSchema.safeParse({ password: '1234567' }).success).toBe(false)
+    expect(userUpdateSchema.safeParse({ password: '' }).success).toBe(true)
+    expect(userInviteCreateSchema.safeParse(user).success).toBe(true)
+    expect(userInviteCreateSchema.safeParse({ ...user, email: 'invalid' }).success).toBe(false)
+    expect(inviteActivationSchema.safeParse({ fileToken: 'file', activationToken: 'activation', password: '1234567' }).success).toBe(false)
   })
 })

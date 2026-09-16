@@ -10,7 +10,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Statut | En cours — lots 2 et 3 terminés, lots 1 et 4 actifs |
 | Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 31 fichiers de tests, 206 tests réussis |
+| Baseline fonctionnelle | 32 fichiers de tests, 213 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -134,7 +134,7 @@ Validation :
 
 Statut : **En cours — relations utilisateur critiques et entrées de messagerie contrôlées**
 
-- [~] Créer les schémas de validation partagés — socle Zod et routes email/threads migrés ; auth, utilisateurs, invitations et configuration restent à couvrir.
+- [~] Créer les schémas de validation partagés — email, threads, auth, utilisateurs et invitations migrés ; les routes de configuration restent à couvrir.
 - [x] Vérifier le tenant de l’utilisateur assigné à un fil.
 - [x] Vérifier le tenant de l’utilisateur assigné à une règle.
 - [x] Vérifier le tenant du bénéficiaire d’un `SenderGrant`.
@@ -143,7 +143,7 @@ Statut : **En cours — relations utilisateur critiques et entrées de messageri
 - [x] Borner la pagination des fils (`take` 1–100, `skip` 0–100000).
 - [x] Valider le destinataire principal avant tout effet de bord.
 - [x] Valider les longueurs du sujet et du corps avant tout effet de bord.
-- [ ] Imposer la politique de mot de passe côté serveur.
+- [x] Imposer un minimum de huit caractères côté serveur à la création et au changement, sans bloquer la connexion des comptes historiques.
 - [ ] Vérifier le domaine auprès de Resend.
 - [ ] Valider les alias contre le domaine.
 - [ ] Valider le format du secret webhook.
@@ -153,7 +153,7 @@ Statut : **En cours — relations utilisateur critiques et entrées de messageri
 Validation :
 
 - [~] Tests cross-tenant négatifs — affectation, routage, autorisation d’expéditeur, réponse et source de transfert couverts ; inventaire restant à poursuivre.
-- [~] Tests de payloads malformés — envoi et identifiants relationnels couverts ; autres routes à inventorier.
+- [~] Tests de payloads malformés — email, threads, auth, utilisateurs et invitations couverts ; routes de configuration restantes.
 - [x] Tests de limites de taille de l’envoi et de pagination des fils.
 - [ ] Tests de domaine et alias.
 - [ ] Tests d’échappement HTML.
@@ -291,6 +291,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-10 | — | Remise au vert du quality gate Dashboard : ordre stable des hooks, formatage et configuration explicite des exports Fast Refresh | Lint, typecheck et build Dashboard | Reprendre le lot 4 | Codex |
 | 2026-09-15 | 4 | Validation anticipée du message source d’un transfert, avec contrôle du tenant et de l’appartenance au fil avant création du token | Typecheck/build backend, 201/201 tests | Centraliser les schémas de validation | Codex |
 | 2026-09-16 | 4 | Introduction du socle Zod partagé et migration des payloads email, pagination et mutations de fils | Typecheck/build backend, 206/206 tests | Migrer auth, utilisateurs, invitations et configuration | Codex |
+| 2026-09-16 | 4 | Migration Zod de l’authentification, des utilisateurs et des invitations ; politique de huit caractères alignée sur le serveur, le webmail et le mobile | Typecheck/build backend, build webmail, typecheck mobile, 213/213 tests | Valider domaines, alias et secret webhook | Codex |
 
 ## Journal des validations
 
@@ -310,6 +311,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-10 | Passe globale | 199/199, dont 58/58 scénarios courrier ciblés | Web, webmail, mobile et dashboard valides | 14/14 appliquées sur la base Docker locale | Non exécuté, tests end-to-end encore absents | Worktree propre avant correction ; dette lint Dashboard identifiée puis corrigée |
 | 2026-09-15 | Lot 4 — transfert | 201/201, dont 14/14 tests réponse/isolation ciblés | Backend typecheck et build valides | Sans migration | Transferts inter-fil et inter-tenant couverts par intégration | Aucun token, message sortant, appel fournisseur ou événement d’activité avant rejet |
 | 2026-09-16 | Lot 4 — validation Zod 1 | 206/206, dont 30/30 tests validation/email/threads/isolation ciblés | Backend typecheck et build valides | Sans migration | Schémas unitaires et routes critiques couverts | Zod devient une dépendance backend explicite ; contrats webmail/mobile conservés |
+| 2026-09-16 | Lot 4 — validation Zod 2 | 213/213, dont 41/41 tests auth/utilisateurs/invitations ciblés | Backend typecheck/build, webmail build et mobile typecheck valides | Sans migration | Création, changement, activation, interfaces et connexion historique couverts | Les mots de passe courts existants restent utilisables uniquement pour se connecter |
 
 ## Journal des incidents et régressions
 

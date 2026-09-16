@@ -19,6 +19,10 @@ export function SignupPage() {
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+    if (form.password.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.')
+      return
+    }
     // L'accès organisation ne doit jamais être la toute première identité d'un compte
     // (décision produit — plan "Découpler l'identité personnelle de l'accès
     // organisation", Phase 2) : une identité perso doit exister avant de créer une
@@ -94,7 +98,7 @@ export function SignupPage() {
           <Input label="Votre nom" value={form.nom} onChange={set('nom')} autoFocus={accountType === 'perso'} required />
           <Input label="Nom d'utilisateur" value={form.username} onChange={set('username')} required />
           <Input label="Email" type="email" value={form.email} onChange={set('email')} required />
-          <Input label="Mot de passe" type="password" value={form.password} onChange={set('password')} required />
+          <Input label="Mot de passe" type="password" value={form.password} onChange={set('password')} minLength={8} required />
           {error && (
             <p className="text-xs text-destructive">
               {error}{' '}

@@ -103,6 +103,27 @@ describe('User invite activation flow', () => {
     expect(me.body.user.username).toBe(created.body.username)
   })
 
+  it('rejects a short password during activation without consuming the invitation', async () => {
+    const created = await createInvite(org)
+    expect(created.status).toBe(201)
+    const fileBytes = await downloadFile(org, created.body.id)
+    const code = await generateCode(org, created.body.id)
+    const resolved = await request(app).post('/api/public/user-invites/resolve').attach('file', fileBytes, 'activation.jep')
+    const verified = await request(app)
+      .post('/api/public/user-invites/verify-code')
+      .send({ fileToken: resolved.body.fileToken, code })
+
+    const rejected = await request(app)
+      .post('/api/public/user-invites/activate')
+      .send({ fileToken: resolved.body.fileToken, activationToken: verified.body.activationToken, password: '1234567' })
+
+    expect(rejected.status).toBe(400)
+    const invite = await prisma.userInvite.findUniqueOrThrow({ where: { id: created.body.id } })
+    expect(invite.status).toBe('PENDING')
+    expect(invite.createdUserId).toBeNull()
+    expect(invite.activationTokenHash).not.toBeNull()
+  })
+
   it('decouples the file from the code: re-downloading the file does not change fileToken or invalidate a code', async () => {
     const created = await createInvite(org)
     const code = await generateCode(org, created.body.id)

@@ -32,6 +32,10 @@ export function CreateEnterpriseFlow({ open, onClose }: { open: boolean; onClose
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+    if (form.password.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.')
+      return
+    }
     setLoading(true)
     try {
       const res = await apiFetch('/auth/signup', { method: 'POST', body: JSON.stringify({ ...form, accountType: 'pro' }) })
@@ -72,7 +76,7 @@ export function CreateEnterpriseFlow({ open, onClose }: { open: boolean; onClose
         <Input label="Votre nom" value={form.nom} onChange={set('nom')} required />
         <Input label="Nom d'utilisateur" value={form.username} onChange={set('username')} required />
         <Input label="Email" type="email" value={form.email} onChange={set('email')} required />
-        <Input label="Mot de passe" type="password" value={form.password} onChange={set('password')} required />
+        <Input label="Mot de passe" type="password" value={form.password} onChange={set('password')} minLength={8} required />
         {error && <p className="text-xs text-destructive">{error}</p>}
         <Button type="submit" loading={loading} className="w-full">Continuer</Button>
       </form>

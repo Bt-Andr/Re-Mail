@@ -2,6 +2,8 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
+import { parseRequest } from '../validation/request'
+import { senderGrantCreateSchema, userCreateSchema, userUpdateSchema } from '../validation/schemas'
 
 const router = Router()
 
@@ -45,9 +47,9 @@ router.get('/', authenticateToken, async (req, res) => {
 })
 
 router.post('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const { username, nom, email, password, orgRole, proEmail, isDeptHead, grantedSenders } = req.body
-  if (!username || !nom || !email || !password)
-    return res.status(400).json({ error: 'Champs requis manquants' })
+  const input = parseRequest(userCreateSchema, req.body, res)
+  if (!input) return
+  const { username, nom, email, password, orgRole, proEmail, isDeptHead, grantedSenders } = input
 
   try {
     const db = forOrg(req.user!.organizationId)
@@ -55,7 +57,7 @@ router.post('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (r
     const user = await db.user.create({
       data: {
         organizationId: req.user!.organizationId,
-        username: username.toLowerCase().trim(),
+        username,
         nom,
         email,
         password: hash,
@@ -79,21 +81,23 @@ router.post('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (r
 })
 
 router.put('/:id', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const { nom, username, email, orgRole, proEmail, password, isDeptHead } = req.body
+  const input = parseRequest(userUpdateSchema, req.body, res)
+  if (!input) return
+  const { nom, username, email, orgRole, proEmail, password, isDeptHead, grantedSenders } = input
   const data: Record<string, unknown> = {}
   if (nom) data.nom = nom
-  if (username) data.username = (username as string).toLowerCase().trim()
+  if (username) data.username = username
   if (email) data.email = email
-  if (orgRole === 'OWNER' || orgRole === 'ADMIN' || orgRole === 'MEMBER') data.orgRole = orgRole
-  if ('proEmail' in req.body) data.proEmail = proEmail || null
-  if ('isDeptHead' in req.body) data.isDeptHead = !!isDeptHead
+  if (orgRole) data.orgRole = orgRole
+  if (proEmail !== undefined) data.proEmail = proEmail || null
+  if (isDeptHead !== undefined) data.isDeptHead = isDeptHead
   if (password) data.password = await bcrypt.hash(password, 12)
 
   try {
     const db = forOrg(req.user!.organizationId)
     await db.user.update({ where: { id: req.params.id }, data, select: { id: true } })
-    if ('grantedSenders' in req.body) {
-      await syncSenderGrants(db, req.user!.organizationId, req.params.id, req.body.grantedSenders, req.user!.nom || req.user!.username)
+    if (grantedSenders !== undefined) {
+      await syncSenderGrants(db, req.user!.organizationId, req.params.id, grantedSenders, req.user!.nom || req.user!.username)
     }
     const user = await db.user.findUnique({ where: { id: req.params.id }, select: userSelect })
     res.json(user)
@@ -105,8 +109,9 @@ router.put('/:id', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async 
 })
 
 router.post('/:id/sender-grants', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const email = typeof req.body.email === 'string' ? req.body.email.toLowerCase().trim() : ''
-  if (!email) return res.status(400).json({ error: 'email requis.' })
+  const input = parseRequest(senderGrantCreateSchema, req.body, res)
+  if (!input) return
+  const { email } = input
   try {
     const db = forOrg(req.user!.organizationId)
     const targetUser = await db.user.findUnique({ where: { id: req.params.id }, select: { id: true } })

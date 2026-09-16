@@ -5,6 +5,8 @@ export const MAX_SUBJECT_LENGTH = 998
 export const MAX_MESSAGE_LENGTH = 100_000
 export const MAX_RESOURCE_ID_LENGTH = 128
 export const MAX_RECIPIENTS = 20
+export const MIN_PASSWORD_LENGTH = 8
+export const MAX_PASSWORD_LENGTH = 1_024
 
 export const resourceIdSchema = z
   .string({ required_error: 'Identifiant requis.', invalid_type_error: 'Identifiant invalide.' })
@@ -17,6 +19,134 @@ export const emailAddressSchema = z
   .trim()
   .max(MAX_EMAIL_LENGTH, 'Adresse email invalide.')
   .email('Adresse email invalide.')
+
+export const passwordSchema = z
+  .string({ required_error: 'Mot de passe requis.', invalid_type_error: 'Le mot de passe doit être textuel.' })
+  .min(MIN_PASSWORD_LENGTH, `Le mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères.`)
+  .max(MAX_PASSWORD_LENGTH, 'Le mot de passe est trop long.')
+
+const loginPasswordSchema = z
+  .string({ required_error: 'Identifiants requis.', invalid_type_error: 'Identifiants requis.' })
+  .min(1, 'Identifiants requis.')
+  .max(MAX_PASSWORD_LENGTH, 'Identifiants invalides.')
+
+const usernameSchema = z
+  .string({ required_error: "Nom d'utilisateur requis.", invalid_type_error: "Nom d'utilisateur invalide." })
+  .trim()
+  .min(1, "Nom d'utilisateur requis.")
+  .max(64, "Le nom d'utilisateur est trop long.")
+  .transform(value => value.toLowerCase())
+
+const personNameSchema = z
+  .string({ required_error: 'Nom requis.', invalid_type_error: 'Nom invalide.' })
+  .trim()
+  .min(1, 'Nom requis.')
+  .max(160, 'Le nom est trop long.')
+
+const normalizedEmailSchema = emailAddressSchema.transform(value => value.toLowerCase())
+const optionalEmailSchema = z.union([normalizedEmailSchema, z.literal(''), z.null()]).optional()
+const orgRoleSchema = z.enum(['OWNER', 'ADMIN', 'MEMBER'])
+const grantedSendersSchema = z.array(normalizedEmailSchema).max(100, 'Trop d’adresses autorisées.').optional()
+
+export const signupSchema = z
+  .object({
+    accountType: z.enum(['perso', 'pro']).optional(),
+    orgName: z.string().trim().min(1).max(160, "Le nom de l'organisation est trop long.").optional(),
+    username: usernameSchema,
+    email: normalizedEmailSchema,
+    password: passwordSchema,
+    nom: personNameSchema,
+  })
+  .passthrough()
+  .superRefine((value, ctx) => {
+    if (value.accountType !== 'perso' && !value.orgName) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Champs requis manquants.' })
+    }
+  })
+
+export const loginSchema = z.object({
+  username: usernameSchema,
+  password: loginPasswordSchema,
+})
+
+export const googleExchangeSchema = z.object({
+  handoff: resourceIdSchema,
+})
+
+export const userCreateSchema = z
+  .object({
+    username: usernameSchema,
+    nom: personNameSchema,
+    email: normalizedEmailSchema,
+    password: passwordSchema,
+    orgRole: orgRoleSchema.optional(),
+    proEmail: optionalEmailSchema,
+    isDeptHead: z.boolean().optional(),
+    grantedSenders: grantedSendersSchema,
+  })
+  .passthrough()
+
+export const userUpdateSchema = z
+  .object({
+    nom: personNameSchema.optional(),
+    username: usernameSchema.optional(),
+    email: normalizedEmailSchema.optional(),
+    orgRole: orgRoleSchema.optional(),
+    proEmail: optionalEmailSchema,
+    password: z.union([z.literal(''), passwordSchema]).optional(),
+    isDeptHead: z.boolean().optional(),
+    grantedSenders: grantedSendersSchema,
+  })
+  .passthrough()
+  .refine(
+    value =>
+      value.nom !== undefined ||
+      value.username !== undefined ||
+      value.email !== undefined ||
+      value.orgRole !== undefined ||
+      value.proEmail !== undefined ||
+      value.password !== undefined ||
+      value.isDeptHead !== undefined ||
+      value.grantedSenders !== undefined,
+    { message: 'Aucune modification demandée.' }
+  )
+
+export const senderGrantCreateSchema = z.object({
+  email: normalizedEmailSchema,
+})
+
+export const userInviteCreateSchema = z
+  .object({
+    username: usernameSchema,
+    email: normalizedEmailSchema,
+    nom: personNameSchema,
+    proEmail: optionalEmailSchema,
+    orgRole: orgRoleSchema.optional(),
+    isDeptHead: z.boolean().optional(),
+  })
+  .passthrough()
+
+const inviteTokenSchema = z.string().trim().min(1, 'Token requis.').max(512, 'Token invalide.')
+
+export const inviteTokenQuerySchema = z.object({
+  token: inviteTokenSchema,
+})
+
+export const inviteCodeVerificationSchema = z.object({
+  fileToken: inviteTokenSchema,
+  code: z
+    .string({ required_error: 'fileToken et code requis.', invalid_type_error: 'Code invalide.' })
+    .trim()
+    .min(1, 'fileToken et code requis.')
+    .max(32, 'Code invalide.')
+    .transform(value => value.toUpperCase()),
+})
+
+export const inviteActivationSchema = z.object({
+  fileToken: inviteTokenSchema,
+  activationToken: inviteTokenSchema,
+  password: passwordSchema,
+})
 
 const emailListSchema = z
   .string({ invalid_type_error: 'Liste de destinataires invalide.' })

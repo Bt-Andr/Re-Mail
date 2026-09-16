@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
+import bcrypt from 'bcryptjs'
 import app from '../src/app'
 import prisma from '../src/lib/prisma'
 import { seedOrg, cleanupOrg, SeededOrg } from './helpers/seed'
@@ -32,6 +33,20 @@ describe('POST /api/auth/signup', () => {
   it('rejects missing required fields', async () => {
     const res = await request(app).post('/api/auth/signup').send({ orgName: 'Champs manquants' })
     expect(res.status).toBe(400)
+  })
+
+  it('rejects a password shorter than eight characters before creating an account', async () => {
+    const email = `short-password-${Date.now()}@example.com`
+    const res = await request(app).post('/api/auth/signup').send({
+      orgName: 'Mot de passe court',
+      username: `short-password-${Date.now()}`,
+      email,
+      password: '1234567',
+      nom: 'Compte refusé',
+    })
+
+    expect(res.status).toBe(400)
+    expect(await prisma.user.findFirst({ where: { email } })).toBeNull()
   })
 
   it('creates an invisible personal organization when accountType is perso, without requiring orgName', async () => {
@@ -169,6 +184,24 @@ describe('POST /api/auth/login', () => {
   it('rejects missing credentials', async () => {
     const res = await request(app).post('/api/auth/login').send({ username: org.username })
     expect(res.status).toBe(400)
+  })
+
+  it('still allows a legacy account whose existing password is shorter than the new creation policy', async () => {
+    const username = `legacy-short-${Date.now()}`
+    const user = await prisma.user.create({
+      data: {
+        organizationId: org.organizationId,
+        username,
+        email: `${username}@example.com`,
+        password: await bcrypt.hash('x', 4),
+        nom: 'Legacy Short',
+        orgRole: 'MEMBER',
+      },
+    })
+
+    const res = await request(app).post('/api/auth/login').send({ username, password: 'x' })
+    expect(res.status).toBe(200)
+    expect(res.body.user.id).toBe(user.id)
   })
 
   it('rate-limits repeated login attempts from the same client', async () => {

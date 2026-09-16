@@ -6,6 +6,8 @@ import { authenticateToken } from '../middleware/auth'
 import { signToken } from '../lib/jwt'
 import { createOrgAndOwner } from '../lib/personalAccountFactory'
 import { consumeLoginHandoff } from '../lib/loginHandoff'
+import { parseRequest } from '../validation/request'
+import { googleExchangeSchema, loginSchema, signupSchema } from '../validation/schemas'
 
 const router = Router()
 
@@ -43,17 +45,13 @@ const googleExchangeLimiter = rateLimit({
 // isPersonal (une "org à un seul membre", jamais montrée comme telle côté produit —
 // voir CLAUDE.md) et orgName n'est pas requis, son nom interne est dérivé de nom/email.
 router.post('/signup', signupLimiter, async (req, res) => {
-  const { orgName, username, email, password, nom } = req.body
-  const isPersonal = req.body.accountType === 'perso'
-  if (!isPersonal && !orgName) {
-    return res.status(400).json({ error: 'Champs requis manquants.' })
-  }
-  if (!username || !email || !password || !nom) {
-    return res.status(400).json({ error: 'Champs requis manquants.' })
-  }
+  const input = parseRequest(signupSchema, req.body, res)
+  if (!input) return
+  const { orgName, username, email, password, nom, accountType } = input
+  const isPersonal = accountType === 'perso'
 
   try {
-    const normalizedEmail = email.toLowerCase().trim()
+    const normalizedEmail = email
     // email n'est plus une contrainte d'unicité en base (schema.prisma — nécessaire
     // pour que Google/IMAP signin puisse créer un compte perso même quand cet email
     // sert déjà de contact à un compte d'organisation ailleurs, voir gmailOAuth.ts).
@@ -64,14 +62,14 @@ router.post('/signup', signupLimiter, async (req, res) => {
       return res.status(409).json({ error: "Ce nom d'utilisateur ou cet email est déjà utilisé." })
     }
 
-    const orgNameToUse = isPersonal ? nom || email.split('@')[0] : orgName
+    const orgNameToUse = isPersonal ? nom : orgName!
     const passwordHash = await bcrypt.hash(password, 12)
 
     const result = await createOrgAndOwner({
       orgName: orgNameToUse,
       isPersonal,
-      username: username.toLowerCase().trim(),
-      email: email.toLowerCase().trim(),
+      username,
+      email,
       passwordHash,
       nom,
     })
@@ -108,12 +106,13 @@ router.post('/signup', signupLimiter, async (req, res) => {
 // comme une connexion d'organisation additive (isPersonal), voir SessionContext côté
 // webmail/mobile.
 router.post('/login', loginLimiter, async (req, res) => {
-  const { username, password } = req.body
-  if (!username || !password) return res.status(400).json({ error: 'Identifiants requis.' })
+  const input = parseRequest(loginSchema, req.body, res)
+  if (!input) return
+  const { username, password } = input
 
   try {
     const user = await prisma.user.findUnique({
-      where: { username: username.toLowerCase().trim() },
+      where: { username },
       include: { organization: { select: { id: true, name: true, slug: true, isPersonal: true, _count: { select: { users: true } } } } },
     })
     if (!user || !(await bcrypt.compare(password, user.password))) {
@@ -148,8 +147,9 @@ router.post('/login', loginLimiter, async (req, res) => {
 // existant, donc doit toujours renvoyer une organisation à jour (sinon
 // useSession().organization resterait périmé jusqu'au prochain /auth/me).
 router.post('/google/exchange', googleExchangeLimiter, async (req, res) => {
-  const { handoff } = req.body
-  if (!handoff || typeof handoff !== 'string') return res.status(400).json({ error: 'Jeton manquant.' })
+  const input = parseRequest(googleExchangeSchema, req.body, res)
+  if (!input) return
+  const { handoff } = input
 
   try {
     const userId = await consumeLoginHandoff(handoff)

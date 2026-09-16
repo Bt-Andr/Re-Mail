@@ -7,6 +7,8 @@ import { forOrg } from '../middleware/scopedPrisma'
 import { inviteFileUpload } from '../lib/upload'
 import { decryptInviteFile, INVITE_FILE_MAGIC } from '../lib/inviteFileCrypto'
 import { signToken } from '../lib/jwt'
+import { parseRequest } from '../validation/request'
+import { inviteActivationSchema, inviteCodeVerificationSchema, inviteTokenQuerySchema } from '../validation/schemas'
 
 const router = Router()
 
@@ -72,8 +74,9 @@ router.post('/resolve', publicInviteLimiter, inviteFileUpload.single('file'), as
 // n'ajoutait aucune entropie au-delà de ce même token. Même réponse que /resolve
 // pour enchaîner sur la même étape 2 (code) côté front.
 router.get('/resolve-by-token', publicInviteLimiter, async (req, res) => {
-  const fileToken = typeof req.query.token === 'string' ? req.query.token : null
-  if (!fileToken) return res.status(400).json({ error: 'Token requis.' })
+  const input = parseRequest(inviteTokenQuerySchema, req.query, res)
+  if (!input) return
+  const fileToken = input.token
 
   const invite = await loadPendingInviteByFileToken(fileToken)
   if (!invite) return res.status(404).json(GENERIC_INVITE_ERROR)
@@ -84,8 +87,9 @@ router.get('/resolve-by-token', publicInviteLimiter, async (req, res) => {
 // Étape 2 : code obtenu par l'utilisateur en contactant l'admin — indépendant du
 // fichier, jamais utilisé pour déchiffrer quoi que ce soit, juste comparé côté serveur.
 router.post('/verify-code', publicInviteLimiter, async (req, res) => {
-  const { fileToken, code } = req.body
-  if (!fileToken || !code) return res.status(400).json({ error: 'fileToken et code requis.' })
+  const input = parseRequest(inviteCodeVerificationSchema, req.body, res)
+  if (!input) return
+  const { fileToken, code } = input
 
   const invite = await prisma.userInvite.findUnique({ where: { fileToken } })
   if (!invite || invite.status !== 'PENDING' || invite.expiresAt < new Date()) {
@@ -96,7 +100,7 @@ router.post('/verify-code', publicInviteLimiter, async (req, res) => {
   }
 
   const db = forOrg(invite.organizationId)
-  const valid = await bcrypt.compare(String(code).toUpperCase().trim(), invite.activationCodeHash)
+  const valid = await bcrypt.compare(code, invite.activationCodeHash)
   if (!valid) {
     const attempts = invite.codeAttempts + 1
     if (attempts >= MAX_CODE_ATTEMPTS) {
@@ -131,10 +135,9 @@ router.post('/verify-code', publicInviteLimiter, async (req, res) => {
 // Étape 3 : crée le vrai User (jamais avant ce point), consomme l'invitation,
 // renvoie une session — même forme que POST /api/auth/login.
 router.post('/activate', publicInviteLimiter, async (req, res) => {
-  const { fileToken, activationToken, password } = req.body
-  if (!fileToken || !activationToken || !password) {
-    return res.status(400).json({ error: 'fileToken, activationToken et password requis.' })
-  }
+  const input = parseRequest(inviteActivationSchema, req.body, res)
+  if (!input) return
+  const { fileToken, activationToken, password } = input
 
   const invite = await prisma.userInvite.findUnique({ where: { fileToken } })
   if (!invite || invite.status !== 'PENDING' || invite.expiresAt < new Date()) {
@@ -144,7 +147,7 @@ router.post('/activate', publicInviteLimiter, async (req, res) => {
     return res.status(400).json({ error: "Session d'activation expirée. Recommencez depuis la vérification du code." })
   }
 
-  const providedHash = crypto.createHash('sha256').update(String(activationToken)).digest('hex')
+  const providedHash = crypto.createHash('sha256').update(activationToken).digest('hex')
   const providedBuf = Buffer.from(providedHash)
   const expectedBuf = Buffer.from(invite.activationTokenHash)
   const valid = providedBuf.length === expectedBuf.length && crypto.timingSafeEqual(providedBuf, expectedBuf)
@@ -152,7 +155,7 @@ router.post('/activate', publicInviteLimiter, async (req, res) => {
 
   try {
     const db = forOrg(invite.organizationId)
-    const passwordHash = await bcrypt.hash(String(password), 12)
+    const passwordHash = await bcrypt.hash(password, 12)
 
     const user = await db.$transaction(async tx => {
       const created = await tx.user.create({

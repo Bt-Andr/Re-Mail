@@ -9,6 +9,8 @@ import { buildResendClient } from '../lib/resendClient'
 import { buildNotificationEmail, sendNotificationEmail } from '../lib/email'
 import { getDecryptedResendKey } from '../helpers/resendAccount'
 import config from '../config'
+import { parseRequest } from '../validation/request'
+import { userInviteCreateSchema } from '../validation/schemas'
 
 const router = Router()
 
@@ -88,12 +90,9 @@ router.get('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (re
 })
 
 router.post('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const { username: rawUsername, email: rawEmail, nom, proEmail, orgRole, isDeptHead } = req.body
-  if (!rawUsername || !rawEmail || !nom) {
-    return res.status(400).json({ error: 'username, email et nom sont requis.' })
-  }
-  const username = String(rawUsername).toLowerCase().trim()
-  const email = String(rawEmail).toLowerCase().trim()
+  const input = parseRequest(userInviteCreateSchema, req.body, res)
+  if (!input) return
+  const { username, email, nom, proEmail, orgRole, isDeptHead } = input
 
   try {
     // username/email sont uniques sur toute la plateforme (comme User) — vérifiés

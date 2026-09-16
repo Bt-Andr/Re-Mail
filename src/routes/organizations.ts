@@ -8,13 +8,20 @@ import { parseConfigImport, ImportedUser, ImportedMailRoute, ImportedRoutingRule
 import { configImportUpload } from '../lib/upload'
 import { INVITE_HYGIENE_TTL_MS } from './userInvites'
 import {
+  getDecryptedResendKey,
   listResendDomains,
   encryptResendKey,
   encryptWebhookSecret,
   generateWebhookToken,
 } from '../helpers/resendAccount'
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+import { parseRequest } from '../validation/request'
+import {
+  emailBelongsToDomain,
+  mailRouteCreateSchema,
+  resendConnectSchema,
+  resendDomainSelectionSchema,
+  resendWebhookSecretSchema,
+} from '../validation/schemas'
 
 const router = Router()
 
@@ -67,8 +74,9 @@ router.put('/me', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (
 // (401 => clé invalide) et on la stocke chiffrée. On renvoie aussi l'URL de
 // webhook unique à coller côté Resend (Domaines → Inbound).
 router.post('/me/resend/connect', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const { apiKey } = req.body
-  if (!apiKey || typeof apiKey !== 'string') return res.status(400).json({ error: 'apiKey requis.' })
+  const input = parseRequest(resendConnectSchema, req.body, res)
+  if (!input) return
+  const { apiKey } = input
 
   try {
     const domains = await listResendDomains(apiKey)
@@ -89,11 +97,39 @@ router.post('/me/resend/connect', authenticateToken, requireOrgRole(['OWNER', 'A
 })
 
 router.post('/me/resend/select-domain', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const { domain } = req.body
-  if (!domain || typeof domain !== 'string') return res.status(400).json({ error: 'domain requis.' })
+  const input = parseRequest(resendDomainSelectionSchema, req.body, res)
+  if (!input) return
+  const { domain } = input
+
+  const currentOrg = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
+  if (!currentOrg?.resendApiKeyEnc) {
+    return res.status(400).json({ error: 'Connectez d’abord une clé API Resend.' })
+  }
+
+  try {
+    const domains = await listResendDomains(getDecryptedResendKey(currentOrg))
+    const verified = domains.some(item => item.status.toLowerCase() === 'verified' && item.name.toLowerCase() === domain)
+    if (!verified) {
+      return res.status(400).json({ error: 'Ce domaine n’est pas vérifié dans le compte Resend connecté.' })
+    }
+  } catch (e) {
+    return res.status(400).json({ error: (e as Error).message })
+  }
+
+  const existingRoutes = await prisma.mailRoute.findMany({
+    where: { organizationId: req.user!.organizationId },
+    select: { alias: true },
+  })
+  const incompatibleRoute = existingRoutes.find(route => !emailBelongsToDomain(route.alias, domain))
+  if (incompatibleRoute) {
+    return res.status(400).json({
+      error: `Le domaine ne peut pas être changé tant que l’alias ${incompatibleRoute.alias} existe.`,
+    })
+  }
+
   const org = await prisma.organization.update({
     where: { id: req.user!.organizationId },
-    data: { resendVerifiedDomain: domain.trim() },
+    data: { resendVerifiedDomain: domain },
   })
   res.json({ resendVerifiedDomain: org.resendVerifiedDomain })
 })
@@ -101,10 +137,9 @@ router.post('/me/resend/select-domain', authenticateToken, requireOrgRole(['OWNE
 // Étape manuelle : Resend n'expose pas le secret de signature d'un webhook via
 // API — l'org le colle elle-même après l'avoir créé dans son propre dashboard.
 router.post('/me/resend/webhook-secret', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const { webhookSecret } = req.body
-  if (!webhookSecret || typeof webhookSecret !== 'string') {
-    return res.status(400).json({ error: 'webhookSecret requis.' })
-  }
+  const input = parseRequest(resendWebhookSecretSchema, req.body, res)
+  if (!input) return
+  const { webhookSecret } = input
   await prisma.organization.update({
     where: { id: req.user!.organizationId },
     data: { webhookSecretEnc: encryptWebhookSecret(webhookSecret) },
@@ -206,6 +241,8 @@ router.post('/me/import', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']),
   const db = forOrg(req.user!.organizationId)
   const organizationId = req.user!.organizationId
   const grantedBy = req.user!.nom || req.user!.username
+  const configuredOrg = await prisma.organization.findUnique({ where: { id: organizationId }, select: { resendVerifiedDomain: true } })
+  const configuredDomain = configuredOrg?.resendVerifiedDomain?.toLowerCase() ?? null
 
   const usersResult = { created: 0, reused: 0, skipped: [] as { key: string; reason: string }[] }
   const seenUserKeys = new Set<string>()
@@ -263,20 +300,40 @@ router.post('/me/import', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']),
       continue
     }
     seenAliases.add(r.alias)
-    if (r.personalEmail && !EMAIL_RE.test(r.personalEmail)) {
-      mailRoutesResult.skipped.push({ key: r.alias, reason: 'personalEmail invalide' })
+    const parsedRoute = mailRouteCreateSchema.safeParse(r)
+    if (!parsedRoute.success) {
+      mailRoutesResult.skipped.push({ key: r.alias, reason: 'alias ou personalEmail invalide' })
       continue
     }
-    const existing = await db.mailRoute.findFirst({ where: { alias: r.alias } })
+    if (!configuredDomain) {
+      mailRoutesResult.skipped.push({ key: r.alias, reason: 'aucun domaine Resend vérifié configuré' })
+      continue
+    }
+    if (!emailBelongsToDomain(parsedRoute.data.alias, configuredDomain)) {
+      mailRoutesResult.skipped.push({ key: r.alias, reason: `alias hors du domaine ${configuredDomain}` })
+      continue
+    }
+    const routeInput = parsedRoute.data
+    const existing = await db.mailRoute.findFirst({ where: { alias: routeInput.alias } })
     if (existing) {
       await db.mailRoute.update({
         where: { id: existing.id },
-        data: { personalEmail: r.personalEmail, displayName: r.displayName || null, active: r.active },
+        data: {
+          personalEmail: routeInput.personalEmail ?? '',
+          displayName: routeInput.displayName || null,
+          active: routeInput.active ?? true,
+        },
       })
       mailRoutesResult.updated++
     } else {
       await db.mailRoute.create({
-        data: { organizationId, alias: r.alias, personalEmail: r.personalEmail, displayName: r.displayName || null, active: r.active },
+        data: {
+          organizationId,
+          alias: routeInput.alias,
+          personalEmail: routeInput.personalEmail ?? '',
+          displayName: routeInput.displayName || null,
+          active: routeInput.active ?? true,
+        },
       })
       mailRoutesResult.created++
     }

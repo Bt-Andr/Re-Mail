@@ -1,0 +1,182 @@
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import request from 'supertest'
+import app from '../src/app'
+import prisma from '../src/lib/prisma'
+import { decrypt } from '../src/lib/crypto'
+import { cleanupOrg, seedOrg, type SeededOrg } from './helpers/seed'
+
+describe('Mail configuration validation', () => {
+  let org: SeededOrg
+
+  beforeAll(async () => {
+    org = await seedOrg('mail-config')
+  })
+
+  beforeEach(async () => {
+    await prisma.mailRoute.deleteMany({ where: { organizationId: org.organizationId } })
+    await prisma.organization.update({
+      where: { id: org.organizationId },
+      data: { resendVerifiedDomain: null, webhookSecretEnc: null },
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  afterAll(async () => {
+    await cleanupOrg(org.organizationId)
+  })
+
+  it('only selects a domain currently verified in the connected Resend account', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ id: 'domain-1', name: 'Mail.Example.com', status: 'verified' }] }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const response = await request(app)
+      .post('/api/organizations/me/resend/select-domain')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ domain: ' MAIL.EXAMPLE.COM ' })
+
+    expect(response.status).toBe(200)
+    expect(response.body.resendVerifiedDomain).toBe('mail.example.com')
+    expect(fetchMock).toHaveBeenCalledWith('https://api.resend.com/domains', {
+      headers: { Authorization: 'Bearer re_test_fake_key' },
+    })
+  })
+
+  it('rejects an unknown or unverified domain without changing the organization', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [{ id: 'domain-1', name: 'mail.example.com', status: 'pending' }] }),
+      })
+    )
+
+    const response = await request(app)
+      .post('/api/organizations/me/resend/select-domain')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ domain: 'mail.example.com' })
+
+    expect(response.status).toBe(400)
+    const stored = await prisma.organization.findUniqueOrThrow({ where: { id: org.organizationId } })
+    expect(stored.resendVerifiedDomain).toBeNull()
+  })
+
+  it('does not select a new domain that would orphan existing aliases', async () => {
+    await prisma.mailRoute.create({
+      data: { organizationId: org.organizationId, alias: 'contact@old.example.com', personalEmail: '', active: true },
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [{ id: 'domain-2', name: 'new.example.com', status: 'verified' }] }),
+      })
+    )
+
+    const response = await request(app)
+      .post('/api/organizations/me/resend/select-domain')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ domain: 'new.example.com' })
+
+    expect(response.status).toBe(400)
+    expect(response.body.error).toContain('contact@old.example.com')
+    const stored = await prisma.organization.findUniqueOrThrow({ where: { id: org.organizationId } })
+    expect(stored.resendVerifiedDomain).toBeNull()
+  })
+
+  it('validates the Resend signing secret before encrypting it', async () => {
+    const invalid = await request(app)
+      .post('/api/organizations/me/resend/webhook-secret')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ webhookSecret: 'not-a-resend-secret' })
+    expect(invalid.status).toBe(400)
+
+    const secret = 'whsec_dGVzdHNlY3JldGZvcnRlc3RzMTIzNDU2Nzg5MA=='
+    const valid = await request(app)
+      .post('/api/organizations/me/resend/webhook-secret')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ webhookSecret: secret })
+    expect(valid.status).toBe(200)
+
+    const stored = await prisma.organization.findUniqueOrThrow({ where: { id: org.organizationId } })
+    expect(stored.webhookSecretEnc).not.toBe(secret)
+    expect(decrypt(stored.webhookSecretEnc!)).toBe(secret)
+  })
+
+  it('accepts aliases only on the configured domain and validates forwarding addresses', async () => {
+    await prisma.organization.update({
+      where: { id: org.organizationId },
+      data: { resendVerifiedDomain: 'mail.example.com' },
+    })
+
+    const valid = await request(app)
+      .post('/api/mail-routes')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ alias: ' Contact@MAIL.EXAMPLE.COM ', personalEmail: ' Owner@Example.com ' })
+    expect(valid.status).toBe(201)
+    expect(valid.body).toMatchObject({ alias: 'contact@mail.example.com', personalEmail: 'owner@example.com' })
+
+    const wrongDomain = await request(app)
+      .post('/api/mail-routes')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ alias: 'sales@other.example.com' })
+    expect(wrongDomain.status).toBe(400)
+
+    const invalidForward = await request(app)
+      .post('/api/mail-routes')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ alias: 'sales@mail.example.com', personalEmail: 'not-an-email' })
+    expect(invalidForward.status).toBe(400)
+    expect(await prisma.mailRoute.count({ where: { organizationId: org.organizationId } })).toBe(1)
+  })
+
+  it('reports invalid bulk aliases per row and never persists them', async () => {
+    await prisma.organization.update({
+      where: { id: org.organizationId },
+      data: { resendVerifiedDomain: 'mail.example.com' },
+    })
+
+    const response = await request(app)
+      .post('/api/mail-routes/bulk')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({
+        routes: [
+          { alias: 'contact@mail.example.com' },
+          { alias: 'sales@other.example.com' },
+          { alias: 'support@mail.example.com', personalEmail: 'invalid' },
+        ],
+      })
+
+    expect(response.status).toBe(200)
+    expect(response.body.created).toHaveLength(1)
+    expect(response.body.skipped).toEqual([
+      { alias: 'sales@other.example.com', reason: 'alias hors du domaine mail.example.com' },
+      { alias: 'support@mail.example.com', reason: 'alias ou personalEmail invalide' },
+    ])
+    expect(await prisma.mailRoute.count({ where: { organizationId: org.organizationId } })).toBe(1)
+  })
+
+  it('rejects a domain change on an existing alias and leaves it untouched', async () => {
+    await prisma.organization.update({
+      where: { id: org.organizationId },
+      data: { resendVerifiedDomain: 'mail.example.com' },
+    })
+    const route = await prisma.mailRoute.create({
+      data: { organizationId: org.organizationId, alias: 'contact@mail.example.com', personalEmail: '', active: true },
+    })
+
+    const response = await request(app)
+      .put(`/api/mail-routes/${route.id}`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ alias: 'contact@other.example.com' })
+
+    expect(response.status).toBe(400)
+    const stored = await prisma.mailRoute.findUniqueOrThrow({ where: { id: route.id } })
+    expect(stored.alias).toBe('contact@mail.example.com')
+  })
+})

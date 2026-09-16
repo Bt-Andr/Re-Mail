@@ -22,6 +22,7 @@ describe('Pending routing rule / sender grant applied at invite activation', () 
 
   beforeAll(async () => {
     org = await seedOrg('pending-assign')
+    await prisma.organization.update({ where: { id: org.organizationId }, data: { resendVerifiedDomain: 'imported.example' } })
   })
 
   afterAll(async () => {

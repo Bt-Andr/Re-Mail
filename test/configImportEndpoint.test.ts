@@ -50,6 +50,7 @@ describe('POST /api/organizations/me/import', () => {
   beforeAll(async () => {
     orgA = await seedOrg('import-a')
     orgB = await seedOrg('import-b')
+    await prisma.organization.update({ where: { id: orgA.organizationId }, data: { resendVerifiedDomain: 'imported.example' } })
     const owner = await prisma.user.findUniqueOrThrow({ where: { id: orgA.userId } })
     orgAOwnerEmail = owner.email
 
@@ -76,17 +77,17 @@ describe('POST /api/organizations/me/import', () => {
     const res = await request(app)
       .post('/api/organizations/me/import')
       .set('Authorization', `Bearer ${orgA.token}`)
-      .attach('file', buildCsv({ assignToEmail: orgAMemberEmail }), 'config.csv')
+      .attach('file', buildCsv({ assignToEmail: orgAMemberEmail, domain: 'source-metadata.example' }), 'config.csv')
 
     expect(res.status).toBe(200)
-    expect(res.body.domain).toBe('imported.example')
+    expect(res.body.domain).toBe('source-metadata.example')
     expect(res.body.users).toEqual({ created: 0, reused: 0, skipped: [] })
     expect(res.body.mailRoutes).toEqual({ created: 1, updated: 0, skipped: [] })
     expect(res.body.routingRules).toEqual({ created: 1, updated: 0, staged: 0, skipped: [] })
     expect(res.body.replyTemplates).toEqual({ created: 1, updated: 0 })
 
     const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgA.organizationId } })
-    expect(org.resendVerifiedDomain).not.toBe('imported.example')
+    expect(org.resendVerifiedDomain).toBe('imported.example')
 
     const route = await prisma.mailRoute.findFirstOrThrow({ where: { organizationId: orgA.organizationId, alias: 'contact@imported.example' } })
     expect(route.personalEmail).toBe('perso@example.com')
@@ -132,6 +133,7 @@ describe('POST /api/organizations/me/import', () => {
   })
 
   it('normalizes the canal to lowercase so a hand-authored CSV with mixed case still matches the mail route and real inbound threads', async () => {
+    await prisma.organization.update({ where: { id: orgA.organizationId }, data: { resendVerifiedDomain: 'mixedcase.example' } })
     let csv = '﻿'
     csv += csvRow(['Section', 'Domaine']) + csvRow(['domain']) + csvRow(['']) + '\r\n'
     csv += csvRow(['Section', 'Users']) + csvRow(['username', 'email', 'nom', 'proEmail', 'orgRole', 'isDeptHead']) + '\r\n'
@@ -154,6 +156,7 @@ describe('POST /api/organizations/me/import', () => {
 
     const grant = await prisma.senderGrant.findFirstOrThrow({ where: { organizationId: orgA.organizationId, userId: orgAMemberId, email: 'support@mixedcase.example' } })
     expect(grant.email).toBe('support@mixedcase.example')
+    await prisma.organization.update({ where: { id: orgA.organizationId }, data: { resendVerifiedDomain: 'imported.example' } })
   })
 
   it('skips a routing rule whose assignToEmail belongs to another organization', async () => {

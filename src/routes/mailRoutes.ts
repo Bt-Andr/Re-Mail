@@ -1,8 +1,32 @@
 import { Router } from 'express'
+import type { Response } from 'express'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
+import prisma from '../lib/prisma'
+import { parseRequest } from '../validation/request'
+import {
+  emailBelongsToDomain,
+  mailRouteBulkSchema,
+  mailRouteCreateSchema,
+  mailRouteUpdateSchema,
+} from '../validation/schemas'
 
 const router = Router()
+
+async function requireConfiguredDomain(organizationId: string, res: Response): Promise<string | null> {
+  const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { resendVerifiedDomain: true } })
+  if (!org?.resendVerifiedDomain) {
+    res.status(400).json({ error: 'Configurez d’abord un domaine Resend vérifié.' })
+    return null
+  }
+  return org.resendVerifiedDomain.toLowerCase()
+}
+
+function rejectAliasOutsideDomain(alias: string, domain: string, res: Response): boolean {
+  if (emailBelongsToDomain(alias, domain)) return false
+  res.status(400).json({ error: `L’alias doit appartenir au domaine ${domain}.` })
+  return true
+}
 
 router.get('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
   const db = forOrg(req.user!.organizationId)
@@ -11,18 +35,21 @@ router.get('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (re
 })
 
 router.post('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const { alias, personalEmail, displayName, active } = req.body
+  const input = parseRequest(mailRouteCreateSchema, req.body, res)
+  if (!input) return
+  const { alias, personalEmail, displayName, active } = input
   // personalEmail est optionnel : l'alias reçoit déjà ses emails comme threads dans
   // l'inbox sans lui — il ne sert qu'au transfert vers une boîte perso, ajoutable plus tard.
-  if (!alias) return res.status(400).json({ error: 'alias requis.' })
+  const domain = await requireConfiguredDomain(req.user!.organizationId, res)
+  if (!domain || rejectAliasOutsideDomain(alias, domain, res)) return
   try {
     const db = forOrg(req.user!.organizationId)
     const route = await db.mailRoute.create({
       data: {
         organizationId: req.user!.organizationId,
-        alias: alias.toLowerCase().trim(),
-        personalEmail: personalEmail?.trim() || '',
-        displayName: displayName?.trim() || null,
+        alias,
+        personalEmail: personalEmail || '',
+        displayName: displayName || null,
         active: active ?? true,
       },
     })
@@ -35,9 +62,11 @@ router.post('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (r
 // Import en masse : priorité à la configuration des alias, le transfert personnel
 // (personalEmail) est optionnel et peut être complété plus tard via l'édition.
 router.post('/bulk', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const { routes } = req.body
-  if (!Array.isArray(routes) || routes.length === 0) return res.status(400).json({ error: 'routes requis.' })
-  if (routes.length > 200) return res.status(400).json({ error: '200 adresses maximum par import.' })
+  const input = parseRequest(mailRouteBulkSchema, req.body, res)
+  if (!input) return
+  const { routes } = input
+  const domain = await requireConfiguredDomain(req.user!.organizationId, res)
+  if (!domain) return
 
   const db = forOrg(req.user!.organizationId)
   const created: unknown[] = []
@@ -45,12 +74,15 @@ router.post('/bulk', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), asyn
   const seen = new Set<string>()
 
   for (const raw of routes) {
-    const alias = typeof raw?.alias === 'string' ? raw.alias.toLowerCase().trim() : ''
-    const personalEmail = typeof raw?.personalEmail === 'string' ? raw.personalEmail.trim() : ''
-    const displayName = typeof raw?.displayName === 'string' ? raw.displayName.trim() : ''
-
-    if (!alias) {
-      skipped.push({ alias: alias || '(vide)', reason: 'alias manquant' })
+    const parsed = mailRouteCreateSchema.safeParse(raw)
+    if (!parsed.success) {
+      const rawAlias = typeof raw === 'object' && raw !== null && 'alias' in raw && typeof raw.alias === 'string' ? raw.alias : '(vide)'
+      skipped.push({ alias: rawAlias, reason: 'alias ou personalEmail invalide' })
+      continue
+    }
+    const { alias, personalEmail, displayName } = parsed.data
+    if (!emailBelongsToDomain(alias, domain)) {
+      skipped.push({ alias, reason: `alias hors du domaine ${domain}` })
       continue
     }
     if (seen.has(alias)) {
@@ -67,7 +99,7 @@ router.post('/bulk', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), asyn
 
     try {
       const route = await db.mailRoute.create({
-        data: { organizationId: req.user!.organizationId, alias, personalEmail, displayName: displayName || null, active: true },
+        data: { organizationId: req.user!.organizationId, alias, personalEmail: personalEmail || '', displayName: displayName || null, active: true },
       })
       created.push(route)
     } catch {
@@ -79,15 +111,24 @@ router.post('/bulk', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), asyn
 })
 
 router.put('/:id', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const { alias, personalEmail, displayName, active } = req.body
+  const db = forOrg(req.user!.organizationId)
+  const existing = await db.mailRoute.findUnique({ where: { id: req.params.id } })
+  if (!existing) return res.status(404).json({ error: 'Route introuvable.' })
+
+  const input = parseRequest(mailRouteUpdateSchema, req.body, res)
+  if (!input) return
+  const { alias, personalEmail, displayName, active } = input
+  if (alias) {
+    const domain = await requireConfiguredDomain(req.user!.organizationId, res)
+    if (!domain || rejectAliasOutsideDomain(alias, domain, res)) return
+  }
   try {
-    const db = forOrg(req.user!.organizationId)
     const route = await db.mailRoute.update({
       where: { id: req.params.id },
       data: {
-        alias: alias?.toLowerCase().trim(),
-        personalEmail: personalEmail?.trim(),
-        displayName: displayName?.trim() || null,
+        alias,
+        personalEmail,
+        displayName: displayName === undefined ? undefined : displayName || null,
         active,
       },
     })

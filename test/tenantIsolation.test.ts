@@ -11,6 +11,7 @@ describe('Tenant isolation', () => {
   beforeAll(async () => {
     orgA = await seedOrg('tenant-a')
     orgB = await seedOrg('tenant-b')
+    await prisma.organization.update({ where: { id: orgA.organizationId }, data: { resendVerifiedDomain: 'org-a.example' } })
   })
 
   afterAll(async () => {

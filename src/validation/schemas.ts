@@ -43,7 +43,7 @@ const personNameSchema = z
   .min(1, 'Nom requis.')
   .max(160, 'Le nom est trop long.')
 
-const normalizedEmailSchema = emailAddressSchema.transform(value => value.toLowerCase())
+export const normalizedEmailSchema = emailAddressSchema.transform(value => value.toLowerCase())
 const optionalEmailSchema = z.union([normalizedEmailSchema, z.literal(''), z.null()]).optional()
 const orgRoleSchema = z.enum(['OWNER', 'ADMIN', 'MEMBER'])
 const grantedSendersSchema = z.array(normalizedEmailSchema).max(100, 'Trop d’adresses autorisées.').optional()
@@ -147,6 +147,65 @@ export const inviteActivationSchema = z.object({
   activationToken: inviteTokenSchema,
   password: passwordSchema,
 })
+
+export const domainNameSchema = z
+  .string({ required_error: 'Domaine requis.', invalid_type_error: 'Domaine invalide.' })
+  .trim()
+  .toLowerCase()
+  .max(253, 'Domaine invalide.')
+  .regex(
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
+    'Domaine invalide.'
+  )
+
+export const resendConnectSchema = z.object({
+  apiKey: z
+    .string({ required_error: 'apiKey requis.', invalid_type_error: 'apiKey invalide.' })
+    .trim()
+    .min(1, 'apiKey requis.')
+    .max(512, 'apiKey invalide.'),
+})
+
+export const resendDomainSelectionSchema = z.object({
+  domain: domainNameSchema,
+})
+
+export const webhookSecretSchema = z
+  .string({ required_error: 'webhookSecret requis.', invalid_type_error: 'webhookSecret invalide.' })
+  .trim()
+  .min(1, 'webhookSecret requis.')
+  .max(512, 'webhookSecret invalide.')
+  .regex(/^whsec_[A-Za-z0-9+/_-]{16,}={0,2}$/, 'Secret webhook Resend invalide.')
+
+export const resendWebhookSecretSchema = z.object({
+  webhookSecret: webhookSecretSchema,
+})
+
+const mailRouteFields = {
+  alias: normalizedEmailSchema,
+  personalEmail: z.union([normalizedEmailSchema, z.literal('')]).optional(),
+  displayName: z.string().trim().max(160, 'Le nom affiché est trop long.').optional(),
+  active: z.boolean().optional(),
+}
+
+export const mailRouteCreateSchema = z.object(mailRouteFields)
+
+export const mailRouteUpdateSchema = z
+  .object({
+    alias: mailRouteFields.alias.optional(),
+    personalEmail: mailRouteFields.personalEmail,
+    displayName: mailRouteFields.displayName,
+    active: mailRouteFields.active,
+  })
+  .refine(value => Object.values(value).some(item => item !== undefined), { message: 'Aucune modification demandée.' })
+
+export const mailRouteBulkSchema = z.object({
+  routes: z.array(z.unknown(), { required_error: 'routes requis.', invalid_type_error: 'routes requis.' }).min(1, 'routes requis.').max(200, '200 adresses maximum par import.'),
+})
+
+export function emailBelongsToDomain(email: string, domain: string): boolean {
+  return email.slice(email.lastIndexOf('@') + 1).toLowerCase() === domain.toLowerCase()
+}
 
 const emailListSchema = z
   .string({ invalid_type_error: 'Liste de destinataires invalide.' })

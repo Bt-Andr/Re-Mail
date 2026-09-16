@@ -6,6 +6,14 @@ import { createActivity, getHiddenProCanaux } from '../helpers/thread'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
 import prisma from '../lib/prisma'
+import { parseRequest } from '../validation/request'
+import {
+  threadAssignmentSchema,
+  threadBulkActionSchema,
+  threadListQuerySchema,
+  threadStarSchema,
+  threadStatusSchema,
+} from '../validation/schemas'
 
 const router = Router()
 
@@ -16,7 +24,9 @@ function isManager(orgRole: string): boolean {
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const db = forOrg(req.user!.organizationId)
-    const { canal, status, folder, q, take, skip, account } = req.query
+    const query = parseRequest(threadListQuerySchema, req.query, res)
+    if (!query) return
+    const { canal, status, folder, q, take, skip, account } = query
     const where: Record<string, unknown> = {}
     const andFilters: Record<string, unknown>[] = []
     const ownedMailboxes = await db.externalMailboxConnection.findMany({
@@ -34,7 +44,7 @@ router.get('/', authenticateToken, async (req, res) => {
     // Switcher de compte (voir routes/accounts.ts) : 'resend' = fils sans boîte externe
     // d'origine (sourceId null, webhook Resend/compose sortant) ; sinon un
     // ExternalMailboxConnection.id précis. Absent = tous les fils, "Toutes les boîtes".
-    if (typeof account === 'string' && account) {
+    if (account) {
       if (account !== 'resend' && !ownedMailboxIds.includes(account)) return res.json([])
       where.sourceId = account === 'resend' ? null : account
     }
@@ -65,7 +75,7 @@ router.get('/', authenticateToken, async (req, res) => {
     // silencieusement ignorer la restriction de visibilité — court-circuite en résultat
     // vide plutôt que de laisser `where.canal` écraser le `notIn` ci-dessous.
     const hiddenCanaux = await getHiddenProCanaux(db, req.user!.id)
-    if (typeof canal === 'string' && canal) {
+    if (canal) {
       if (hiddenCanaux.includes(canal)) return res.json([])
       where.canal = canal
     } else if (hiddenCanaux.length > 0) {
@@ -75,34 +85,24 @@ router.get('/', authenticateToken, async (req, res) => {
     // Recherche texte : sujet/expéditeur + corps des messages du fil. Combinée en AND
     // avec le reste du where (canal/statut/dossier/portée) — Prisma fusionne les clés
     // top-level en AND, seul le contenu du OR ci-dessous porte la recherche elle-même.
-    if (typeof q === 'string' && q.trim()) {
-      const query = q.trim()
+    if (q) {
       andFilters.push({
         OR: [
-          { sujet: { contains: query, mode: 'insensitive' } },
-          { externalFrom: { contains: query, mode: 'insensitive' } },
-          { externalEmail: { contains: query, mode: 'insensitive' } },
-          { messages: { some: { body: { contains: query, mode: 'insensitive' } } } },
+          { sujet: { contains: q, mode: 'insensitive' } },
+          { externalFrom: { contains: q, mode: 'insensitive' } },
+          { externalEmail: { contains: q, mode: 'insensitive' } },
+          { messages: { some: { body: { contains: q, mode: 'insensitive' } } } },
         ],
       })
     }
 
     // Pagination optionnelle (rétrocompatible : sans `take`, comportement inchangé —
     // tout le dossier en un appel, comme avant).
-    const takeNum = typeof take === 'string' && /^\d+$/.test(take) ? Number(take) : undefined
-    const skipNum = typeof skip === 'string' && /^\d+$/.test(skip) ? Number(skip) : undefined
-    if (take !== undefined && (takeNum === undefined || takeNum < 1 || takeNum > 100)) {
-      return res.status(400).json({ error: 'take doit être un entier compris entre 1 et 100.' })
-    }
-    if (skip !== undefined && (skipNum === undefined || skipNum < 0 || skipNum > 100_000)) {
-      return res.status(400).json({ error: 'skip doit être un entier compris entre 0 et 100000.' })
-    }
-
     const threads = await db.thread.findMany({
       where,
       orderBy: { updatedAt: 'desc' },
-      ...(takeNum !== undefined ? { take: takeNum } : {}),
-      ...(skipNum !== undefined ? { skip: skipNum } : {}),
+      ...(take !== undefined ? { take } : {}),
+      ...(skip !== undefined ? { skip } : {}),
       include: {
         assignedTo: { select: { id: true, nom: true, username: true } },
         messages: {
@@ -162,10 +162,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
 })
 
 router.patch('/:id/assign', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const { assignedToId } = req.body
-  if (assignedToId !== undefined && assignedToId !== null && typeof assignedToId !== 'string') {
-    return res.status(400).json({ error: 'assignedToId doit être un identifiant ou null.' })
-  }
+  const input = parseRequest(threadAssignmentSchema, req.body, res)
+  if (!input) return
+  const { assignedToId } = input
   try {
     const db = forOrg(req.user!.organizationId)
     if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
@@ -214,9 +213,9 @@ router.patch('/:id/assign', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']
 })
 
 router.patch('/:id/status', authenticateToken, async (req, res) => {
-  const { status } = req.body
-  const validStatuses = ['nouveau', 'en_cours', 'resolu']
-  if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Statut invalide.' })
+  const input = parseRequest(threadStatusSchema, req.body, res)
+  if (!input) return
+  const { status } = input
 
   try {
     const db = forOrg(req.user!.organizationId)
@@ -332,8 +331,9 @@ router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
 // Pas de journal d'activité pour l'étoile : comme /unread, c'est un simple
 // marqueur personnel, pas un événement métier du fil.
 router.patch('/:id/star', authenticateToken, async (req, res) => {
-  const { starred } = req.body
-  if (typeof starred !== 'boolean') return res.status(400).json({ error: 'starred (boolean) requis.' })
+  const input = parseRequest(threadStarSchema, req.body, res)
+  if (!input) return
+  const { starred } = input
   try {
     const db = forOrg(req.user!.organizationId)
     if (await denyThreadAccess(db, req.user!.id, req.user!.orgRole, req.params.id, res)) return
@@ -362,11 +362,9 @@ router.patch('/:id/restore', authenticateToken, async (req, res) => {
 // inaccessibles ou inexistants sont silencieusement ignorés par updateMany plutôt
 // que de faire échouer tout l'appel pour une sélection partiellement invalide.
 router.patch('/bulk', authenticateToken, async (req, res) => {
-  const { ids, status, archivedAt, deletedAt } = req.body
-  if (!Array.isArray(ids) || ids.length === 0 || !ids.every((id: unknown) => typeof id === 'string')) {
-    return res.status(400).json({ error: 'ids (tableau non vide) requis.' })
-  }
-  if (ids.length > 200) return res.status(400).json({ error: 'Trop de fils sélectionnés (200 maximum).' })
+  const input = parseRequest(threadBulkActionSchema, req.body, res)
+  if (!input) return
+  const { ids, status, archivedAt, deletedAt } = input
 
   const data: Record<string, unknown> = {}
   if (status !== undefined) {
@@ -379,8 +377,6 @@ router.patch('/bulk', authenticateToken, async (req, res) => {
     // Mêmes dossiers mutuellement exclusifs que /:id/trash.
     if (deletedAt) data.archivedAt = null
   }
-  if (Object.keys(data).length === 0) return res.status(400).json({ error: 'Aucune modification demandée.' })
-
   try {
     const db = forOrg(req.user!.organizationId)
     const [hiddenCanaux, ownedMailboxes] = await Promise.all([

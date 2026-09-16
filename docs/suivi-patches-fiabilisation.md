@@ -8,9 +8,9 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
 | Statut | En cours — lots 2 et 3 terminés, lots 1 et 4 actifs |
-| Dernière mise à jour | 2026-09-15 |
+| Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 30 fichiers de tests, 201 tests réussis |
+| Baseline fonctionnelle | 31 fichiers de tests, 206 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -134,7 +134,7 @@ Validation :
 
 Statut : **En cours — relations utilisateur critiques et entrées de messagerie contrôlées**
 
-- [ ] Créer les schémas de validation partagés.
+- [~] Créer les schémas de validation partagés — socle Zod et routes email/threads migrés ; auth, utilisateurs, invitations et configuration restent à couvrir.
 - [x] Vérifier le tenant de l’utilisateur assigné à un fil.
 - [x] Vérifier le tenant de l’utilisateur assigné à une règle.
 - [x] Vérifier le tenant du bénéficiaire d’un `SenderGrant`.
@@ -290,6 +290,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-10 | 2 | Typage des tokens de conversation et de pont, suppression de l’écho client et conservation du relais collaborateur | 14 migrations depuis zéro, typecheck/build backend, 199/199 tests | Reprendre les dernières garanties du lot 1 | Codex |
 | 2026-09-10 | — | Remise au vert du quality gate Dashboard : ordre stable des hooks, formatage et configuration explicite des exports Fast Refresh | Lint, typecheck et build Dashboard | Reprendre le lot 4 | Codex |
 | 2026-09-15 | 4 | Validation anticipée du message source d’un transfert, avec contrôle du tenant et de l’appartenance au fil avant création du token | Typecheck/build backend, 201/201 tests | Centraliser les schémas de validation | Codex |
+| 2026-09-16 | 4 | Introduction du socle Zod partagé et migration des payloads email, pagination et mutations de fils | Typecheck/build backend, 206/206 tests | Migrer auth, utilisateurs, invitations et configuration | Codex |
 
 ## Journal des validations
 
@@ -308,6 +309,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-10 | Lot 2 — tranche 3 | 199/199 | Backend typecheck et build valides | 14/14 migrations rejouées depuis zéro | Conversation sans écho et pont de transfert couverts | Les anciens tokens conservent temporairement leur comportement `legacy` jusqu’à expiration |
 | 2026-09-10 | Passe globale | 199/199, dont 58/58 scénarios courrier ciblés | Web, webmail, mobile et dashboard valides | 14/14 appliquées sur la base Docker locale | Non exécuté, tests end-to-end encore absents | Worktree propre avant correction ; dette lint Dashboard identifiée puis corrigée |
 | 2026-09-15 | Lot 4 — transfert | 201/201, dont 14/14 tests réponse/isolation ciblés | Backend typecheck et build valides | Sans migration | Transferts inter-fil et inter-tenant couverts par intégration | Aucun token, message sortant, appel fournisseur ou événement d’activité avant rejet |
+| 2026-09-16 | Lot 4 — validation Zod 1 | 206/206, dont 30/30 tests validation/email/threads/isolation ciblés | Backend typecheck et build valides | Sans migration | Schémas unitaires et routes critiques couverts | Zod devient une dépendance backend explicite ; contrats webmail/mobile conservés |
 
 ## Journal des incidents et régressions
 

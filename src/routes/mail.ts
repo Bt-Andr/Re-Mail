@@ -5,6 +5,8 @@ import prisma from '../lib/prisma'
 import { forOrg } from '../middleware/scopedPrisma'
 import { authenticateToken } from '../middleware/auth'
 import { attachmentUpload } from '../lib/upload'
+import { parseRequest } from '../validation/request'
+import { emailReplySchema } from '../validation/schemas'
 import { buildResendClient } from '../lib/resendClient'
 import { getDecryptedResendKey, getDecryptedWebhookSecret } from '../helpers/resendAccount'
 import { getMailboxAuth } from '../lib/mailboxAuth'
@@ -30,20 +32,7 @@ import {
 
 const router = Router()
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const MAX_RECIPIENTS = 20
-const MAX_EMAIL_LENGTH = 320
-const MAX_SUBJECT_LENGTH = 998
-const MAX_MESSAGE_LENGTH = 100_000
-
 type ForwardSourceMessage = Prisma.ThreadMessageGetPayload<{ include: { attachments: true } }>
-
-function parseEmailList(raw: unknown): string[] {
-  if (typeof raw !== 'string' || !raw.trim()) return []
-  return [...new Set(
-    raw.split(',').map(s => s.trim()).filter(s => EMAIL_RE.test(s))
-  )].slice(0, MAX_RECIPIENTS)
-}
 
 // GET /api/emails/senders — adresses d'expédition autorisées pour l'utilisateur
 // connecté (utilisé par le composeur pour peupler/valider le champ "De").
@@ -56,24 +45,9 @@ router.get('/emails/senders', authenticateToken, async (req, res) => {
 // (accepte JSON ou multipart avec fichiers dans le champ "attachments")
 // ─────────────────────────────────────────────────────────────────────────
 router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachments', 5), async (req, res) => {
-  const { to: rawTo, subject: rawSubject, message: rawMessage, threadId, draftId, mode, sourceMessageId } = req.body
-  const to = typeof rawTo === 'string' ? rawTo.trim() : ''
-  const subject = typeof rawSubject === 'string' ? rawSubject : ''
-  const message = typeof rawMessage === 'string' ? rawMessage : ''
-
-  if (!to || to.length > MAX_EMAIL_LENGTH || !EMAIL_RE.test(to)) {
-    return res.status(400).json({ error: 'Destinataire principal invalide.' })
-  }
-  if (!message.trim()) return res.status(400).json({ error: 'Le corps du message est requis.' })
-  if (message.length > MAX_MESSAGE_LENGTH) return res.status(400).json({ error: 'Le corps du message est trop long.' })
-  if (subject.length > MAX_SUBJECT_LENGTH) return res.status(400).json({ error: 'Le sujet est trop long.' })
-  for (const [name, value] of Object.entries({ threadId, draftId, sourceMessageId })) {
-    if (value !== undefined && (typeof value !== 'string' || !value.trim() || value.length > 128)) {
-      return res.status(400).json({ error: `${name} invalide.` })
-    }
-  }
-  const cc = parseEmailList(req.body.cc)
-  const bcc = parseEmailList(req.body.bcc)
+  const input = parseRequest(emailReplySchema, req.body, res)
+  if (!input) return
+  const { to, subject, message, threadId, draftId, mode, sourceMessageId, cc, bcc, fromEmail: requestedFromEmail } = input
   const files = (req.files as Express.Multer.File[] | undefined) ?? []
   const isForward = mode === 'forward'
   let forwardSource: ForwardSourceMessage | null = null
@@ -85,10 +59,6 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
   const allowed = await getAllowedSenders(db, req.user!.id)
   let fromEmail = ''
   let senderName = org.companyName || org.name
-
-  if (isForward && (!threadId || !sourceMessageId)) {
-    return res.status(400).json({ error: 'threadId et sourceMessageId requis pour un transfert.' })
-  }
 
   if (threadId) {
     // Une réponse (ou un transfert) part obligatoirement de l'adresse qui a reçu le mail
@@ -139,7 +109,7 @@ router.post('/emails/reply', authenticateToken, attachmentUpload.array('attachme
   }
 
   if (!fromEmail) {
-    const requestedFrom = typeof req.body.fromEmail === 'string' ? req.body.fromEmail.trim().toLowerCase() : ''
+    const requestedFrom = requestedFromEmail?.toLowerCase() ?? ''
     const match = requestedFrom
       ? allowed.find(s => s.email.toLowerCase() === requestedFrom)
       : allowed.find(s => s.isDefault) ?? allowed[0]

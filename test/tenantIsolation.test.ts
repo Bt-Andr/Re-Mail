@@ -47,7 +47,7 @@ describe('Tenant isolation', () => {
       .post('/api/reply-templates')
       .set('Authorization', `Bearer ${orgA.token}`)
       .send({ titre: 'Modèle A', corps: 'Bonjour...' })
-    expect(created.status).toBe(200)
+    expect(created.status).toBe(201)
 
     const listB = await request(app).get('/api/reply-templates').set('Authorization', `Bearer ${orgB.token}`)
     expect(listB.body).toEqual([])

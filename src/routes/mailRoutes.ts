@@ -3,6 +3,7 @@ import type { Response } from 'express'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
 import prisma from '../lib/prisma'
+import { hasPrismaErrorCode } from '../lib/prismaErrors'
 import { parseRequest } from '../validation/request'
 import {
   emailBelongsToDomain,
@@ -54,8 +55,9 @@ router.post('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (r
       },
     })
     res.status(201).json(route)
-  } catch {
-    res.status(409).json({ error: 'Cet alias existe déjà.' })
+  } catch (error) {
+    if (hasPrismaErrorCode(error, 'P2002')) return res.status(409).json({ error: 'Cet alias existe déjà.' })
+    throw error
   }
 })
 
@@ -133,19 +135,18 @@ router.put('/:id', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async 
       },
     })
     res.json(route)
-  } catch {
-    res.status(404).json({ error: 'Route introuvable.' })
+  } catch (error) {
+    if (hasPrismaErrorCode(error, 'P2002')) return res.status(409).json({ error: 'Cet alias existe déjà.' })
+    throw error
   }
 })
 
 router.delete('/:id', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  try {
-    const db = forOrg(req.user!.organizationId)
-    await db.mailRoute.delete({ where: { id: req.params.id } })
-    res.json({ success: true })
-  } catch {
-    res.status(404).json({ error: 'Route introuvable.' })
-  }
+  const db = forOrg(req.user!.organizationId)
+  const existing = await db.mailRoute.findUnique({ where: { id: req.params.id }, select: { id: true } })
+  if (!existing) return res.status(404).json({ error: 'Route introuvable.' })
+  await db.mailRoute.delete({ where: { id: existing.id } })
+  res.json({ success: true })
 })
 
 export default router

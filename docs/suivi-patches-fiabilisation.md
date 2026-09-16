@@ -10,7 +10,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Statut | En cours — lots 2 et 3 terminés, lots 1 et 4 actifs |
 | Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 34 fichiers de tests, 223 tests réussis |
+| Baseline fonctionnelle | 35 fichiers de tests, 232 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -134,7 +134,7 @@ Validation :
 
 Statut : **En cours — relations utilisateur critiques et entrées de messagerie contrôlées**
 
-- [~] Créer les schémas de validation partagés — email, threads, auth, utilisateurs, invitations, configuration Resend et alias migrés ; profil, règles et modèles restent à couvrir.
+- [x] Créer les schémas de validation partagés — parcours critiques, configuration, profil, règles, modèles et brouillons migrés.
 - [x] Vérifier le tenant de l’utilisateur assigné à un fil.
 - [x] Vérifier le tenant de l’utilisateur assigné à une règle.
 - [x] Vérifier le tenant du bénéficiaire d’un `SenderGrant`.
@@ -148,12 +148,12 @@ Statut : **En cours — relations utilisateur critiques et entrées de messageri
 - [x] Valider les alias contre le domaine.
 - [x] Valider le format du secret webhook.
 - [x] Échapper les valeurs des notifications HTML.
-- [ ] Uniformiser les réponses `400`, `404` et `500`.
+- [~] Uniformiser les réponses `400`, `404` et `500` — routes de configuration corrigées ; utilisateurs, appareils et connexions externes restent à harmoniser.
 
 Validation :
 
 - [~] Tests cross-tenant négatifs — affectation, routage, autorisation d’expéditeur, réponse et source de transfert couverts ; inventaire restant à poursuivre.
-- [~] Tests de payloads malformés — email, threads, auth, utilisateurs, invitations, configuration Resend et alias couverts ; profil, règles et modèles restent à couvrir.
+- [~] Tests de payloads malformés — parcours critiques, configuration et brouillons couverts ; connexions externes et administration secondaire restent à couvrir.
 - [x] Tests de limites de taille de l’envoi et de pagination des fils.
 - [x] Tests de domaine et alias.
 - [x] Tests d’échappement HTML.
@@ -294,6 +294,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | 4 | Migration Zod de l’authentification, des utilisateurs et des invitations ; politique de huit caractères alignée sur le serveur, le webmail et le mobile | Typecheck/build backend, build webmail, typecheck mobile, 213/213 tests | Valider domaines, alias et secret webhook | Codex |
 | 2026-09-16 | 4 | Vérification du domaine auprès de Resend, verrouillage des alias sur ce domaine et validation du secret webhook | Typecheck/build backend, 220/220 tests | Échapper les valeurs des notifications HTML | Codex |
 | 2026-09-16 | 4 | Échappement systématique des notifications HTML et remplacement du HTML brut d’activation par un lien explicite | Typecheck backend, 223/223 tests | Uniformiser les réponses d’erreur des routes restantes | Codex |
+| 2026-09-16 | 4 | Validation Zod du profil, du routage, des modèles et des brouillons ; sémantique HTTP corrigée sur ces routes et les collisions d’alias | Typecheck/build backend, 232/232 tests | Harmoniser utilisateurs, appareils et connexions externes | Codex |
 
 ## Journal des validations
 
@@ -316,6 +317,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | Lot 4 — validation Zod 2 | 213/213, dont 41/41 tests auth/utilisateurs/invitations ciblés | Backend typecheck/build, webmail build et mobile typecheck valides | Sans migration | Création, changement, activation, interfaces et connexion historique couverts | Les mots de passe courts existants restent utilisables uniquement pour se connecter |
 | 2026-09-16 | Lot 4 — configuration mail | 220/220, dont 34/34 tests configuration/import/isolation ciblés | Backend typecheck et build valides | Sans migration | Domaine Resend, changement de domaine, alias unitaires/bulk/CSV et secret webhook couverts | Un changement de domaine est refusé s’il rendrait un alias existant inutilisable |
 | 2026-09-16 | Lot 4 — notifications HTML | 223/223, dont 36/36 tests notification/invitation/webhook/isolation ciblés | Backend typecheck et build valides | Sans migration | Société, titre, libellés, valeurs et lien d’activation couverts | Le rendu HTML volontaire passe désormais par un type de lien explicite |
+| 2026-09-16 | Lot 4 — configuration HTTP | 232/232, dont 42/42 tests configuration/routage/isolation ciblés | Backend typecheck et build valides | Sans migration | Profil, règles, modèles, brouillons, 400/404/409 et collisions d’alias couverts | Les erreurs base inattendues ne sont plus maquillées en ressources absentes |
 
 ## Journal des incidents et régressions
 

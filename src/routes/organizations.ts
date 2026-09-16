@@ -18,6 +18,7 @@ import { parseRequest } from '../validation/request'
 import {
   emailBelongsToDomain,
   mailRouteCreateSchema,
+  organizationUpdateSchema,
   resendConnectSchema,
   resendDomainSelectionSchema,
   resendWebhookSecretSchema,
@@ -60,11 +61,13 @@ router.get('/me', authenticateToken, async (req, res) => {
 })
 
 router.put('/me', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const { name, companyName, emailContact } = req.body
+  const input = parseRequest(organizationUpdateSchema, req.body, res)
+  if (!input) return
+  const { name, companyName, emailContact } = input
   const data: Record<string, unknown> = {}
-  if (typeof name === 'string' && name.trim()) data.name = name.trim()
-  if (typeof companyName === 'string') data.companyName = companyName.trim() || null
-  if (typeof emailContact === 'string') data.emailContact = emailContact.trim() || null
+  if (name !== undefined) data.name = name
+  if (companyName !== undefined) data.companyName = companyName || null
+  if (emailContact !== undefined) data.emailContact = emailContact || null
 
   const org = await prisma.organization.update({ where: { id: req.user!.organizationId }, data })
   res.json({ id: org.id, name: org.name, companyName: org.companyName, emailContact: org.emailContact })

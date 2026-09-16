@@ -2,6 +2,8 @@ import { Router } from 'express'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
 import { PERSONAL_MAILBOX_CANAL } from '../helpers/thread'
+import { parseRequest } from '../validation/request'
+import { routingCanalParamSchema, routingRuleUpsertSchema } from '../validation/schemas'
 
 const router = Router()
 
@@ -33,12 +35,9 @@ router.get('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (_r
 // (assignToId est une FK non-nullable), elle le sera à l'activation de l'invitation
 // (publicUserInvites.ts:185-192, déjà en place, non modifié).
 router.put('/:canal', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  const { canal } = req.params
-  const { assignToId, assignToEmail, active } = req.body
-  if (!assignToId && !assignToEmail) return res.status(400).json({ error: 'assignToId ou assignToEmail requis.' })
-  if (assignToId !== undefined && typeof assignToId !== 'string') {
-    return res.status(400).json({ error: 'assignToId invalide.' })
-  }
+  const input = parseRequest(routingRuleUpsertSchema, { ...req.body, canal: req.params.canal }, res)
+  if (!input) return
+  const { canal, assignToId, assignToEmail, active } = input
   // "email" est le canal réservé de toute boîte IMAP/Gmail personnelle connectée
   // (mailboxPoller.ts, org entière confondue) — créer une adresse pro dessus
   // masquerait/interceptrait le courrier personnel de tout le monde dans
@@ -46,59 +45,53 @@ router.put('/:canal', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), asy
   if (canal.toLowerCase() === PERSONAL_MAILBOX_CANAL) {
     return res.status(400).json({ error: `"${PERSONAL_MAILBOX_CANAL}" est un nom réservé, choisissez un autre alias.` })
   }
-  try {
-    const db = forOrg(req.user!.organizationId)
-    const include = { assignTo: { select: { id: true, nom: true, username: true, orgRole: true } } } as const
+  const db = forOrg(req.user!.organizationId)
+  const include = { assignTo: { select: { id: true, nom: true, username: true, orgRole: true } } } as const
 
-    let resolvedAssignToId: string = assignToId
-    if (resolvedAssignToId) {
-      const assignee = await db.user.findUnique({ where: { id: resolvedAssignToId }, select: { id: true } })
-      if (!assignee) return res.status(400).json({ error: "L'utilisateur assigné n'appartient pas à cette organisation." })
+  let resolvedAssignToId = assignToId
+  if (resolvedAssignToId) {
+    const assignee = await db.user.findUnique({ where: { id: resolvedAssignToId }, select: { id: true } })
+    if (!assignee) return res.status(400).json({ error: "L'utilisateur assigné n'appartient pas à cette organisation." })
+  } else {
+    const email = assignToEmail!
+    const user = await db.user.findFirst({ where: { email } })
+    if (user) {
+      resolvedAssignToId = user.id
     } else {
-      const email = String(assignToEmail).toLowerCase().trim()
-      const user = await db.user.findFirst({ where: { email } })
-      if (user) {
-        resolvedAssignToId = user.id
-      } else {
-        const invite = await db.userInvite.findFirst({ where: { email, status: 'PENDING' } })
-        if (!invite) {
-          return res.status(404).json({ error: "Aucun compte ni invitation en attente pour cet email — créez d'abord une invitation." })
-        }
-        const canaux = new Set<string>(invite.pendingRoutingCanaux ? JSON.parse(invite.pendingRoutingCanaux) : [])
-        canaux.add(canal)
-        await db.userInvite.update({ where: { id: invite.id }, data: { pendingRoutingCanaux: JSON.stringify([...canaux]) } })
-        return res.json({ staged: true, canal, invite: { id: invite.id, email: invite.email, nom: invite.nom } })
+      const invite = await db.userInvite.findFirst({ where: { email, status: 'PENDING' } })
+      if (!invite) {
+        return res.status(404).json({ error: "Aucun compte ni invitation en attente pour cet email — créez d'abord une invitation." })
       }
+      const canaux = new Set<string>(invite.pendingRoutingCanaux ? JSON.parse(invite.pendingRoutingCanaux) : [])
+      canaux.add(canal)
+      await db.userInvite.update({ where: { id: invite.id }, data: { pendingRoutingCanaux: JSON.stringify([...canaux]) } })
+      return res.json({ staged: true, canal, invite: { id: invite.id, email: invite.email, nom: invite.nom } })
     }
-
-    const existing = await db.threadRoutingRule.findFirst({ where: { canal } })
-    const rule = existing
-      ? await db.threadRoutingRule.update({
-          where: { id: existing.id },
-          data: { assignToId: resolvedAssignToId, ...(active !== undefined ? { active } : {}) },
-          include,
-        })
-      : await db.threadRoutingRule.create({
-          data: { organizationId: req.user!.organizationId, canal, assignToId: resolvedAssignToId, active: active ?? true },
-          include,
-        })
-    res.json(rule)
-  } catch (err) {
-    console.error('[PUT /api/thread-routing-rules]', err)
-    res.status(500).json({ error: 'Erreur serveur.' })
   }
+
+  const existing = await db.threadRoutingRule.findFirst({ where: { canal } })
+  const rule = existing
+    ? await db.threadRoutingRule.update({
+        where: { id: existing.id },
+        data: { assignToId: resolvedAssignToId!, ...(active !== undefined ? { active } : {}) },
+        include,
+      })
+    : await db.threadRoutingRule.create({
+        data: { organizationId: req.user!.organizationId, canal, assignToId: resolvedAssignToId!, active: active ?? true },
+        include,
+      })
+  res.json(rule)
 })
 
 router.delete('/:canal', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
-  try {
-    const db = forOrg(req.user!.organizationId)
-    const existing = await db.threadRoutingRule.findFirst({ where: { canal: req.params.canal } })
-    if (!existing) return res.status(404).json({ error: 'Règle introuvable.' })
-    await db.threadRoutingRule.delete({ where: { id: existing.id } })
-    res.json({ success: true })
-  } catch {
-    res.status(404).json({ error: 'Règle introuvable.' })
-  }
+  const input = parseRequest(routingCanalParamSchema, req.params, res)
+  if (!input) return
+  const { canal } = input
+  const db = forOrg(req.user!.organizationId)
+  const existing = await db.threadRoutingRule.findFirst({ where: { canal } })
+  if (!existing) return res.status(404).json({ error: 'Règle introuvable.' })
+  await db.threadRoutingRule.delete({ where: { id: existing.id } })
+  res.json({ success: true })
 })
 
 export default router

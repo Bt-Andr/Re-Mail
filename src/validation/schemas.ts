@@ -207,6 +207,76 @@ export function emailBelongsToDomain(email: string, domain: string): boolean {
   return email.slice(email.lastIndexOf('@') + 1).toLowerCase() === domain.toLowerCase()
 }
 
+const nullableTrimmedText = (max: number, message: string) =>
+  z.union([z.string().trim().max(max, message), z.null()]).optional()
+
+export const organizationUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1, "Le nom de l'organisation est requis.").max(160, "Le nom de l'organisation est trop long.").optional(),
+    companyName: nullableTrimmedText(160, 'Le nom affiché est trop long.'),
+    emailContact: z.union([normalizedEmailSchema, z.literal(''), z.null()]).optional(),
+  })
+  .refine(value => Object.values(value).some(item => item !== undefined), { message: 'Aucune modification demandée.' })
+
+const routingCanalSchema = z
+  .string({ required_error: 'Canal requis.', invalid_type_error: 'Canal invalide.' })
+  .trim()
+  .toLowerCase()
+  .min(1, 'Canal requis.')
+  .max(128, 'Canal invalide.')
+  .regex(/^[^\s@]+$/, 'Canal invalide.')
+
+export const routingCanalParamSchema = z.object({ canal: routingCanalSchema })
+
+export const routingRuleUpsertSchema = z
+  .object({
+    canal: routingCanalSchema,
+    assignToId: resourceIdSchema.optional(),
+    assignToEmail: normalizedEmailSchema.optional(),
+    active: z.boolean().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.assignToId ? 1 : 0) + (value.assignToEmail ? 1 : 0) !== 1) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Indiquez soit assignToId, soit assignToEmail.' })
+    }
+  })
+
+export const replyTemplateQuerySchema = z.object({
+  canal: routingCanalSchema.optional(),
+})
+
+export const replyTemplateWriteSchema = z.object({
+  titre: z.string({ required_error: 'Titre et corps requis.', invalid_type_error: 'Titre invalide.' }).trim().min(1, 'Titre et corps requis.').max(200, 'Le titre est trop long.'),
+  corps: z.string({ required_error: 'Titre et corps requis.', invalid_type_error: 'Corps invalide.' }).trim().min(1, 'Titre et corps requis.').max(MAX_MESSAGE_LENGTH, 'Le corps est trop long.'),
+  canal: z.union([routingCanalSchema, z.literal(''), z.null()]).optional(),
+})
+
+const draftFields = {
+  toEmail: z.string().max(2_000, 'Le champ destinataire est trop long.'),
+  ccEmail: z.string().max(2_000, 'Le champ copie est trop long.'),
+  bccEmail: z.string().max(2_000, 'Le champ copie cachée est trop long.'),
+  subject: z.string().max(MAX_SUBJECT_LENGTH, 'Le sujet est trop long.'),
+  body: z.string().max(MAX_MESSAGE_LENGTH, 'Le corps est trop long.'),
+}
+
+export const draftCreateSchema = z.object({
+  toEmail: draftFields.toEmail.optional().default(''),
+  ccEmail: draftFields.ccEmail.optional().default(''),
+  bccEmail: draftFields.bccEmail.optional().default(''),
+  subject: draftFields.subject.optional().default(''),
+  body: draftFields.body.optional().default(''),
+})
+
+export const draftUpdateSchema = z
+  .object({
+    toEmail: draftFields.toEmail.optional(),
+    ccEmail: draftFields.ccEmail.optional(),
+    bccEmail: draftFields.bccEmail.optional(),
+    subject: draftFields.subject.optional(),
+    body: draftFields.body.optional(),
+  })
+  .refine(value => Object.values(value).some(item => item !== undefined), { message: 'Aucune modification demandée.' })
+
 const emailListSchema = z
   .string({ invalid_type_error: 'Liste de destinataires invalide.' })
   .optional()

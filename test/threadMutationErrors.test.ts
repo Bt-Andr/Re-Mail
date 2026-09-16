@@ -1,5 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import jwt from 'jsonwebtoken'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import request from 'supertest'
 
 const scopedDb = vi.hoisted(() => ({
@@ -17,20 +16,25 @@ vi.mock('../src/middleware/scopedPrisma', () => ({
 }))
 
 import app from '../src/app'
-import config from '../src/config'
+import { cleanupOrg, seedOrg, type SeededOrg } from './helpers/seed'
 
 describe('PATCH /api/threads — erreurs internes', () => {
+  let org: SeededOrg
+
+  beforeAll(async () => {
+    org = await seedOrg('thread-mutation-errors')
+  })
+
+  afterAll(async () => {
+    await cleanupOrg(org.organizationId)
+  })
+
   afterEach(() => {
     vi.restoreAllMocks()
     vi.clearAllMocks()
   })
 
   it('réserve 500 à une panne inattendue au lieu de la maquiller en 404', async () => {
-    const token = jwt.sign(
-      { id: 'user-test', organizationId: 'org-test', username: 'test', orgRole: 'OWNER', nom: 'Test' },
-      config.jwtSecret,
-      { expiresIn: '1h' }
-    )
     scopedDb.thread.findUnique
       .mockResolvedValueOnce({ assignedToId: null, canal: 'contact', sourceId: null })
       .mockResolvedValueOnce({ status: 'nouveau' })
@@ -40,7 +44,7 @@ describe('PATCH /api/threads — erreurs internes', () => {
 
     const response = await request(app)
       .patch('/api/threads/thread-test/status')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${org.token}`)
       .send({ status: 'en_cours' })
 
     expect(response.status).toBe(500)

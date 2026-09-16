@@ -7,10 +7,10 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Champ | Valeur |
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
-| Statut | En cours — lots 2, 3 et 4 terminés, lot 1 actif |
+| Statut | En cours — lots 2, 3 et 4 terminés, lots 1 et 5 actifs |
 | Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 37 fichiers de tests, 254 tests réussis |
+| Baseline fonctionnelle | 38 fichiers de tests, 259 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -31,7 +31,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | 2 | Corrélation des conversations | Critique | Terminé | 0, 1 | Aucun regroupement fondé seulement sur l’expéditeur |
 | 3 | Classement comptes et dossiers | Haute | Terminé | 2 | Fils visibles dans la bonne boîte et le bon dossier |
 | 4 | Intégrité tenant et validation | Critique | Terminé | 0 | Aucune relation cross-tenant acceptée |
-| 5 | Comptes et rôles | Haute | À faire | 0, 4 | Dernier propriétaire protégé et récupération disponible |
+| 5 | Comptes et rôles | Haute | En cours | 0, 4 | Dernier propriétaire protégé et récupération disponible |
 | 6 | Onboarding vérifié | Haute | À faire | 1–5 | Test réel d’envoi/réception réussi dans l’assistant |
 | 7 | Finition des clients | Moyenne | À faire | 3–6 | Parcours critiques couverts en end-to-end |
 
@@ -160,22 +160,22 @@ Validation :
 
 ## Lot 5 — Comptes et rôles
 
-Statut : **À faire**
+Statut : **En cours — gouvernance des rôles et transfert de propriété validés**
 
-- [ ] Définir la matrice de permissions `OWNER`/`ADMIN`/`MEMBER`.
-- [ ] Protéger le dernier propriétaire.
-- [ ] Ajouter un transfert de propriété atomique.
+- [x] Définir la matrice de permissions `OWNER`/`ADMIN`/`MEMBER` — voir [matrice-permissions-comptes.md](./matrice-permissions-comptes.md).
+- [x] Protéger le dernier propriétaire — aucun propriétaire ne peut être supprimé ou rétrogradé hors transfert.
+- [x] Ajouter un transfert de propriété atomique.
 - [ ] Ajouter le changement de mot de passe.
 - [ ] Ajouter la demande de réinitialisation.
 - [ ] Ajouter le jeton expirant à usage unique.
-- [ ] Ajouter la révocation des sessions.
+- [~] Ajouter la révocation des sessions — suppression et changement de rôle immédiatement pris en compte ; révocation globale après mot de passe restante.
 - [ ] Ajouter les interfaces web et mobile associées.
 
 Validation :
 
-- [ ] Dernier propriétaire impossible à supprimer.
-- [ ] Dernier propriétaire impossible à rétrograder.
-- [ ] Transfert concurrent sans organisation orpheline.
+- [x] Dernier propriétaire impossible à supprimer.
+- [x] Dernier propriétaire impossible à rétrograder.
+- [x] Transfert concurrent sans organisation orpheline.
 - [ ] Réinitialisation non énumérable.
 - [ ] Jeton expiré ou rejoué refusé.
 - [ ] Anciennes sessions révoquées.
@@ -255,7 +255,7 @@ Sous Windows avec une politique PowerShell restrictive, utiliser `npm.cmd` et `n
 | R-03 | Fusion de conversations indépendantes | Haute | Haute | Lot 2, en-têtes email | Réduit et couvert |
 | R-04 | Mauvaise boîte ou mauvais dossier | Haute | Haute | Lot 3 | Réduit et couvert |
 | R-05 | Relation cross-tenant forgée | Critique | Faible à moyenne | Lot 4 | Réduit et couvert |
-| R-06 | Organisation sans propriétaire | Haute | Moyenne | Lot 5 | Ouvert |
+| R-06 | Organisation sans propriétaire | Haute | Moyenne | Lot 5 | Réduit et couvert |
 | R-07 | Configuration déclarée terminée mais inactive | Haute | Haute | Lot 6, tests réels | Ouvert |
 | R-08 | Régression non détectée dans les interfaces | Moyenne | Haute | Lot 7, end-to-end | Ouvert |
 | R-09 | Migration impossible sur certains environnements | Haute | Moyenne | Lot 0 | Ouvert |
@@ -299,6 +299,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | 4 | Validation stricte IMAP/SMTP, blocage des hôtes locaux évidents, erreurs fournisseur opaques et import historique sans coercition | Typecheck/build backend, 242/242 tests | Corriger les faux `404` des mutations de fils | Codex |
 | 2026-09-16 | 4 | Suppression des captures trop larges sur les mutations de fils ; conservation des `404`/`403` explicites et propagation des incidents inattendus vers le filet global `500` | Typecheck/build backend, 251/251 tests | Poursuivre l’inventaire cross-tenant négatif du lot 4 | Codex |
 | 2026-09-16 | 4 | Matrice négative cross-tenant étendue aux fils, routes mail, modèles, brouillons, boîtes, adresses pro, utilisateurs, autorisations, règles et révocation d’invitations | Typecheck/build backend, 254/254 tests | Démarrer le lot 5 sur les comptes et rôles | Codex |
+| 2026-09-16 | 5 | Matrice OWNER/ADMIN/MEMBER, rôles relus en base, protection des propriétaires et transfert atomique avec concurrence contrôlée | Typecheck/build backend, 259/259 tests | Ajouter changement de mot de passe et révocation complète des sessions | Codex |
 
 ## Journal des validations
 
@@ -326,6 +327,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | Lot 4 — connexions externes | 242/242, dont 40/40 tests IMAP/SMTP/poller/isolation ciblés | Backend typecheck et build valides | Sans migration | Types, ports, hôtes privés, normalisation, conflits, erreurs fournisseur et historique couverts | Gmail OAuth était déjà protégé par état signé et liste de redirections autorisées |
 | 2026-09-16 | Lot 4 — mutations de fils | 251/251, dont 35/35 tests fils/isolation/validation ciblés | Backend typecheck et build valides | Sans migration | Statut, non-lu, étoile, archive, corbeille, restauration, absences réelles et panne interne forcée couverts | Une erreur interne n’est plus présentée comme un fil inexistant |
 | 2026-09-16 | Lot 4 — clôture isolation | 254/254, dont 39/39 tests isolation/invitations/réponse/utilisateurs ciblés | Backend typecheck et build valides | Sans migration | Toutes les références relationnelles prévues et les ressources mutables recensées sont couvertes | Les tentatives inter-tenant restent invisibles et ne modifient aucune donnée |
+| 2026-09-16 | Lot 5 — rôles et propriété | 259/259, dont 46/46 tests comptes/import/invitations/auth ciblés | Backend typecheck et build valides | Sans migration | Création, invitation, import, mise à jour, suppression, JWT obsolètes et transferts concurrents couverts | Un seul transfert concurrent aboutit et l’organisation conserve exactement un propriétaire |
 
 ## Journal des incidents et régressions
 

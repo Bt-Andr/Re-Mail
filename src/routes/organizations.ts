@@ -3,6 +3,7 @@ import prisma from '../lib/prisma'
 import config from '../config'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
+import { canCreateOrgRole } from '../lib/orgPermissions'
 import { csvRow } from '../lib/csv'
 import { parseConfigImport, ImportedUser, ImportedMailRoute, ImportedRoutingRule, ImportedReplyTemplate } from '../lib/configImport'
 import { configImportUpload } from '../lib/upload'
@@ -250,6 +251,10 @@ router.post('/me/import', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']),
   const usersResult = { created: 0, reused: 0, skipped: [] as { key: string; reason: string }[] }
   const seenUserKeys = new Set<string>()
   for (const u of parsed.users as ImportedUser[]) {
+    if (!canCreateOrgRole(req.user!.orgRole, u.orgRole)) {
+      usersResult.skipped.push({ key: u.email, reason: "rôle non autorisé pour l'importateur" })
+      continue
+    }
     if (seenUserKeys.has(u.email) || seenUserKeys.has(u.username)) {
       usersResult.skipped.push({ key: u.email, reason: 'doublon dans le fichier' })
       continue

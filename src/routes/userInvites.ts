@@ -7,6 +7,7 @@ import { forOrg } from '../middleware/scopedPrisma'
 import { encryptInviteFile, INVITE_FILE_MAGIC } from '../lib/inviteFileCrypto'
 import { buildResendClient } from '../lib/resendClient'
 import { buildNotificationEmail, sendNotificationEmail } from '../lib/email'
+import { canCreateOrgRole, canManageOrgUser } from '../lib/orgPermissions'
 import { getDecryptedResendKey } from '../helpers/resendAccount'
 import config from '../config'
 import { parseRequest } from '../validation/request'
@@ -93,6 +94,10 @@ router.post('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (r
   const input = parseRequest(userInviteCreateSchema, req.body, res)
   if (!input) return
   const { username, email, nom, proEmail, orgRole, isDeptHead } = input
+  const requestedRole = orgRole ?? 'MEMBER'
+  if (!canCreateOrgRole(req.user!.orgRole, requestedRole)) {
+    return res.status(403).json({ error: "Vous ne pouvez pas inviter un utilisateur avec ce rôle." })
+  }
 
   try {
     // username/email sont uniques sur toute la plateforme (comme User) — vérifiés
@@ -115,7 +120,7 @@ router.post('/', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (r
         email,
         nom,
         proEmail: proEmail || null,
-        orgRole: orgRole === 'OWNER' || orgRole === 'ADMIN' ? orgRole : 'MEMBER',
+        orgRole: requestedRole,
         isDeptHead: !!isDeptHead,
         expiresAt: new Date(Date.now() + INVITE_HYGIENE_TTL_MS),
         createdById: req.user!.id,
@@ -140,6 +145,9 @@ router.get('/:id/file', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), a
   const db = forOrg(req.user!.organizationId)
   const invite = await db.userInvite.findFirst({ where: { id: req.params.id } })
   if (!invite) return res.status(404).json({ error: 'Invitation introuvable.' })
+  if (!canManageOrgUser(req.user!.orgRole, invite.orgRole)) {
+    return res.status(403).json({ error: 'Vous ne pouvez pas gérer cette invitation.' })
+  }
 
   const payload = JSON.stringify({ v: 1, token: invite.fileToken })
   const fileContent = `${INVITE_FILE_MAGIC}\n${encryptInviteFile(payload)}`
@@ -156,6 +164,9 @@ router.post('/:id/activation-code', authenticateToken, requireOrgRole(['OWNER', 
   const db = forOrg(req.user!.organizationId)
   const invite = await db.userInvite.findFirst({ where: { id: req.params.id } })
   if (!invite) return res.status(404).json({ error: 'Invitation introuvable.' })
+  if (!canManageOrgUser(req.user!.orgRole, invite.orgRole)) {
+    return res.status(403).json({ error: 'Vous ne pouvez pas gérer cette invitation.' })
+  }
   if (invite.status !== 'PENDING') return res.status(400).json({ error: 'Cette invitation n\'est plus en attente.' })
 
   const code = generateCode()
@@ -175,6 +186,9 @@ router.post('/:id/revoke', authenticateToken, requireOrgRole(['OWNER', 'ADMIN'])
   const db = forOrg(req.user!.organizationId)
   const invite = await db.userInvite.findFirst({ where: { id: req.params.id } })
   if (!invite) return res.status(404).json({ error: 'Invitation introuvable.' })
+  if (!canManageOrgUser(req.user!.orgRole, invite.orgRole)) {
+    return res.status(403).json({ error: 'Vous ne pouvez pas gérer cette invitation.' })
+  }
   const updated = await db.userInvite.update({ where: { id: invite.id }, data: { status: 'REVOKED' }, select: inviteSelect })
   res.json(updated)
 })

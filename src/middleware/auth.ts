@@ -1,11 +1,12 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import config from '../config'
+import prisma from '../lib/prisma'
 
 // Le JWT porte organizationId depuis le login (routes/auth.ts) — jamais accepté
 // depuis un header/body contrôlé par le client. C'est la seule source de vérité
 // pour le scoping tenant (voir middleware/scopedPrisma.ts).
-export function authenticateToken(req: Request, res: Response, next: NextFunction): void {
+export async function authenticateToken(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers['authorization']
   const token = authHeader && authHeader.split(' ')[1]
 
@@ -14,14 +15,36 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
     return
   }
 
-  jwt.verify(token, config.jwtSecret, (err, decoded) => {
-    if (err) {
+  try {
+    const decoded = jwt.verify(token, config.jwtSecret)
+    if (
+      typeof decoded === 'string' ||
+      typeof decoded.id !== 'string' ||
+      typeof decoded.organizationId !== 'string'
+    ) {
       res.status(403).json({ error: 'Token invalide' })
       return
     }
-    req.user = decoded as Express.Request['user']
+
+    // L'identité et le rôle courants viennent toujours de la base. Un compte supprimé
+    // ou rétrogradé perd donc immédiatement ses droits, même avec un JWT encore valide.
+    const user = await prisma.user.findFirst({
+      where: { id: decoded.id, organizationId: decoded.organizationId },
+      select: { id: true, organizationId: true, username: true, orgRole: true, nom: true },
+    })
+    if (!user) {
+      res.status(403).json({ error: 'Token invalide' })
+      return
+    }
+    req.user = user
     next()
-  })
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      res.status(403).json({ error: 'Token invalide' })
+      return
+    }
+    next(error)
+  }
 }
 
 export function requireOrgRole(roles: ('OWNER' | 'ADMIN' | 'MEMBER')[]) {

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import jwt from 'jsonwebtoken'
 import request from 'supertest'
 import app from '../src/app'
+import config from '../src/config'
 import prisma from '../src/lib/prisma'
 import { csvRow } from '../src/lib/csv'
 import { seedOrg, cleanupOrg, SeededOrg } from './helpers/seed'
@@ -46,6 +48,7 @@ describe('POST /api/organizations/me/import', () => {
   let orgAOwnerEmail: string
   let orgAMemberId: string
   let orgAMemberEmail: string
+  let orgAAdminToken: string
 
   beforeAll(async () => {
     orgA = await seedOrg('import-a')
@@ -66,6 +69,22 @@ describe('POST /api/organizations/me/import', () => {
     })
     orgAMemberId = member.id
     orgAMemberEmail = member.email
+
+    const admin = await prisma.user.create({
+      data: {
+        organizationId: orgA.organizationId,
+        username: `import-admin-${Date.now()}`,
+        email: `import-admin-${Date.now()}@test-co.example`,
+        password: 'irrelevant',
+        nom: 'Admin Import',
+        orgRole: 'ADMIN',
+      },
+    })
+    orgAAdminToken = jwt.sign(
+      { id: admin.id, organizationId: orgA.organizationId, username: admin.username, orgRole: admin.orgRole, nom: admin.nom },
+      config.jwtSecret,
+      { expiresIn: '1h' }
+    )
   })
 
   afterAll(async () => {
@@ -97,6 +116,31 @@ describe('POST /api/organizations/me/import', () => {
 
     const grant = await prisma.senderGrant.findFirstOrThrow({ where: { organizationId: orgA.organizationId, userId: orgAMemberId, email: 'contact@imported.example' } })
     expect(grant.email).toBe('contact@imported.example')
+  })
+
+  it('prevents an ADMIN import from creating ADMIN or OWNER invitations', async () => {
+    const stamp = Date.now()
+    const users = [
+      { username: `member-${stamp}`, email: `member-${stamp}@example.com`, nom: 'Member', orgRole: 'MEMBER' },
+      { username: `admin-${stamp}`, email: `admin-${stamp}@example.com`, nom: 'Admin', orgRole: 'ADMIN' },
+      { username: `owner-${stamp}`, email: `owner-${stamp}@example.com`, nom: 'Owner', orgRole: 'OWNER' },
+    ]
+
+    const response = await request(app)
+      .post('/api/organizations/me/import')
+      .set('Authorization', `Bearer ${orgAAdminToken}`)
+      .attach('file', buildCsv({ users }), 'roles.csv')
+
+    expect(response.status).toBe(200)
+    expect(response.body.users.created).toBe(1)
+    expect(response.body.users.skipped).toEqual(expect.arrayContaining([
+      { key: users[1].email, reason: "rôle non autorisé pour l'importateur" },
+      { key: users[2].email, reason: "rôle non autorisé pour l'importateur" },
+    ]))
+
+    const invites = await prisma.userInvite.findMany({ where: { email: { in: users.map(user => user.email) } } })
+    expect(invites).toHaveLength(1)
+    expect(invites[0]).toMatchObject({ email: users[0].email, orgRole: 'MEMBER' })
   })
 
   it('is idempotent: re-importing the same file updates instead of duplicating', async () => {

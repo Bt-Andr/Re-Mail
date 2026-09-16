@@ -286,7 +286,7 @@ describe('User invite activation flow', () => {
   })
 
   describe('tenant isolation', () => {
-    it('does not let org B list, download, or generate a code for org A\'s invite', async () => {
+    it('does not let org B list, download, generate a code, or revoke org A\'s invite', async () => {
       const created = await createInvite(org)
 
       const listB = await request(app).get('/api/user-invites').set('Authorization', `Bearer ${orgB.token}`)
@@ -297,6 +297,12 @@ describe('User invite activation flow', () => {
 
       const codeB = await request(app).post(`/api/user-invites/${created.body.id}/activation-code`).set('Authorization', `Bearer ${orgB.token}`)
       expect(codeB.status).toBe(404)
+
+      const revokeB = await request(app).post(`/api/user-invites/${created.body.id}/revoke`).set('Authorization', `Bearer ${orgB.token}`)
+      expect(revokeB.status).toBe(404)
+
+      const untouched = await prisma.userInvite.findUnique({ where: { id: created.body.id } })
+      expect(untouched?.status).toBe('PENDING')
     })
 
     it('always activates the user under the organization actually encoded in the file, regardless of caller', async () => {

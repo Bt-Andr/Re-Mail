@@ -7,10 +7,10 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Champ | Valeur |
 |---|---|
 | Programme | Fiabilisation de Re-Mail |
-| Statut | En cours — lots 2 et 3 terminés, lots 1 et 4 actifs |
+| Statut | En cours — lots 2, 3 et 4 terminés, lot 1 actif |
 | Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 37 fichiers de tests, 251 tests réussis |
+| Baseline fonctionnelle | 37 fichiers de tests, 254 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -30,7 +30,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | 1 | Réception durable et idempotente | Critique | En cours | 0 | Aucun événement perdu ou traité deux fois |
 | 2 | Corrélation des conversations | Critique | Terminé | 0, 1 | Aucun regroupement fondé seulement sur l’expéditeur |
 | 3 | Classement comptes et dossiers | Haute | Terminé | 2 | Fils visibles dans la bonne boîte et le bon dossier |
-| 4 | Intégrité tenant et validation | Critique | En cours | 0 | Aucune relation cross-tenant acceptée |
+| 4 | Intégrité tenant et validation | Critique | Terminé | 0 | Aucune relation cross-tenant acceptée |
 | 5 | Comptes et rôles | Haute | À faire | 0, 4 | Dernier propriétaire protégé et récupération disponible |
 | 6 | Onboarding vérifié | Haute | À faire | 1–5 | Test réel d’envoi/réception réussi dans l’assistant |
 | 7 | Finition des clients | Moyenne | À faire | 3–6 | Parcours critiques couverts en end-to-end |
@@ -132,7 +132,7 @@ Validation :
 
 ## Lot 4 — Intégrité tenant et validation
 
-Statut : **En cours — relations utilisateur critiques et entrées de messagerie contrôlées**
+Statut : **Terminé — 2026-09-16**
 
 - [x] Créer les schémas de validation partagés — parcours critiques, configuration, profil, règles, modèles et brouillons migrés.
 - [x] Vérifier le tenant de l’utilisateur assigné à un fil.
@@ -152,7 +152,7 @@ Statut : **En cours — relations utilisateur critiques et entrées de messageri
 
 Validation :
 
-- [~] Tests cross-tenant négatifs — affectation, routage, autorisation d’expéditeur, réponse et source de transfert couverts ; inventaire restant à poursuivre.
+- [x] Tests cross-tenant négatifs — relations client et ressources mutables couvertes, y compris les opérations individuelles, groupées et personnelles.
 - [x] Tests de payloads malformés — parcours critiques, configuration, brouillons, utilisateurs, appareils et connexions externes couverts.
 - [x] Tests de limites de taille de l’envoi et de pagination des fils.
 - [x] Tests de domaine et alias.
@@ -254,7 +254,7 @@ Sous Windows avec une politique PowerShell restrictive, utiliser `npm.cmd` et `n
 | R-02 | Double traitement d’un email | Haute | Moyenne | Lots 1 et 2, idempotence | Ouvert |
 | R-03 | Fusion de conversations indépendantes | Haute | Haute | Lot 2, en-têtes email | Réduit et couvert |
 | R-04 | Mauvaise boîte ou mauvais dossier | Haute | Haute | Lot 3 | Réduit et couvert |
-| R-05 | Relation cross-tenant forgée | Critique | Faible à moyenne | Lot 4 | En réduction |
+| R-05 | Relation cross-tenant forgée | Critique | Faible à moyenne | Lot 4 | Réduit et couvert |
 | R-06 | Organisation sans propriétaire | Haute | Moyenne | Lot 5 | Ouvert |
 | R-07 | Configuration déclarée terminée mais inactive | Haute | Haute | Lot 6, tests réels | Ouvert |
 | R-08 | Régression non détectée dans les interfaces | Moyenne | Haute | Lot 7, end-to-end | Ouvert |
@@ -298,6 +298,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | 4 | Harmonisation utilisateurs/appareils : conflits `409`, alias d’envoi validés avant mutation et transfert inter-session des jetons push globaux | Typecheck/build backend, 238/238 tests | Harmoniser les connexions externes | Codex |
 | 2026-09-16 | 4 | Validation stricte IMAP/SMTP, blocage des hôtes locaux évidents, erreurs fournisseur opaques et import historique sans coercition | Typecheck/build backend, 242/242 tests | Corriger les faux `404` des mutations de fils | Codex |
 | 2026-09-16 | 4 | Suppression des captures trop larges sur les mutations de fils ; conservation des `404`/`403` explicites et propagation des incidents inattendus vers le filet global `500` | Typecheck/build backend, 251/251 tests | Poursuivre l’inventaire cross-tenant négatif du lot 4 | Codex |
+| 2026-09-16 | 4 | Matrice négative cross-tenant étendue aux fils, routes mail, modèles, brouillons, boîtes, adresses pro, utilisateurs, autorisations, règles et révocation d’invitations | Typecheck/build backend, 254/254 tests | Démarrer le lot 5 sur les comptes et rôles | Codex |
 
 ## Journal des validations
 
@@ -324,6 +325,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-16 | Lot 4 — utilisateurs et appareils | 238/238, dont 6/6 tests utilisateurs/appareils ciblés | Backend typecheck et build valides | Sans migration | Collisions, alias inconnus, suppression contrainte, payloads push et transfert inter-tenant couverts | Le jeton push global suit désormais la session courante sans duplication |
 | 2026-09-16 | Lot 4 — connexions externes | 242/242, dont 40/40 tests IMAP/SMTP/poller/isolation ciblés | Backend typecheck et build valides | Sans migration | Types, ports, hôtes privés, normalisation, conflits, erreurs fournisseur et historique couverts | Gmail OAuth était déjà protégé par état signé et liste de redirections autorisées |
 | 2026-09-16 | Lot 4 — mutations de fils | 251/251, dont 35/35 tests fils/isolation/validation ciblés | Backend typecheck et build valides | Sans migration | Statut, non-lu, étoile, archive, corbeille, restauration, absences réelles et panne interne forcée couverts | Une erreur interne n’est plus présentée comme un fil inexistant |
+| 2026-09-16 | Lot 4 — clôture isolation | 254/254, dont 39/39 tests isolation/invitations/réponse/utilisateurs ciblés | Backend typecheck et build valides | Sans migration | Toutes les références relationnelles prévues et les ressources mutables recensées sont couvertes | Les tentatives inter-tenant restent invisibles et ne modifient aucune donnée |
 
 ## Journal des incidents et régressions
 

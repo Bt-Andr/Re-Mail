@@ -37,6 +37,11 @@ describe('Tenant isolation', () => {
       .send({ alias: 'hijacked@org-a.example', personalEmail: 'attacker@example.com' })
     expect(updateB.status).toBe(404)
 
+    const deleteB = await request(app)
+      .delete(`/api/mail-routes/${created.body.id}`)
+      .set('Authorization', `Bearer ${orgB.token}`)
+    expect(deleteB.status).toBe(404)
+
     // La route d'origine n'a pas été modifiée
     const untouched = await prisma.mailRoute.findUnique({ where: { id: created.body.id } })
     expect(untouched?.alias).toBe('contact@org-a.example')
@@ -52,10 +57,19 @@ describe('Tenant isolation', () => {
     const listB = await request(app).get('/api/reply-templates').set('Authorization', `Bearer ${orgB.token}`)
     expect(listB.body).toEqual([])
 
+    const updateB = await request(app)
+      .put(`/api/reply-templates/${created.body.id}`)
+      .set('Authorization', `Bearer ${orgB.token}`)
+      .send({ titre: 'Modèle détourné', corps: 'Contenu détourné' })
+    expect(updateB.status).toBe(404)
+
     const deleteB = await request(app)
       .delete(`/api/reply-templates/${created.body.id}`)
       .set('Authorization', `Bearer ${orgB.token}`)
     expect(deleteB.status).toBe(404)
+
+    const untouched = await prisma.replyTemplate.findUnique({ where: { id: created.body.id } })
+    expect(untouched?.titre).toBe('Modèle A')
   })
 
   it('does not let org B see org A\'s threads, even by guessing the id', async () => {
@@ -87,6 +101,53 @@ describe('Tenant isolation', () => {
     expect(replyB.status).toBe(404)
   })
 
+  it('does not let org B mutate org A threads through individual or bulk endpoints', async () => {
+    const thread = await prisma.thread.create({
+      data: {
+        organizationId: orgA.organizationId,
+        canal: 'contact',
+        sujet: 'Fil protégé org A',
+        externalFrom: 'Client protégé',
+        externalEmail: 'protected@a.example',
+        origin: 'inbound',
+      },
+    })
+    const auth = { Authorization: `Bearer ${orgB.token}` }
+    const mutations = [
+      { suffix: 'status', body: { status: 'resolu' } },
+      { suffix: 'unread' },
+      { suffix: 'trash' },
+      { suffix: 'archive' },
+      { suffix: 'unarchive' },
+      { suffix: 'star', body: { starred: true } },
+      { suffix: 'restore' },
+    ] as const
+
+    for (const mutation of mutations) {
+      const response = await request(app)
+        .patch(`/api/threads/${thread.id}/${mutation.suffix}`)
+        .set(auth)
+        .send('body' in mutation ? mutation.body : undefined)
+      expect(response.status, mutation.suffix).toBe(404)
+    }
+
+    const activity = await request(app).get(`/api/threads/${thread.id}/activity`).set(auth)
+    expect(activity.status).toBe(404)
+
+    const deletion = await request(app).delete(`/api/threads/${thread.id}`).set(auth)
+    expect(deletion.status).toBe(404)
+
+    const bulk = await request(app)
+      .patch('/api/threads/bulk')
+      .set(auth)
+      .send({ ids: [thread.id], status: 'resolu', deletedAt: true })
+    expect(bulk.status).toBe(200)
+    expect(bulk.body).toEqual({ updated: 0 })
+
+    const untouched = await prisma.thread.findUnique({ where: { id: thread.id } })
+    expect(untouched).toMatchObject({ status: 'nouveau', starred: false, deletedAt: null, archivedAt: null })
+  })
+
   it('does not let org B assign org A\'s thread to one of its own users', async () => {
     const thread = await prisma.thread.create({
       data: {
@@ -103,8 +164,7 @@ describe('Tenant isolation', () => {
       .patch(`/api/threads/${thread.id}/assign`)
       .set('Authorization', `Bearer ${orgB.token}`)
       .send({ assignedToId: orgB.userId })
-    // La mise à jour scopée par organizationId ne trouve aucune ligne à modifier
-    expect([404, 500]).toContain(assignB.status)
+    expect(assignB.status).toBe(404)
 
     const stillUnassigned = await prisma.thread.findUnique({ where: { id: thread.id } })
     expect(stillUnassigned?.assignedToId).toBeNull()
@@ -140,6 +200,65 @@ describe('Tenant isolation', () => {
 
     expect(response.status).toBe(400)
     expect(await prisma.threadRoutingRule.findFirst({ where: { organizationId: orgA.organizationId, canal: 'finance' } })).toBeNull()
+  })
+
+  it('does not let org B update or delete org A personal resources', async () => {
+    const draft = await prisma.mailDraft.create({
+      data: { organizationId: orgA.organizationId, userId: orgA.userId, subject: 'Brouillon A', body: 'Secret' },
+    })
+    const mailbox = await prisma.externalMailboxConnection.create({
+      data: {
+        organizationId: orgA.organizationId,
+        userId: orgA.userId,
+        provider: 'imap',
+        email: `private-${Date.now()}@a.example`,
+        imapHost: 'imap.a.example',
+        smtpHost: 'smtp.a.example',
+        credentialEnc: 'encrypted-test-value',
+      },
+    })
+    const proAddress = await prisma.threadRoutingRule.create({
+      data: { organizationId: orgA.organizationId, canal: `private-${Date.now()}`, assignToId: orgA.userId },
+    })
+    const auth = { Authorization: `Bearer ${orgB.token}` }
+
+    const draftList = await request(app).get('/api/drafts').set(auth)
+    expect(draftList.body.find((item: { id: string }) => item.id === draft.id)).toBeUndefined()
+    expect((await request(app).put(`/api/drafts/${draft.id}`).set(auth).send({ subject: 'Détourné' })).status).toBe(404)
+    expect((await request(app).delete(`/api/drafts/${draft.id}`).set(auth)).status).toBe(404)
+
+    expect((await request(app).delete(`/api/mailbox-connections/${mailbox.id}`).set(auth)).status).toBe(404)
+    expect((await request(app).patch(`/api/mailbox-connections/${mailbox.id}/retry`).set(auth)).status).toBe(404)
+    expect((await request(app).post(`/api/mailbox-connections/${mailbox.id}/import-history`).set(auth).send({ days: 1 })).status).toBe(404)
+
+    expect((await request(app).post(`/api/pro-addresses/${proAddress.id}/claim`).set(auth)).status).toBe(404)
+
+    expect(await prisma.mailDraft.findUnique({ where: { id: draft.id } })).not.toBeNull()
+    expect(await prisma.externalMailboxConnection.findUnique({ where: { id: mailbox.id } })).not.toBeNull()
+    expect((await prisma.threadRoutingRule.findUnique({ where: { id: proAddress.id } }))?.claimedAt).toBeNull()
+  })
+
+  it('does not let org B update org A users or revoke their grants and routing rules', async () => {
+    const grant = await prisma.senderGrant.create({
+      data: {
+        organizationId: orgA.organizationId,
+        userId: orgA.userId,
+        email: `grant-${Date.now()}@org-a.example`,
+      },
+    })
+    const rule = await prisma.threadRoutingRule.create({
+      data: { organizationId: orgA.organizationId, canal: `restricted-${Date.now()}`, assignToId: orgA.userId },
+    })
+    const auth = { Authorization: `Bearer ${orgB.token}` }
+
+    expect((await request(app).put(`/api/users/${orgA.userId}`).set(auth).send({ nom: 'Détourné' })).status).toBe(404)
+    expect((await request(app).delete(`/api/users/${orgA.userId}/sender-grants/${grant.id}`).set(auth)).status).toBe(404)
+    expect((await request(app).delete(`/api/users/${orgA.userId}`).set(auth)).status).toBe(404)
+    expect((await request(app).delete(`/api/thread-routing-rules/${rule.canal}`).set(auth)).status).toBe(404)
+
+    expect((await prisma.user.findUnique({ where: { id: orgA.userId } }))?.nom).toBe('Test User')
+    expect(await prisma.senderGrant.findUnique({ where: { id: grant.id } })).not.toBeNull()
+    expect(await prisma.threadRoutingRule.findUnique({ where: { id: rule.id } })).not.toBeNull()
   })
 
   it('does not let an org A sender grant reference an org B user', async () => {

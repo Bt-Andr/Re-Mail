@@ -293,3 +293,22 @@ export interface OrganizationSetupStatus {
   firstInboundAt: string | null;
   operational: boolean;
 }
+
+export interface ResendDnsRecordStatus {
+  record: string;
+  name: string;
+  type: string;
+  value: string;
+  ttl: string | null;
+  status: string;
+  priority: number | null;
+}
+
+export interface ResendDomainStatus {
+  name: string;
+  status: string;
+  sendingEnabled: boolean;
+  receivingEnabled: boolean;
+  receivingReady: boolean;
+  records: ResendDnsRecordStatus[];
+}

@@ -10,6 +10,7 @@ import { configImportUpload } from '../lib/upload'
 import { INVITE_HYGIENE_TTL_MS } from './userInvites'
 import {
   getDecryptedResendKey,
+  getResendDomain,
   listResendDomains,
   encryptResendKey,
   encryptWebhookSecret,
@@ -149,6 +150,48 @@ router.get('/me/resend/domains', authenticateToken, requireOrgRole(['OWNER', 'AD
       verifiedDomains: domains
         .filter(domain => domain.status.toLowerCase() === 'verified')
         .map(domain => domain.name.toLowerCase()),
+    })
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message })
+  }
+})
+
+router.get('/me/resend/domain-status', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
+  const org = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
+  if (!org?.resendApiKeyEnc || !org.resendVerifiedDomain) {
+    return res.status(400).json({ error: 'Sélectionnez d’abord un domaine Resend vérifié.' })
+  }
+
+  try {
+    const apiKey = getDecryptedResendKey(org)
+    const domains = await listResendDomains(apiKey)
+    const selected = domains.find(domain => domain.name.toLowerCase() === org.resendVerifiedDomain!.toLowerCase())
+    if (!selected) return res.status(404).json({ error: 'Le domaine sélectionné n’existe plus dans Resend.' })
+
+    const details = await getResendDomain(apiKey, selected.id)
+    const records = (details.records ?? []).map(record => ({
+      record: record.record,
+      name: record.name,
+      type: record.type,
+      value: record.value,
+      ttl: record.ttl ?? null,
+      status: record.status,
+      priority: record.priority ?? null,
+    }))
+    const receivingRecords = records.filter(record => record.record.toLowerCase().includes('receiving'))
+    const receivingEnabled = details.capabilities?.receiving?.toLowerCase() === 'enabled'
+    const receivingReady =
+      receivingEnabled &&
+      receivingRecords.length > 0 &&
+      receivingRecords.every(record => record.status.toLowerCase() === 'verified')
+
+    res.json({
+      name: details.name.toLowerCase(),
+      status: details.status,
+      sendingEnabled: details.capabilities?.sending?.toLowerCase() === 'enabled',
+      receivingEnabled,
+      receivingReady,
+      records,
     })
   } catch (error) {
     res.status(400).json({ error: (error as Error).message })

@@ -31,6 +31,24 @@ export interface ResendDomain {
   id: string
   name: string
   status: string
+  capabilities?: {
+    sending?: string
+    receiving?: string
+  }
+}
+
+export interface ResendDnsRecord {
+  record: string
+  name: string
+  type: string
+  value: string
+  ttl?: string
+  status: string
+  priority?: number
+}
+
+export interface ResendDomainDetails extends ResendDomain {
+  records: ResendDnsRecord[]
 }
 
 // Valide une clé API en listant les domaines de CE compte Resend — sert à la fois
@@ -45,4 +63,14 @@ export async function listResendDomains(apiKey: string): Promise<ResendDomain[]>
   }
   const json = (await res.json()) as { data?: ResendDomain[] }
   return json.data ?? []
+}
+
+export async function getResendDomain(apiKey: string, domainId: string): Promise<ResendDomainDetails> {
+  const res = await fetch(`https://api.resend.com/domains/${encodeURIComponent(domainId)}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  })
+  if (!res.ok) {
+    throw new Error(res.status === 404 ? 'Domaine introuvable dans le compte Resend connecté' : `Erreur Resend (${res.status})`)
+  }
+  return (await res.json()) as ResendDomainDetails
 }

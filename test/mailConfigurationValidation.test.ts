@@ -86,6 +86,71 @@ describe('Mail configuration validation', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it('returns contextual DNS records and requires a verified receiving MX record', async () => {
+    await prisma.organization.update({
+      where: { id: org.organizationId },
+      data: { resendVerifiedDomain: 'mail.example.com' },
+    })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ id: 'domain-1', name: 'mail.example.com', status: 'partially_verified' }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'domain-1',
+          name: 'mail.example.com',
+          status: 'partially_verified',
+          capabilities: { sending: 'enabled', receiving: 'enabled' },
+          records: [
+            {
+              record: 'Receiving MX',
+              name: 'mail.example.com',
+              type: 'MX',
+              value: 'inbound-smtp.us-east-1.amazonaws.com',
+              ttl: 'Auto',
+              status: 'pending',
+              priority: 10,
+            },
+            {
+              record: 'DKIM',
+              name: 'resend._domainkey.mail.example.com',
+              type: 'TXT',
+              value: 'public-dkim-value',
+              status: 'verified',
+            },
+          ],
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const response = await request(app)
+      .get('/api/organizations/me/resend/domain-status')
+      .set('Authorization', `Bearer ${org.token}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body).toMatchObject({
+      name: 'mail.example.com',
+      sendingEnabled: true,
+      receivingEnabled: true,
+      receivingReady: false,
+    })
+    expect(response.body.records[0]).toEqual({
+      record: 'Receiving MX',
+      name: 'mail.example.com',
+      type: 'MX',
+      value: 'inbound-smtp.us-east-1.amazonaws.com',
+      ttl: 'Auto',
+      status: 'pending',
+      priority: 10,
+    })
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://api.resend.com/domains/domain-1', {
+      headers: { Authorization: 'Bearer re_test_fake_key' },
+    })
+  })
+
   it('rejects an unknown or unverified domain without changing the organization', async () => {
     vi.stubGlobal(
       'fetch',

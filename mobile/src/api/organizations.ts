@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { OrgSummary } from '../types/api';
+import type { OrgSummary, ResendDomainStatus } from '../types/api';
 
 export function getOrgSummary(): Promise<OrgSummary> {
   return apiFetch<OrgSummary>('/organizations/me');
@@ -17,6 +17,10 @@ export function connectResend(apiKey: string): Promise<{ verifiedDomains: string
 
 export function listVerifiedResendDomains(): Promise<{ verifiedDomains: string[] }> {
   return apiFetch<{ verifiedDomains: string[] }>('/organizations/me/resend/domains');
+}
+
+export function getResendDomainStatus(): Promise<ResendDomainStatus> {
+  return apiFetch<ResendDomainStatus>('/organizations/me/resend/domain-status');
 }
 
 export function selectResendDomain(domain: string): Promise<unknown> {

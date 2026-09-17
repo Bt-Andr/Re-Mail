@@ -18,7 +18,6 @@ export interface OrganizationSummary {
   slug: string
   isPersonal: boolean
   memberCount: number
-  setupStatus: OrganizationSetupStatus
 }
 
 export interface OrganizationSetupStatus {
@@ -46,6 +45,7 @@ export interface OrganizationStatus {
   externalMailboxCount: number
   isPersonal: boolean
   memberCount: number
+  setupStatus: OrganizationSetupStatus
 }
 
 // Notion unifiée "compte" (voir src/routes/accounts.ts backend) — utilisée par le

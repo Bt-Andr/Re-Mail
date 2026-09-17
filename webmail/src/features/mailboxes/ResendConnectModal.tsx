@@ -9,6 +9,7 @@ import { useSession } from '../../context/SessionContext'
 import { useOrganization } from '../../hooks/useOrganization'
 import { ConnectResendStep } from './resendSteps/ConnectResendStep'
 import { SelectDomainStep } from './resendSteps/SelectDomainStep'
+import { DnsRecordsStep } from './resendSteps/DnsRecordsStep'
 import { WebhookSecretStep } from './resendSteps/WebhookSecretStep'
 
 // Réutilise telles quelles les étapes de l'onboarding (déjà autonomes : juste
@@ -21,18 +22,21 @@ import { WebhookSecretStep } from './resendSteps/WebhookSecretStep'
 export function ResendConnectModal({ open, onClose, onConnected }: { open: boolean; onClose: () => void; onConnected: () => void }) {
   const { organization, loading, refetch } = useOrganization()
   const [verifiedDomains, setVerifiedDomains] = useState<string[] | null>(null)
+  const [dnsReady, setDnsReady] = useState(false)
   const [senderDone, setSenderDone] = useState(false)
 
   const close = () => {
     setVerifiedDomains(null)
+    setDnsReady(false)
     setSenderDone(false)
     onClose()
   }
 
-  let step: 'connect' | 'domain' | 'webhook' | 'sender' | 'done' = 'connect'
+  let step: 'connect' | 'domain' | 'dns' | 'webhook' | 'sender' | 'done' = 'connect'
   if (organization) {
     if (!organization.resendConnected) step = 'connect'
     else if (!organization.resendVerifiedDomain) step = 'domain'
+    else if (!organization.webhookConfigured && !dnsReady) step = 'dns'
     else if (!organization.webhookConfigured) step = 'webhook'
     else if (organization.isPersonal && !senderDone) step = 'sender'
     else step = 'done'
@@ -51,6 +55,8 @@ export function ResendConnectModal({ open, onClose, onConnected }: { open: boole
         />
       ) : step === 'domain' ? (
         <SelectDomainStep verifiedDomains={verifiedDomains} onDone={refetch} />
+      ) : step === 'dns' ? (
+        <DnsRecordsStep onReady={() => setDnsReady(true)} />
       ) : step === 'webhook' ? (
         <WebhookSecretStep organization={organization} onDone={refetch} />
       ) : step === 'sender' ? (

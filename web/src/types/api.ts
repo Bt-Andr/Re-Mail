@@ -24,6 +24,7 @@ export interface OrganizationSetupStatus {
   resendConnected: boolean
   domainSelected: boolean
   webhookConfigured: boolean
+  webhookVerified: boolean
   firstAddressConfigured: boolean
   firstOutboundAt: string | null
   firstInboundAt: string | null

@@ -6,23 +6,26 @@ import {
   getOrgSummary,
   connectResend,
   getResendDomainStatus,
+  getWebhookTestStatus,
   listVerifiedResendDomains,
   selectResendDomain,
   setResendWebhookSecret,
+  startWebhookTest,
 } from '../../api/organizations';
 import { describeError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
-import type { OrgSummary, ResendDomainStatus } from '../../types/api';
+import type { OrgSummary, ResendDomainStatus, WebhookTestStatus } from '../../types/api';
 
-type Step = 'connect' | 'domain' | 'dns' | 'webhook' | 'done';
+type Step = 'connect' | 'domain' | 'dns' | 'webhook' | 'webhook-test' | 'done';
 
 function stepFor(org: OrgSummary, dnsReady: boolean): Step {
   if (!org.resendConnected) return 'connect';
   if (!org.resendVerifiedDomain) return 'domain';
   if (!org.webhookConfigured && !dnsReady) return 'dns';
   if (!org.webhookConfigured) return 'webhook';
+  if (!org.setupStatus.webhookVerified) return 'webhook-test';
   return 'done';
 }
 
@@ -91,6 +94,86 @@ function DnsRecordsStep({ onReady }: { onReady: () => void }) {
       ) : (
         <Button onPress={() => void refresh()} loading={loading}>Actualiser la vérification</Button>
       )}
+    </View>
+  );
+}
+
+function WebhookTestStep({ onVerified }: { onVerified: () => void }) {
+  const [status, setStatus] = useState<WebhookTestStatus | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setError('');
+    try {
+      setStatus(await getWebhookTestStatus());
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!status?.started || status.verified) return;
+    const handle = setInterval(() => void refresh(true), 5_000);
+    return () => clearInterval(handle);
+  }, [refresh, status?.started, status?.verified]);
+
+  const start = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setStatus(await startWebhookTest());
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading && !status) return <ActivityIndicator />;
+
+  return (
+    <View className="gap-4">
+      <View className="gap-1">
+        <Text className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">5. Tester le webhook entrant</Text>
+        <Text className="text-xs text-neutral-500 dark:text-neutral-400">
+          Le test attend un véritable email reçu et signé par Resend.
+        </Text>
+      </View>
+      {!status?.started ? (
+        <Button onPress={() => void start()} loading={loading}>Générer l’adresse de test</Button>
+      ) : status.verified ? (
+        <>
+          <View className="flex-row items-center gap-2">
+            <CheckCircle2 size={18} color="#059669" />
+            <Text className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Webhook vérifié par une réception réelle.</Text>
+          </View>
+          <Button onPress={onVerified}>Continuer</Button>
+        </>
+      ) : (
+        <>
+          <View className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3">
+            <Text className="text-xs text-blue-800 dark:text-blue-300">
+              Envoyez un email depuis une adresse externe vers l’adresse unique ci-dessous. La vérification s’actualise automatiquement.
+            </Text>
+          </View>
+          {status.testAddress ? (
+            <Pressable onPress={() => Clipboard.setStringAsync(status.testAddress!)} className="rounded-lg bg-neutral-100 p-3 dark:bg-neutral-800">
+              <Text className="text-xs text-neutral-800 dark:text-neutral-200" selectable>{status.testAddress}</Text>
+              <Text className="mt-1 text-[11px] text-neutral-500">Touchez pour copier</Text>
+            </Pressable>
+          ) : null}
+          <Button variant="secondary" onPress={() => void refresh()} loading={loading}>Vérifier maintenant</Button>
+        </>
+      )}
+      {error ? <Text className="text-xs text-red-600">{error}</Text> : null}
     </View>
   );
 }
@@ -295,6 +378,8 @@ export function ResendConnectSheet({ open, onClose, onConnected }: { open: boole
             Valider
           </Button>
         </>
+      ) : step === 'webhook-test' ? (
+        <WebhookTestStep onVerified={refetchOrg} />
       ) : (
         <View className="items-center gap-3 py-6">
           <CheckCircle2 size={40} color="#059669" />

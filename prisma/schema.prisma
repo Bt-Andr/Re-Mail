@@ -47,6 +47,9 @@ model Organization {
   // éviter l'énumération) formant l'URL unique à coller dans le dashboard Resend.
   webhookToken     String  @unique @default(cuid())
   webhookSecretEnc String?
+  webhookTestToken     String?
+  webhookTestStartedAt DateTime?
+  webhookVerifiedAt    DateTime?
 
   companyName  String?
   emailContact String?

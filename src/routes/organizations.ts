@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import crypto from 'crypto'
 import prisma from '../lib/prisma'
 import config from '../config'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
@@ -59,6 +60,7 @@ router.get('/me', authenticateToken, async (req, res) => {
   const resendConnected = !!org.resendApiKeyEnc
   const domainSelected = !!org.resendVerifiedDomain
   const webhookConfigured = !!org.webhookSecretEnc
+  const webhookVerified = !!org.webhookVerifiedAt
   const firstAddressConfigured = mailRoutesCount > 0 || routingRulesCount > 0 || !!currentUser?.proEmail
   const firstOutboundAt = firstOutbound?.sentAt ?? null
   const firstInboundAt = firstInbound?.processedAt ?? null
@@ -82,6 +84,7 @@ router.get('/me', authenticateToken, async (req, res) => {
       resendConnected,
       domainSelected,
       webhookConfigured,
+      webhookVerified,
       firstAddressConfigured,
       firstOutboundAt,
       firstInboundAt,
@@ -89,6 +92,7 @@ router.get('/me', authenticateToken, async (req, res) => {
         resendConnected &&
         domainSelected &&
         webhookConfigured &&
+        webhookVerified &&
         firstAddressConfigured &&
         firstOutboundAt !== null &&
         firstInboundAt !== null,
@@ -231,7 +235,12 @@ router.post('/me/resend/select-domain', authenticateToken, requireOrgRole(['OWNE
 
   const org = await prisma.organization.update({
     where: { id: req.user!.organizationId },
-    data: { resendVerifiedDomain: domain },
+    data: {
+      resendVerifiedDomain: domain,
+      webhookTestToken: null,
+      webhookTestStartedAt: null,
+      webhookVerifiedAt: null,
+    },
   })
   res.json({ resendVerifiedDomain: org.resendVerifiedDomain })
 })
@@ -244,9 +253,85 @@ router.post('/me/resend/webhook-secret', authenticateToken, requireOrgRole(['OWN
   const { webhookSecret } = input
   await prisma.organization.update({
     where: { id: req.user!.organizationId },
-    data: { webhookSecretEnc: encryptWebhookSecret(webhookSecret) },
+    data: {
+      webhookSecretEnc: encryptWebhookSecret(webhookSecret),
+      webhookTestToken: null,
+      webhookTestStartedAt: null,
+      webhookVerifiedAt: null,
+    },
   })
   res.json({ connected: true })
+})
+
+function payloadRecipients(payload: unknown): string[] {
+  if (!payload || typeof payload !== 'object') return []
+  const body = payload as Record<string, unknown>
+  const data = body.data && typeof body.data === 'object' ? (body.data as Record<string, unknown>) : body
+  const to = data.to
+  if (Array.isArray(to)) return to.filter((value): value is string => typeof value === 'string').map(value => value.toLowerCase())
+  return typeof to === 'string' ? [to.toLowerCase()] : []
+}
+
+router.post('/me/resend/webhook-test/start', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
+  const org = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
+  if (!org?.resendVerifiedDomain || !org.webhookSecretEnc) {
+    return res.status(400).json({ error: 'Configurez d’abord le domaine et le secret du webhook.' })
+  }
+
+  const token = crypto.randomBytes(8).toString('hex')
+  const startedAt = new Date()
+  const updated = await prisma.organization.update({
+    where: { id: org.id },
+    data: { webhookTestToken: token, webhookTestStartedAt: startedAt, webhookVerifiedAt: null },
+  })
+  res.json({
+    started: true,
+    verified: false,
+    testAddress: `setup+${token}@${updated.resendVerifiedDomain}`,
+    startedAt,
+    verifiedAt: null,
+  })
+})
+
+router.get('/me/resend/webhook-test', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
+  const org = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
+  if (!org?.resendVerifiedDomain || !org.webhookSecretEnc) {
+    return res.status(400).json({ error: 'Configurez d’abord le domaine et le secret du webhook.' })
+  }
+
+  const testAddress = org.webhookTestToken ? `setup+${org.webhookTestToken}@${org.resendVerifiedDomain}` : null
+  if (org.webhookVerifiedAt) {
+    return res.json({ started: true, verified: true, testAddress, startedAt: org.webhookTestStartedAt, verifiedAt: org.webhookVerifiedAt })
+  }
+  if (!org.webhookTestToken || !org.webhookTestStartedAt || !testAddress) {
+    return res.json({ started: false, verified: false, testAddress: null, startedAt: null, verifiedAt: null })
+  }
+
+  const events = await prisma.inboundEvent.findMany({
+    where: { organizationId: org.id, provider: 'resend', createdAt: { gte: org.webhookTestStartedAt } },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+    select: { createdAt: true, payload: true },
+  })
+  const matchingEvent = events.find(event =>
+    payloadRecipients(event.payload).some(recipient => recipient.includes(testAddress.toLowerCase()))
+  )
+  if (!matchingEvent) {
+    return res.json({ started: true, verified: false, testAddress, startedAt: org.webhookTestStartedAt, verifiedAt: null })
+  }
+
+  const verified = await prisma.organization.update({
+    where: { id: org.id },
+    data: { webhookVerifiedAt: matchingEvent.createdAt },
+    select: { webhookVerifiedAt: true },
+  })
+  res.json({
+    started: true,
+    verified: true,
+    testAddress,
+    startedAt: org.webhookTestStartedAt,
+    verifiedAt: verified.webhookVerifiedAt,
+  })
 })
 
 // Rotation en cas de fuite du token : l'ancienne URL de webhook devient
@@ -254,7 +339,12 @@ router.post('/me/resend/webhook-secret', authenticateToken, requireOrgRole(['OWN
 router.post('/me/resend/regenerate-webhook-token', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
   const org = await prisma.organization.update({
     where: { id: req.user!.organizationId },
-    data: { webhookToken: generateWebhookToken() },
+    data: {
+      webhookToken: generateWebhookToken(),
+      webhookTestToken: null,
+      webhookTestStartedAt: null,
+      webhookVerifiedAt: null,
+    },
   })
   res.json({ webhookUrl: webhookUrlFor(org.webhookToken) })
 })

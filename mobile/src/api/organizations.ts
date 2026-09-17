@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { OrgSummary, ResendDomainStatus } from '../types/api';
+import type { OrgSummary, ResendDomainStatus, WebhookTestStatus } from '../types/api';
 
 export function getOrgSummary(): Promise<OrgSummary> {
   return apiFetch<OrgSummary>('/organizations/me');
@@ -21,6 +21,14 @@ export function listVerifiedResendDomains(): Promise<{ verifiedDomains: string[]
 
 export function getResendDomainStatus(): Promise<ResendDomainStatus> {
   return apiFetch<ResendDomainStatus>('/organizations/me/resend/domain-status');
+}
+
+export function getWebhookTestStatus(): Promise<WebhookTestStatus> {
+  return apiFetch<WebhookTestStatus>('/organizations/me/resend/webhook-test');
+}
+
+export function startWebhookTest(): Promise<WebhookTestStatus> {
+  return apiFetch<WebhookTestStatus>('/organizations/me/resend/webhook-test/start', { method: 'POST' });
 }
 
 export function selectResendDomain(domain: string): Promise<unknown> {

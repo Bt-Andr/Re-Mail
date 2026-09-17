@@ -288,6 +288,7 @@ export interface OrganizationSetupStatus {
   resendConnected: boolean;
   domainSelected: boolean;
   webhookConfigured: boolean;
+  webhookVerified: boolean;
   firstAddressConfigured: boolean;
   firstOutboundAt: string | null;
   firstInboundAt: string | null;
@@ -311,4 +312,12 @@ export interface ResendDomainStatus {
   receivingEnabled: boolean;
   receivingReady: boolean;
   records: ResendDnsRecordStatus[];
+}
+
+export interface WebhookTestStatus {
+  started: boolean;
+  verified: boolean;
+  testAddress: string | null;
+  startedAt: string | null;
+  verifiedAt: string | null;
 }

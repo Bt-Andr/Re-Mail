@@ -16,7 +16,13 @@ describe('Mail configuration validation', () => {
     await prisma.mailRoute.deleteMany({ where: { organizationId: org.organizationId } })
     await prisma.organization.update({
       where: { id: org.organizationId },
-      data: { resendVerifiedDomain: null, webhookSecretEnc: null },
+      data: {
+        resendVerifiedDomain: null,
+        webhookSecretEnc: null,
+        webhookTestToken: null,
+        webhookTestStartedAt: null,
+        webhookVerifiedAt: null,
+      },
     })
   })
 
@@ -38,6 +44,7 @@ describe('Mail configuration validation', () => {
       resendConnected: true,
       domainSelected: false,
       webhookConfigured: false,
+      webhookVerified: false,
       firstAddressConfigured: false,
       firstOutboundAt: null,
       firstInboundAt: null,
@@ -210,6 +217,66 @@ describe('Mail configuration validation', () => {
     const stored = await prisma.organization.findUniqueOrThrow({ where: { id: org.organizationId } })
     expect(stored.webhookSecretEnc).not.toBe(secret)
     expect(decrypt(stored.webhookSecretEnc!)).toBe(secret)
+  })
+
+  it('verifies the webhook only after receiving the generated test address', async () => {
+    await prisma.organization.update({
+      where: { id: org.organizationId },
+      data: { resendVerifiedDomain: 'mail.example.com' },
+    })
+    const configured = await request(app)
+      .post('/api/organizations/me/resend/webhook-secret')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ webhookSecret: org.webhookSecret })
+    expect(configured.status).toBe(200)
+
+    const started = await request(app)
+      .post('/api/organizations/me/resend/webhook-test/start')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send()
+    expect(started.status).toBe(200)
+    expect(started.body).toMatchObject({ started: true, verified: false })
+    expect(started.body.testAddress).toMatch(/^setup\+[a-f0-9]{16}@mail\.example\.com$/)
+
+    await prisma.inboundEvent.create({
+      data: {
+        organizationId: org.organizationId,
+        provider: 'resend',
+        externalId: `unrelated-setup-test-${Date.now()}`,
+        payload: { data: { to: ['someone-else@mail.example.com'], from: 'sender@example.com' } },
+        status: 'completed',
+        processedAt: new Date(),
+      },
+    })
+
+    const pending = await request(app)
+      .get('/api/organizations/me/resend/webhook-test')
+      .set('Authorization', `Bearer ${org.token}`)
+    expect(pending.body.verified).toBe(false)
+
+    await prisma.inboundEvent.create({
+      data: {
+        organizationId: org.organizationId,
+        provider: 'resend',
+        externalId: `setup-test-${Date.now()}`,
+        payload: { data: { to: [started.body.testAddress], from: 'sender@example.com' } },
+        status: 'completed',
+        processedAt: new Date(),
+      },
+    })
+
+    const verified = await request(app)
+      .get('/api/organizations/me/resend/webhook-test')
+      .set('Authorization', `Bearer ${org.token}`)
+    expect(verified.status).toBe(200)
+    expect(verified.body).toMatchObject({
+      started: true,
+      verified: true,
+      testAddress: started.body.testAddress,
+    })
+
+    const stored = await prisma.organization.findUniqueOrThrow({ where: { id: org.organizationId } })
+    expect(stored.webhookVerifiedAt).not.toBeNull()
   })
 
   it('accepts aliases only on the configured domain and validates forwarding addresses', async () => {

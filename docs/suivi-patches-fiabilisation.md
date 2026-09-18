@@ -182,7 +182,7 @@ Validation :
 
 ## Lot 6 — Onboarding vérifié
 
-Statut : **En cours — configuration Resend et test aller-retour vérifiés**
+Statut : **En cours — parcours Resend principal terminé, fournisseurs IMAP/SMTP à reprendre**
 
 - [x] Concevoir l’état détaillé de configuration — preuves persistées pour clé, domaine, webhook, première adresse, premier envoi et première réception.
 - [x] Afficher uniquement les domaines vérifiés — relecture Resend disponible après rechargement sur web et mobile, sans saisie libre.
@@ -191,7 +191,7 @@ Statut : **En cours — configuration Resend et test aller-retour vérifiés**
 - [x] Ajouter la création guidée de la première adresse — expéditeur personnel ou route d'équipe créé depuis le domaine validé, sur webmail et mobile.
 - [x] Ajouter l’envoi d’un email test — l’adresse créée s’envoie un challenge unique via le chemin normal du composeur.
 - [x] Ajouter la confirmation de réception — polling sur le message entrant correspondant exactement au challenge, avec preuve rattachée à l’adresse encore configurée.
-- [ ] Ajouter un écran final opérationnel.
+- [x] Ajouter un écran final opérationnel — synthèse des quatre preuves et action explicite vers la boîte de réception sur webmail et mobile.
 - [ ] Améliorer les instructions IMAP/SMTP par fournisseur.
 - [ ] Permettre de ressaisir les identifiants d’une connexion en erreur.
 - [ ] Ne déclarer une reconnexion réussie qu’après test IMAP et SMTP.
@@ -308,6 +308,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-17 | 6 | Test de webhook par adresse unique, polling webmail/mobile et validation uniquement après réception d’un événement Resend correspondant | 16/16 migrations locales, typecheck/build backend, build webmail, typecheck mobile, 269/269 tests | Ajouter la création guidée de la première adresse | Codex |
 | 2026-09-18 | 6 | Création guidée de la première adresse sur webmail et mobile : `User.proEmail` pour le personnel, `MailRoute` sans transfert obligatoire pour une équipe | Build webmail et typecheck mobile valides ; backend inchangé, baseline 269/269 conservée | Ajouter l’envoi d’un email test | Codex |
 | 2026-09-18 | 6 | Test aller-retour autonome de la première adresse, preuve persistée et reprise du polling sur webmail/mobile ; correction des routes sans transfert qui tentaient encore un envoi vide | 17/17 migrations locales, typecheck/build backend, builds web/webmail, typecheck mobile, 271/271 tests | Ajouter l’écran final opérationnel | Codex |
+| 2026-09-18 | 6 | Écran final opérationnel sur webmail et mobile avec synthèse du domaine, du webhook, de l’adresse et du test aller-retour | Build webmail et typecheck mobile valides ; backend inchangé, baseline 271/271 conservée | Reprendre les parcours IMAP/SMTP par fournisseur | Codex |
 
 ## Journal des validations
 
@@ -344,6 +345,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-17 | Lot 6 — test webhook | 269/269, dont 20/20 scénarios configuration/webhook ciblés | Backend typecheck/build, webmail build et mobile typecheck valides | 16/16 appliquées sur Docker local | Adresse de test générée, événement non correspondant ignoré, preuve persistée après correspondance | La preuve est révoquée si le domaine, le secret de signature ou le token d’URL change |
 | 2026-09-18 | Lot 6 — première adresse | 269/269 (backend inchangé) | Webmail en build de production et mobile en typecheck | Sans migration | Le flux crée une adresse d'envoi/réception selon le type d'organisation et reprend sur l'étape suivante après relecture du statut | Les contrôles de domaine et d'unicité restent assurés par les routes backend existantes |
 | 2026-09-18 | Lot 6 — test aller-retour | 271/271, dont 22/22 scénarios configuration/webhook ciblés | Backend typecheck/build, web et webmail en build de production, mobile en typecheck | 17/17 appliquées sur Docker local | Challenge unique envoyé à la même adresse, sortie puis entrée exactes exigées ; route sans transfert couverte | L’état opérationnel reste faux si l’adresse testée est supprimée ou si le retour entrant n’est pas observé |
+| 2026-09-18 | Lot 6 — sortie opérationnelle | 271/271 (backend inchangé) | Webmail en build de production et mobile en typecheck | Sans migration | État final uniquement accessible après toutes les preuves du parcours Resend | La validation manuelle sur un compte Resend réel reste à exécuter avant livraison |
 
 ## Journal des incidents et régressions
 

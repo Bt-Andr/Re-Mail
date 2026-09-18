@@ -547,16 +547,34 @@ export function ResendConnectSheet({ open, onClose, onConnected }: { open: boole
       ) : step === 'round-trip' ? (
         <RoundTripTestStep onVerified={refetchOrg} />
       ) : (
-        <View className="items-center gap-3 py-6">
-          <CheckCircle2 size={40} color="#059669" />
-          <Text className="text-sm font-medium text-neutral-900 dark:text-neutral-100">Resend connecté.</Text>
+        <View className="gap-5 py-2">
+          <View className="items-center gap-2">
+            <CheckCircle2 size={40} color="#059669" />
+            <Text className="text-base font-semibold text-neutral-900 dark:text-neutral-100">Votre messagerie est opérationnelle</Text>
+            <Text className="text-center text-xs text-neutral-500 dark:text-neutral-400">
+              Re-Mail peut maintenant envoyer et recevoir sur {org.resendVerifiedDomain}.
+            </Text>
+          </View>
+          <View className="gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-800">
+            {[
+              `Domaine ${org.resendVerifiedDomain} validé`,
+              'Webhook entrant vérifié',
+              'Première adresse créée',
+              'Envoi et réception testés de bout en bout',
+            ].map(item => (
+              <View key={item} className="flex-row items-center gap-2">
+                <CheckCircle2 size={16} color="#059669" />
+                <Text className="flex-1 text-sm text-neutral-900 dark:text-neutral-100">{item}</Text>
+              </View>
+            ))}
+          </View>
           <Button
             onPress={() => {
               close();
               onConnected();
             }}
           >
-            Terminer
+            Ouvrir la boîte de réception
           </Button>
         </View>
       )}

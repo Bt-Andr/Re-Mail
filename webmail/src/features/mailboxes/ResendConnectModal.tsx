@@ -79,16 +79,32 @@ export function ResendConnectModal({ open, onClose, onConnected }: { open: boole
       ) : step === 'round-trip' ? (
         <RoundTripTestStep onVerified={refetch} />
       ) : (
-        <div className="text-center py-6">
-          <CheckCircle2 className="mx-auto text-emerald-600 dark:text-emerald-400 mb-3" size={40} />
-          <p className="text-sm font-medium text-foreground mb-4">Resend connecté.</p>
+        <div className="space-y-5 py-2">
+          <div className="text-center">
+            <CheckCircle2 className="mx-auto text-emerald-600 dark:text-emerald-400 mb-3" size={40} />
+            <h2 className="text-base font-semibold text-foreground">Votre messagerie est opérationnelle</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Re-Mail peut maintenant envoyer et recevoir sur {organization.resendVerifiedDomain}.</p>
+          </div>
+          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-4">
+            {[
+              `Domaine ${organization.resendVerifiedDomain} validé`,
+              'Webhook entrant vérifié',
+              'Première adresse créée',
+              'Envoi et réception testés de bout en bout',
+            ].map(item => (
+              <div key={item} className="flex items-center gap-2 text-sm text-foreground">
+                <CheckCircle2 size={16} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
           <Button
             onClick={() => {
               close()
               onConnected()
             }}
           >
-            Terminer
+            Ouvrir la boîte de réception
           </Button>
         </div>
       )}

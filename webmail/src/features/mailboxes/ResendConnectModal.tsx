@@ -4,7 +4,7 @@ import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Spinner } from '../../components/ui/Spinner'
-import { apiFetch, parseError } from '../../lib/apiClient'
+import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useSession } from '../../context/SessionContext'
 import { useOrganization } from '../../hooks/useOrganization'
 import { ConnectResendStep } from './resendSteps/ConnectResendStep'
@@ -16,33 +16,30 @@ import { WebhookTestStep } from './resendSteps/WebhookTestStep'
 // Réutilise telles quelles les étapes de l'onboarding (déjà autonomes : juste
 // organization + onDone, aucune extraction nécessaire) dans un flux indépendant
 // accessible depuis le picker "ajouter un compte", pas seulement au premier signup.
-// Pas d'étape route ici (réglage d'équipe, configurable ensuite depuis Paramètres) —
-// mais une étape "sender" est ajoutée pour les comptes perso (isPersonal) juste après
-// le webhook : un utilisateur perso qui connecte Resend lui-même n'a pas d'admin pour
-// lui régler son adresse d'expédition, contrairement à un membre d'une org d'équipe.
+// Après le webhook, le flux crée aussi la première adresse utilisable : User.proEmail
+// pour un compte personnel, MailRoute pour une équipe. Le wizard ne peut donc plus
+// annoncer une connexion terminée alors que le composeur n'a encore aucun expéditeur.
 export function ResendConnectModal({ open, onClose, onConnected }: { open: boolean; onClose: () => void; onConnected: () => void }) {
   const { organization, loading, refetch } = useOrganization()
   const [verifiedDomains, setVerifiedDomains] = useState<string[] | null>(null)
   const [dnsReady, setDnsReady] = useState(false)
   const [webhookTestDone, setWebhookTestDone] = useState(false)
-  const [senderDone, setSenderDone] = useState(false)
 
   const close = () => {
     setVerifiedDomains(null)
     setDnsReady(false)
     setWebhookTestDone(false)
-    setSenderDone(false)
     onClose()
   }
 
-  let step: 'connect' | 'domain' | 'dns' | 'webhook' | 'webhook-test' | 'sender' | 'done' = 'connect'
+  let step: 'connect' | 'domain' | 'dns' | 'webhook' | 'webhook-test' | 'address' | 'done' = 'connect'
   if (organization) {
     if (!organization.resendConnected) step = 'connect'
     else if (!organization.resendVerifiedDomain) step = 'domain'
     else if (!organization.webhookConfigured && !dnsReady) step = 'dns'
     else if (!organization.webhookConfigured) step = 'webhook'
     else if (!organization.setupStatus.webhookVerified && !webhookTestDone) step = 'webhook-test'
-    else if (organization.isPersonal && !senderDone) step = 'sender'
+    else if (!organization.setupStatus.firstAddressConfigured) step = 'address'
     else step = 'done'
   }
 
@@ -70,8 +67,13 @@ export function ResendConnectModal({ open, onClose, onConnected }: { open: boole
             void refetch()
           }}
         />
-      ) : step === 'sender' ? (
-        <SenderStep domain={organization.resendVerifiedDomain!} onDone={() => setSenderDone(true)} />
+      ) : step === 'address' ? (
+        <FirstAddressStep
+          domain={organization.resendVerifiedDomain!}
+          isPersonal={organization.isPersonal}
+          organizationName={organization.name}
+          onDone={refetch}
+        />
       ) : (
         <div className="text-center py-6">
           <CheckCircle2 className="mx-auto text-emerald-600 dark:text-emerald-400 mb-3" size={40} />
@@ -90,30 +92,45 @@ export function ResendConnectModal({ open, onClose, onConnected }: { open: boole
   )
 }
 
-// Portée depuis l'ex-PersonalSenderStep (onboarding). Perso : pas de notion d'alias
-// d'équipe — on pose directement User.proEmail, le seul champ que getAllowedSenders
-// traite comme expéditeur par défaut indépendamment de tout MailRoute
-// (src/helpers/senders.ts). Réutilise PUT /users/:id (habituellement un outil d'admin
-// d'équipe) : un compte perso est toujours OWNER de sa propre org invisible, donc déjà
-// autorisé à modifier son propre utilisateur via cette route sans rien ajouter côté backend.
-function SenderStep({ domain, onDone }: { domain: string; onDone: () => void }) {
+// Un compte perso utilise directement User.proEmail. Une organisation d'équipe crée
+// plutôt un MailRoute : l'adresse devient à la fois expéditeur autorisé et destination
+// entrante, sans imposer un transfert vers une boîte personnelle.
+function FirstAddressStep({
+  domain,
+  isPersonal,
+  organizationName,
+  onDone,
+}: {
+  domain: string
+  isPersonal: boolean
+  organizationName: string
+  onDone: () => void | Promise<void>
+}) {
   const { user } = useSession()
-  const [email, setEmail] = useState(() => (user ? `${user.username}@${domain}` : ''))
+  const [localPart, setLocalPart] = useState(() => (isPersonal && user ? user.username : 'contact'))
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (!user) return
+    const email = `${localPart.trim().toLowerCase()}@${domain}`
     setError('')
     setLoading(true)
     try {
-      const res = await apiFetch(`/users/${user.id}`, { method: 'PUT', body: JSON.stringify({ proEmail: email.trim() }) })
+      const res = isPersonal
+        ? await apiFetch(`/users/${user.id}`, { method: 'PUT', body: JSON.stringify({ proEmail: email }) })
+        : await apiFetch('/mail-routes', {
+            method: 'POST',
+            body: JSON.stringify({ alias: email, personalEmail: '', displayName: organizationName }),
+          })
       if (!res.ok) {
         setError(await parseError(res, 'Adresse invalide.'))
         return
       }
-      onDone()
+      await onDone()
+    } catch (err) {
+      setError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -122,15 +139,19 @@ function SenderStep({ domain, onDone }: { domain: string; onDone: () => void }) 
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <h2 className="text-sm font-semibold mb-1">Votre adresse</h2>
+        <h2 className="text-sm font-semibold mb-1">6. Créer la première adresse</h2>
         <p className="text-xs text-muted-foreground">
-          Toutes les adresses @{domain} reçoivent déjà leurs emails dans votre boîte. Choisissez celle que vous
-          utiliserez pour envoyer des messages depuis le composeur.
+          Choisissez l'adresse qui servira à envoyer et recevoir les premiers messages dans Re-Mail.
         </p>
       </div>
-      <Input label="Adresse" placeholder={`vous@${domain}`} type="email" value={email} onChange={e => setEmail(e.target.value)} autoFocus required />
+      <div className="flex items-end gap-2">
+        <div className="min-w-0 flex-1">
+          <Input label="Nom de l'adresse" placeholder="contact" value={localPart} onChange={e => setLocalPart(e.target.value)} autoFocus required />
+        </div>
+        <span className="pb-2.5 text-sm text-muted-foreground">@{domain}</span>
+      </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
-      <Button type="submit" loading={loading} disabled={!email.trim()}>Continuer</Button>
+      <Button type="submit" loading={loading} disabled={!localPart.trim()}>Créer l'adresse</Button>
     </form>
   )
 }

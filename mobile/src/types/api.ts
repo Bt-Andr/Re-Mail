@@ -273,6 +273,8 @@ export interface OrgSummary {
   id: string;
   name: string;
   slug: string;
+  isPersonal: boolean;
+  memberCount: number;
   companyName: string | null;
   emailContact: string | null;
   resendConnected: boolean;

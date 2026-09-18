@@ -13,6 +13,10 @@ export function updateSenderGrants(userId: string, grantedSenders: string[]): Pr
   return apiFetch<OrgUser>(`/users/${userId}`, { method: 'PUT', body: { grantedSenders } });
 }
 
+export function updateOwnProEmail(userId: string, proEmail: string): Promise<OrgUser> {
+  return apiFetch<OrgUser>(`/users/${userId}`, { method: 'PUT', body: { proEmail } });
+}
+
 export function transferOwnership(userId: string): Promise<{ previousOwnerId: string; owner: OrgUser }> {
   return apiFetch<{ previousOwnerId: string; owner: OrgUser }>(`/users/${userId}/transfer-ownership`, { method: 'POST' });
 }

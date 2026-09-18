@@ -12,13 +12,16 @@ import {
   setResendWebhookSecret,
   startWebhookTest,
 } from '../../api/organizations';
+import { createMailRoute } from '../../api/mailRoutes';
+import { updateOwnProEmail } from '../../api/users';
 import { describeError } from '../../api/client';
+import { useSession } from '../../context/SessionContext';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import type { OrgSummary, ResendDomainStatus, WebhookTestStatus } from '../../types/api';
 
-type Step = 'connect' | 'domain' | 'dns' | 'webhook' | 'webhook-test' | 'done';
+type Step = 'connect' | 'domain' | 'dns' | 'webhook' | 'webhook-test' | 'address' | 'done';
 
 function stepFor(org: OrgSummary, dnsReady: boolean): Step {
   if (!org.resendConnected) return 'connect';
@@ -26,6 +29,7 @@ function stepFor(org: OrgSummary, dnsReady: boolean): Step {
   if (!org.webhookConfigured && !dnsReady) return 'dns';
   if (!org.webhookConfigured) return 'webhook';
   if (!org.setupStatus.webhookVerified) return 'webhook-test';
+  if (!org.setupStatus.firstAddressConfigured) return 'address';
   return 'done';
 }
 
@@ -181,9 +185,55 @@ function WebhookTestStep({ onVerified }: { onVerified: () => void }) {
 // Équivalent mobile de web/features/mailboxes/ResendConnectModal.tsx, mais construit
 // depuis zéro : pas de ConnectResendStep/SelectDomainStep/WebhookSecretStep côté mobile
 // à réutiliser, l'onboarding est resté web-only jusqu'ici. Même logique de progression
-// par étape dérivée de GET /organizations/me, même arrêt après le webhook — pas d'étape
-// expéditeur/routage ici, configurable ensuite dans Réglages.
+// par étape dérivée de GET /organizations/me, y compris la première adresse utilisable.
+function FirstAddressStep({ org, userId, username, onDone }: { org: OrgSummary; userId: string | null; username: string; onDone: () => void }) {
+  const [localPart, setLocalPart] = useState(org.isPersonal ? username : 'contact');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    if (!userId || !org.resendVerifiedDomain || !localPart.trim()) return;
+    const email = `${localPart.trim().toLowerCase()}@${org.resendVerifiedDomain}`;
+    setError('');
+    setLoading(true);
+    try {
+      if (org.isPersonal) {
+        await updateOwnProEmail(userId, email);
+      } else {
+        await createMailRoute({ alias: email, personalEmail: '', displayName: org.name });
+      }
+      onDone();
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View className="gap-4">
+      <View className="gap-1">
+        <Text className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">6. Créer la première adresse</Text>
+        <Text className="text-xs text-neutral-500 dark:text-neutral-400">
+          Choisissez l'adresse qui servira à envoyer et recevoir les premiers messages dans Re-Mail.
+        </Text>
+      </View>
+      <View className="flex-row items-end gap-2">
+        <View className="flex-1">
+          <Input label="Nom de l'adresse" placeholder="contact" value={localPart} onChangeText={setLocalPart} autoCapitalize="none" />
+        </View>
+        <Text className="pb-3 text-sm text-neutral-500 dark:text-neutral-400">@{org.resendVerifiedDomain}</Text>
+      </View>
+      {error ? <Text className="text-xs text-red-600">{error}</Text> : null}
+      <Button onPress={() => void submit()} loading={loading} disabled={!userId || !localPart.trim()}>
+        Créer l'adresse
+      </Button>
+    </View>
+  );
+}
+
 export function ResendConnectSheet({ open, onClose, onConnected }: { open: boolean; onClose: () => void; onConnected: () => void }) {
+  const { user } = useSession();
   const [org, setOrg] = useState<OrgSummary | null>(null);
   const [loadingOrg, setLoadingOrg] = useState(true);
   const [verifiedDomains, setVerifiedDomains] = useState<string[] | null>(null);
@@ -380,6 +430,8 @@ export function ResendConnectSheet({ open, onClose, onConnected }: { open: boole
         </>
       ) : step === 'webhook-test' ? (
         <WebhookTestStep onVerified={refetchOrg} />
+      ) : step === 'address' ? (
+        <FirstAddressStep org={org} userId={user?.id ?? null} username={user?.username ?? ''} onDone={refetchOrg} />
       ) : (
         <View className="items-center gap-3 py-6">
           <CheckCircle2 size={40} color="#059669" />

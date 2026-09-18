@@ -28,7 +28,21 @@ export interface OrganizationSetupStatus {
   firstAddressConfigured: boolean
   firstOutboundAt: string | null
   firstInboundAt: string | null
+  roundTripVerified: boolean
   operational: boolean
+}
+
+export interface RoundTripTestStatus {
+  started: boolean
+  sent: boolean
+  received: boolean
+  address: string | null
+  subject: string | null
+  message: string
+  startedAt: string | null
+  sentAt: string | null
+  receivedAt: string | null
+  addressConfigured: boolean
 }
 
 export interface OrganizationStatus {

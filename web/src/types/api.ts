@@ -28,6 +28,7 @@ export interface OrganizationSetupStatus {
   firstAddressConfigured: boolean
   firstOutboundAt: string | null
   firstInboundAt: string | null
+  roundTripVerified: boolean
   operational: boolean
 }
 

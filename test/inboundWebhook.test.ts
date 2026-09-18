@@ -135,6 +135,45 @@ describe('POST /api/inbound-mail/:webhookToken', () => {
     expect(messages[0].body).toContain('Bonjour, ceci est un test.')
   })
 
+  it('keeps an address without personal forwarding fully usable for inbound mail', async () => {
+    const address = `no-forward-${Date.now()}@testco.example`
+    await prisma.mailRoute.create({
+      data: { organizationId: org.organizationId, alias: address, personalEmail: '', active: true },
+    })
+    const body = payload({
+      email_id: `re_inbound_no_forward_${Date.now()}`,
+      from: 'Round Trip <round-trip@example.com>',
+      to: [address],
+      subject: 'Adresse sans transfert',
+    })
+    const headers = signTestWebhook(org.webhookSecret, body)
+
+    const response = await request(app)
+      .post(`/api/inbound-mail/${org.webhookToken}`)
+      .set(headers)
+      .set('Content-Type', 'application/json')
+      .send(body)
+    expect(response.status).toBe(200)
+
+    let event = null
+    for (let i = 0; i < 30 && event?.status !== 'completed'; i++) {
+      event = await prisma.inboundEvent.findFirst({
+        where: { organizationId: org.organizationId, provider: 'resend', externalId: headers['svix-id'] },
+      })
+      if (event?.status !== 'completed') await new Promise(resolve => setTimeout(resolve, 100))
+    }
+
+    expect(event?.status).toBe('completed')
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>
+    const outboundCalls = fetchMock.mock.calls.filter(([input]) => input.toString() === 'https://api.resend.com/emails')
+    expect(outboundCalls).toHaveLength(0)
+    expect(
+      await prisma.threadMessage.count({
+        where: { organizationId: org.organizationId, direction: 'inbound', fromEmail: 'round-trip@example.com' },
+      })
+    ).toBe(1)
+  })
+
   it('persists and processes the same Svix event only once when Resend retries it', async () => {
     const body = payload({
       email_id: 're_inbound_duplicate',

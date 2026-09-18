@@ -10,7 +10,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Statut | En cours — lots 0 à 5 terminés, lot 6 actif |
 | Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 40 fichiers de tests, 269 tests réussis |
+| Baseline fonctionnelle | 40 fichiers de tests, 271 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -182,15 +182,15 @@ Validation :
 
 ## Lot 6 — Onboarding vérifié
 
-Statut : **En cours — configuration Resend, preuve du webhook et première adresse guidées**
+Statut : **En cours — configuration Resend et test aller-retour vérifiés**
 
 - [x] Concevoir l’état détaillé de configuration — preuves persistées pour clé, domaine, webhook, première adresse, premier envoi et première réception.
 - [x] Afficher uniquement les domaines vérifiés — relecture Resend disponible après rechargement sur web et mobile, sans saisie libre.
 - [x] Ajouter les instructions DNS/MX contextualisées — capacités et enregistrements relus depuis le domaine Resend sélectionné, avec copie des valeurs et blocage avant validation du MX de réception.
 - [x] Ajouter le test du webhook — adresse unique, événement Resend réellement persisté et preuve invalidée lors d’un changement de domaine, secret ou URL.
 - [x] Ajouter la création guidée de la première adresse — expéditeur personnel ou route d'équipe créé depuis le domaine validé, sur webmail et mobile.
-- [ ] Ajouter l’envoi d’un email test.
-- [ ] Ajouter la confirmation de réception.
+- [x] Ajouter l’envoi d’un email test — l’adresse créée s’envoie un challenge unique via le chemin normal du composeur.
+- [x] Ajouter la confirmation de réception — polling sur le message entrant correspondant exactement au challenge, avec preuve rattachée à l’adresse encore configurée.
 - [ ] Ajouter un écran final opérationnel.
 - [ ] Améliorer les instructions IMAP/SMTP par fournisseur.
 - [ ] Permettre de ressaisir les identifiants d’une connexion en erreur.
@@ -307,6 +307,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-17 | 6 | Contrôle des capacités du domaine et affichage contextualisé des enregistrements « Receiving MX » sur webmail et mobile avant l’étape webhook | Typecheck/build backend, build webmail, typecheck mobile, 268/268 tests | Ajouter le test vérifiable du webhook | Codex |
 | 2026-09-17 | 6 | Test de webhook par adresse unique, polling webmail/mobile et validation uniquement après réception d’un événement Resend correspondant | 16/16 migrations locales, typecheck/build backend, build webmail, typecheck mobile, 269/269 tests | Ajouter la création guidée de la première adresse | Codex |
 | 2026-09-18 | 6 | Création guidée de la première adresse sur webmail et mobile : `User.proEmail` pour le personnel, `MailRoute` sans transfert obligatoire pour une équipe | Build webmail et typecheck mobile valides ; backend inchangé, baseline 269/269 conservée | Ajouter l’envoi d’un email test | Codex |
+| 2026-09-18 | 6 | Test aller-retour autonome de la première adresse, preuve persistée et reprise du polling sur webmail/mobile ; correction des routes sans transfert qui tentaient encore un envoi vide | 17/17 migrations locales, typecheck/build backend, builds web/webmail, typecheck mobile, 271/271 tests | Ajouter l’écran final opérationnel | Codex |
 
 ## Journal des validations
 
@@ -342,6 +343,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-17 | Lot 6 — DNS/MX | 268/268, dont 10/10 validations de configuration ciblées | Backend typecheck/build, webmail build et mobile typecheck valides | Sans migration | Domaine sélectionné résolu par son identifiant Resend ; capacité Receiving et statut du MX contrôlés | Les valeurs DNS affichées proviennent de `GET /domains/:id` et ne contiennent aucun secret |
 | 2026-09-17 | Lot 6 — test webhook | 269/269, dont 20/20 scénarios configuration/webhook ciblés | Backend typecheck/build, webmail build et mobile typecheck valides | 16/16 appliquées sur Docker local | Adresse de test générée, événement non correspondant ignoré, preuve persistée après correspondance | La preuve est révoquée si le domaine, le secret de signature ou le token d’URL change |
 | 2026-09-18 | Lot 6 — première adresse | 269/269 (backend inchangé) | Webmail en build de production et mobile en typecheck | Sans migration | Le flux crée une adresse d'envoi/réception selon le type d'organisation et reprend sur l'étape suivante après relecture du statut | Les contrôles de domaine et d'unicité restent assurés par les routes backend existantes |
+| 2026-09-18 | Lot 6 — test aller-retour | 271/271, dont 22/22 scénarios configuration/webhook ciblés | Backend typecheck/build, web et webmail en build de production, mobile en typecheck | 17/17 appliquées sur Docker local | Challenge unique envoyé à la même adresse, sortie puis entrée exactes exigées ; route sans transfert couverte | L’état opérationnel reste faux si l’adresse testée est supprimée ou si le retour entrant n’est pas observé |
 
 ## Journal des incidents et régressions
 

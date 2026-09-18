@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { OrgSummary, ResendDomainStatus, WebhookTestStatus } from '../types/api';
+import type { OrgSummary, ResendDomainStatus, RoundTripTestStatus, WebhookTestStatus } from '../types/api';
 
 export function getOrgSummary(): Promise<OrgSummary> {
   return apiFetch<OrgSummary>('/organizations/me');
@@ -29,6 +29,14 @@ export function getWebhookTestStatus(): Promise<WebhookTestStatus> {
 
 export function startWebhookTest(): Promise<WebhookTestStatus> {
   return apiFetch<WebhookTestStatus>('/organizations/me/resend/webhook-test/start', { method: 'POST' });
+}
+
+export function getRoundTripTestStatus(): Promise<RoundTripTestStatus> {
+  return apiFetch<RoundTripTestStatus>('/organizations/me/resend/round-trip-test');
+}
+
+export function startRoundTripTest(): Promise<RoundTripTestStatus> {
+  return apiFetch<RoundTripTestStatus>('/organizations/me/resend/round-trip-test/start', { method: 'POST' });
 }
 
 export function selectResendDomain(domain: string): Promise<unknown> {

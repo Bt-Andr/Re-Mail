@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import crypto from 'crypto'
+import type { Organization } from '@prisma/client'
 import prisma from '../lib/prisma'
 import config from '../config'
 import { authenticateToken, requireOrgRole } from '../middleware/auth'
@@ -18,6 +19,7 @@ import {
   generateWebhookToken,
 } from '../helpers/resendAccount'
 import { parseRequest } from '../validation/request'
+import { getAllowedSenders } from '../helpers/senders'
 import {
   emailBelongsToDomain,
   mailRouteCreateSchema,
@@ -29,6 +31,82 @@ import {
 
 const router = Router()
 
+const ROUND_TRIP_SUBJECT_PREFIX = '[Re-Mail] Test aller-retour '
+const ROUND_TRIP_MESSAGE = "Ce message vérifie automatiquement l'envoi et la réception de votre adresse Re-Mail."
+
+function roundTripSubject(token: string): string {
+  return `${ROUND_TRIP_SUBJECT_PREFIX}${token}`
+}
+
+async function getRoundTripStatus(
+  org: Pick<Organization, 'id' | 'resendVerifiedDomain' | 'roundTripTestToken' | 'roundTripTestAddress' | 'roundTripTestStartedAt'>
+) {
+  const { roundTripTestToken: token, roundTripTestAddress: address, roundTripTestStartedAt: startedAt } = org
+  if (!token || !address || !startedAt) {
+    return {
+      started: false,
+      sent: false,
+      received: false,
+      address: null,
+      subject: null,
+      message: ROUND_TRIP_MESSAGE,
+      startedAt: null,
+      sentAt: null,
+      receivedAt: null,
+      addressConfigured: false,
+    }
+  }
+
+  const subject = roundTripSubject(token)
+  const routingCanal = org.resendVerifiedDomain && emailBelongsToDomain(address, org.resendVerifiedDomain)
+    ? address.slice(0, address.lastIndexOf('@'))
+    : null
+  const outbound = await prisma.threadMessage.findFirst({
+    where: {
+      organizationId: org.id,
+      direction: 'outbound',
+      fromEmail: { equals: address, mode: 'insensitive' },
+      sentAt: { gte: startedAt },
+      thread: { sujet: subject },
+    },
+    orderBy: { sentAt: 'asc' },
+    select: { sentAt: true },
+  })
+  const inbound = outbound
+    ? await prisma.threadMessage.findFirst({
+        where: {
+          organizationId: org.id,
+          direction: 'inbound',
+          fromEmail: { equals: address, mode: 'insensitive' },
+          sentAt: { gte: outbound.sentAt },
+          thread: { sujet: subject },
+        },
+        orderBy: { sentAt: 'asc' },
+        select: { sentAt: true },
+      })
+    : null
+  const [route, user, routingRule] = await Promise.all([
+    prisma.mailRoute.findFirst({ where: { organizationId: org.id, alias: { equals: address, mode: 'insensitive' }, active: true }, select: { id: true } }),
+    prisma.user.findFirst({ where: { organizationId: org.id, proEmail: { equals: address, mode: 'insensitive' } }, select: { id: true } }),
+    routingCanal
+      ? prisma.threadRoutingRule.findFirst({ where: { organizationId: org.id, canal: routingCanal, active: true, claimedAt: { not: null } }, select: { id: true } })
+      : null,
+  ])
+
+  return {
+    started: true,
+    sent: !!outbound,
+    received: !!inbound,
+    address,
+    subject,
+    message: ROUND_TRIP_MESSAGE,
+    startedAt,
+    sentAt: outbound?.sentAt ?? null,
+    receivedAt: inbound?.sentAt ?? null,
+    addressConfigured: !!(route || user || routingRule),
+  }
+}
+
 function webhookUrlFor(webhookToken: string): string {
   return `${config.backendUrl}/api/inbound-mail/${webhookToken}`
 }
@@ -39,7 +117,7 @@ router.get('/me', authenticateToken, async (req, res) => {
   const org = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
   if (!org) return res.status(404).json({ error: 'Organisation introuvable.' })
 
-  const [mailRoutesCount, routingRulesCount, memberCount, externalMailboxCount, currentUser, firstOutbound, firstInbound] = await Promise.all([
+  const [mailRoutesCount, routingRulesCount, memberCount, externalMailboxCount, currentUser, firstOutbound, firstInbound, roundTrip] = await Promise.all([
     prisma.mailRoute.count({ where: { organizationId: org.id } }),
     prisma.threadRoutingRule.count({ where: { organizationId: org.id, active: true } }),
     prisma.user.count({ where: { organizationId: org.id } }),
@@ -55,6 +133,7 @@ router.get('/me', authenticateToken, async (req, res) => {
       orderBy: { processedAt: 'asc' },
       select: { processedAt: true },
     }),
+    getRoundTripStatus(org),
   ])
 
   const resendConnected = !!org.resendApiKeyEnc
@@ -64,6 +143,7 @@ router.get('/me', authenticateToken, async (req, res) => {
   const firstAddressConfigured = mailRoutesCount > 0 || routingRulesCount > 0 || !!currentUser?.proEmail
   const firstOutboundAt = firstOutbound?.sentAt ?? null
   const firstInboundAt = firstInbound?.processedAt ?? null
+  const roundTripVerified = roundTrip.received && roundTrip.addressConfigured
 
   res.json({
     id: org.id,
@@ -88,6 +168,7 @@ router.get('/me', authenticateToken, async (req, res) => {
       firstAddressConfigured,
       firstOutboundAt,
       firstInboundAt,
+      roundTripVerified,
       operational:
         resendConnected &&
         domainSelected &&
@@ -95,7 +176,8 @@ router.get('/me', authenticateToken, async (req, res) => {
         webhookVerified &&
         firstAddressConfigured &&
         firstOutboundAt !== null &&
-        firstInboundAt !== null,
+        firstInboundAt !== null &&
+        roundTripVerified,
     },
   })
 })
@@ -127,7 +209,14 @@ router.post('/me/resend/connect', authenticateToken, requireOrgRole(['OWNER', 'A
 
     const org = await prisma.organization.update({
       where: { id: req.user!.organizationId },
-      data: { resendApiKeyEnc: enc, resendApiKeyLast4: last4, resendConnectedAt: new Date() },
+      data: {
+        resendApiKeyEnc: enc,
+        resendApiKeyLast4: last4,
+        resendConnectedAt: new Date(),
+        roundTripTestToken: null,
+        roundTripTestAddress: null,
+        roundTripTestStartedAt: null,
+      },
     })
 
     res.json({
@@ -240,6 +329,9 @@ router.post('/me/resend/select-domain', authenticateToken, requireOrgRole(['OWNE
       webhookTestToken: null,
       webhookTestStartedAt: null,
       webhookVerifiedAt: null,
+      roundTripTestToken: null,
+      roundTripTestAddress: null,
+      roundTripTestStartedAt: null,
     },
   })
   res.json({ resendVerifiedDomain: org.resendVerifiedDomain })
@@ -258,6 +350,9 @@ router.post('/me/resend/webhook-secret', authenticateToken, requireOrgRole(['OWN
       webhookTestToken: null,
       webhookTestStartedAt: null,
       webhookVerifiedAt: null,
+      roundTripTestToken: null,
+      roundTripTestAddress: null,
+      roundTripTestStartedAt: null,
     },
   })
   res.json({ connected: true })
@@ -334,6 +429,38 @@ router.get('/me/resend/webhook-test', authenticateToken, requireOrgRole(['OWNER'
   })
 })
 
+router.post('/me/resend/round-trip-test/start', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
+  const org = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
+  if (!org?.resendApiKeyEnc || !org.resendVerifiedDomain || !org.webhookVerifiedAt) {
+    return res.status(400).json({ error: 'Validez d’abord la connexion Resend, le domaine et le webhook.' })
+  }
+
+  const senders = await getAllowedSenders(forOrg(org.id), req.user!.id)
+  const domainSenders = senders.filter(sender => emailBelongsToDomain(sender.email, org.resendVerifiedDomain!))
+  const sender = domainSenders.find(item => item.isDefault) ?? domainSenders[0]
+  if (!sender) {
+    return res.status(400).json({ error: 'Créez d’abord une adresse sur le domaine Resend sélectionné.' })
+  }
+
+  const token = crypto.randomBytes(8).toString('hex')
+  const startedAt = new Date()
+  const updated = await prisma.organization.update({
+    where: { id: org.id },
+    data: {
+      roundTripTestToken: token,
+      roundTripTestAddress: sender.email.toLowerCase(),
+      roundTripTestStartedAt: startedAt,
+    },
+  })
+  res.json(await getRoundTripStatus(updated))
+})
+
+router.get('/me/resend/round-trip-test', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
+  const org = await prisma.organization.findUnique({ where: { id: req.user!.organizationId } })
+  if (!org) return res.status(404).json({ error: 'Organisation introuvable.' })
+  res.json(await getRoundTripStatus(org))
+})
+
 // Rotation en cas de fuite du token : l'ancienne URL de webhook devient
 // immédiatement invalide (404), l'org doit la remettre à jour côté Resend.
 router.post('/me/resend/regenerate-webhook-token', authenticateToken, requireOrgRole(['OWNER', 'ADMIN']), async (req, res) => {
@@ -344,6 +471,9 @@ router.post('/me/resend/regenerate-webhook-token', authenticateToken, requireOrg
       webhookTestToken: null,
       webhookTestStartedAt: null,
       webhookVerifiedAt: null,
+      roundTripTestToken: null,
+      roundTripTestAddress: null,
+      roundTripTestStartedAt: null,
     },
   })
   res.json({ webhookUrl: webhookUrlFor(org.webhookToken) })

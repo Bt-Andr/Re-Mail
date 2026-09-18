@@ -22,6 +22,9 @@ describe('Mail configuration validation', () => {
         webhookTestToken: null,
         webhookTestStartedAt: null,
         webhookVerifiedAt: null,
+        roundTripTestToken: null,
+        roundTripTestAddress: null,
+        roundTripTestStartedAt: null,
       },
     })
   })
@@ -48,6 +51,7 @@ describe('Mail configuration validation', () => {
       firstAddressConfigured: false,
       firstOutboundAt: null,
       firstInboundAt: null,
+      roundTripVerified: false,
       operational: false,
     })
   })
@@ -277,6 +281,85 @@ describe('Mail configuration validation', () => {
 
     const stored = await prisma.organization.findUniqueOrThrow({ where: { id: org.organizationId } })
     expect(stored.webhookVerifiedAt).not.toBeNull()
+  })
+
+  it('tracks an exact outbound and inbound round trip on the configured address', async () => {
+    const address = 'contact@mail.example.com'
+    await prisma.organization.update({
+      where: { id: org.organizationId },
+      data: { resendVerifiedDomain: 'mail.example.com', webhookVerifiedAt: new Date() },
+    })
+    await prisma.mailRoute.create({
+      data: { organizationId: org.organizationId, alias: address, personalEmail: '', active: true },
+    })
+
+    const started = await request(app)
+      .post('/api/organizations/me/resend/round-trip-test/start')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send()
+    expect(started.status).toBe(200)
+    expect(started.body).toMatchObject({ started: true, sent: false, received: false, address })
+    expect(started.body.subject).toMatch(/^\[Re-Mail\] Test aller-retour [a-f0-9]{16}$/)
+
+    const outboundThread = await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'email',
+        sujet: started.body.subject,
+        externalFrom: address,
+        externalEmail: address,
+        toEmail: address,
+        origin: 'outbound',
+        messages: {
+          create: {
+            organizationId: org.organizationId,
+            direction: 'outbound',
+            fromName: 'Test User',
+            fromEmail: address,
+            toEmails: address,
+            body: '<p>Test aller-retour</p>',
+          },
+        },
+      },
+    })
+
+    const sent = await request(app)
+      .get('/api/organizations/me/resend/round-trip-test')
+      .set('Authorization', `Bearer ${org.token}`)
+    expect(sent.body).toMatchObject({ started: true, sent: true, received: false, address })
+
+    await prisma.thread.create({
+      data: {
+        organizationId: org.organizationId,
+        canal: 'contact',
+        sujet: started.body.subject,
+        externalFrom: address,
+        externalEmail: address,
+        toEmail: address,
+        messages: {
+          create: {
+            organizationId: org.organizationId,
+            direction: 'inbound',
+            fromName: 'Test User',
+            fromEmail: address,
+            body: '<p>Test reçu</p>',
+          },
+        },
+      },
+    })
+
+    const received = await request(app)
+      .get('/api/organizations/me/resend/round-trip-test')
+      .set('Authorization', `Bearer ${org.token}`)
+    expect(received.body).toMatchObject({ started: true, sent: true, received: true, address, addressConfigured: true })
+    expect(received.body.sentAt).not.toBeNull()
+    expect(received.body.receivedAt).not.toBeNull()
+
+    const summary = await request(app)
+      .get('/api/organizations/me')
+      .set('Authorization', `Bearer ${org.token}`)
+    expect(summary.body.setupStatus.roundTripVerified).toBe(true)
+    expect(await prisma.thread.findUnique({ where: { id: outboundThread.id } })).not.toBeNull()
   })
 
   it('accepts aliases only on the configured domain and validates forwarding addresses', async () => {

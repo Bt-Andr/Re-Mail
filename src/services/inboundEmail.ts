@@ -257,8 +257,8 @@ export async function processInboundEmail(org: Organization, payload: unknown, i
   }
 
   const route = await db.mailRoute.findFirst({ where: { alias: toAddr, active: true } })
-  if (!route) {
-    console.log(`[INBOUND] Org ${org.id} : pas de MailRoute pour ${toAddr} — thread créé, pas de transfert`)
+  if (!route?.personalEmail.trim()) {
+    console.log(`[INBOUND] Org ${org.id} : pas de transfert personnel pour ${toAddr} — thread créé uniquement`)
     return
   }
 

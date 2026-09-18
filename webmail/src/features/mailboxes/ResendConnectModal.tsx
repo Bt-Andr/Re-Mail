@@ -12,6 +12,7 @@ import { SelectDomainStep } from './resendSteps/SelectDomainStep'
 import { DnsRecordsStep } from './resendSteps/DnsRecordsStep'
 import { WebhookSecretStep } from './resendSteps/WebhookSecretStep'
 import { WebhookTestStep } from './resendSteps/WebhookTestStep'
+import { RoundTripTestStep } from './resendSteps/RoundTripTestStep'
 
 // Réutilise telles quelles les étapes de l'onboarding (déjà autonomes : juste
 // organization + onDone, aucune extraction nécessaire) dans un flux indépendant
@@ -32,7 +33,7 @@ export function ResendConnectModal({ open, onClose, onConnected }: { open: boole
     onClose()
   }
 
-  let step: 'connect' | 'domain' | 'dns' | 'webhook' | 'webhook-test' | 'address' | 'done' = 'connect'
+  let step: 'connect' | 'domain' | 'dns' | 'webhook' | 'webhook-test' | 'address' | 'round-trip' | 'done' = 'connect'
   if (organization) {
     if (!organization.resendConnected) step = 'connect'
     else if (!organization.resendVerifiedDomain) step = 'domain'
@@ -40,6 +41,7 @@ export function ResendConnectModal({ open, onClose, onConnected }: { open: boole
     else if (!organization.webhookConfigured) step = 'webhook'
     else if (!organization.setupStatus.webhookVerified && !webhookTestDone) step = 'webhook-test'
     else if (!organization.setupStatus.firstAddressConfigured) step = 'address'
+    else if (!organization.setupStatus.roundTripVerified) step = 'round-trip'
     else step = 'done'
   }
 
@@ -74,6 +76,8 @@ export function ResendConnectModal({ open, onClose, onConnected }: { open: boole
           organizationName={organization.name}
           onDone={refetch}
         />
+      ) : step === 'round-trip' ? (
+        <RoundTripTestStep onVerified={refetch} />
       ) : (
         <div className="text-center py-6">
           <CheckCircle2 className="mx-auto text-emerald-600 dark:text-emerald-400 mb-3" size={40} />

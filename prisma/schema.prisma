@@ -50,6 +50,9 @@ model Organization {
   webhookTestToken     String?
   webhookTestStartedAt DateTime?
   webhookVerifiedAt    DateTime?
+  roundTripTestToken     String?
+  roundTripTestAddress   String?
+  roundTripTestStartedAt DateTime?
 
   companyName  String?
   emailContact String?

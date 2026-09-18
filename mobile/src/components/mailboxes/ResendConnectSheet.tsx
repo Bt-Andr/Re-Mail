@@ -4,24 +4,27 @@ import * as Clipboard from 'expo-clipboard';
 import { Check, CheckCircle2, Copy } from 'lucide-react-native';
 import {
   getOrgSummary,
+  getRoundTripTestStatus,
   connectResend,
   getResendDomainStatus,
   getWebhookTestStatus,
   listVerifiedResendDomains,
   selectResendDomain,
   setResendWebhookSecret,
+  startRoundTripTest,
   startWebhookTest,
 } from '../../api/organizations';
 import { createMailRoute } from '../../api/mailRoutes';
+import { sendReply } from '../../api/mail';
 import { updateOwnProEmail } from '../../api/users';
 import { describeError } from '../../api/client';
 import { useSession } from '../../context/SessionContext';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
-import type { OrgSummary, ResendDomainStatus, WebhookTestStatus } from '../../types/api';
+import type { OrgSummary, ResendDomainStatus, RoundTripTestStatus, WebhookTestStatus } from '../../types/api';
 
-type Step = 'connect' | 'domain' | 'dns' | 'webhook' | 'webhook-test' | 'address' | 'done';
+type Step = 'connect' | 'domain' | 'dns' | 'webhook' | 'webhook-test' | 'address' | 'round-trip' | 'done';
 
 function stepFor(org: OrgSummary, dnsReady: boolean): Step {
   if (!org.resendConnected) return 'connect';
@@ -30,6 +33,7 @@ function stepFor(org: OrgSummary, dnsReady: boolean): Step {
   if (!org.webhookConfigured) return 'webhook';
   if (!org.setupStatus.webhookVerified) return 'webhook-test';
   if (!org.setupStatus.firstAddressConfigured) return 'address';
+  if (!org.setupStatus.roundTripVerified) return 'round-trip';
   return 'done';
 }
 
@@ -228,6 +232,114 @@ function FirstAddressStep({ org, userId, username, onDone }: { org: OrgSummary; 
       <Button onPress={() => void submit()} loading={loading} disabled={!userId || !localPart.trim()}>
         Créer l'adresse
       </Button>
+    </View>
+  );
+}
+
+function RoundTripTestStep({ onVerified }: { onVerified: () => void }) {
+  const [status, setStatus] = useState<RoundTripTestStatus | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setError('');
+    try {
+      const next = await getRoundTripTestStatus();
+      setStatus(next);
+      return next;
+    } catch (e) {
+      setError(describeError(e));
+      return null;
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!status?.started || status.received) return;
+    const handle = setInterval(() => void refresh(true), 5_000);
+    return () => clearInterval(handle);
+  }, [refresh, status?.received, status?.started]);
+
+  const dispatch = async (challenge: RoundTripTestStatus) => {
+    if (!challenge.address || !challenge.subject) return false;
+    await sendReply({
+      to: challenge.address,
+      fromEmail: challenge.address,
+      subject: challenge.subject,
+      message: challenge.message,
+    });
+    return true;
+  };
+
+  const start = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const challenge = await startRoundTripTest();
+      setStatus(challenge);
+      if (await dispatch(challenge)) await refresh(true);
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const retry = async () => {
+    if (!status) return;
+    setLoading(true);
+    setError('');
+    try {
+      if (await dispatch(status)) await refresh(true);
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading && !status) return <ActivityIndicator />;
+
+  return (
+    <View className="gap-4">
+      <View className="gap-1">
+        <Text className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">7. Tester l'envoi et la réception</Text>
+        <Text className="text-xs text-neutral-500 dark:text-neutral-400">
+          Re-Mail envoie un message à votre nouvelle adresse puis attend son retour par le webhook. Les deux sens sont vérifiés sans boîte externe.
+        </Text>
+      </View>
+      {!status?.started ? (
+        <Button onPress={() => void start()} loading={loading}>Lancer le test aller-retour</Button>
+      ) : status.received ? (
+        <>
+          <View className="flex-row items-center gap-2">
+            <CheckCircle2 size={18} color="#059669" />
+            <Text className="flex-1 text-sm font-medium text-emerald-700 dark:text-emerald-400">Envoi et réception confirmés sur {status.address}.</Text>
+          </View>
+          <Button onPress={onVerified}>Continuer</Button>
+        </>
+      ) : status.sent ? (
+        <>
+          <View className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3">
+            <Text className="text-xs text-blue-800 dark:text-blue-300">Email envoyé depuis {status.address}. Réception en cours, cette étape s'actualise automatiquement.</Text>
+          </View>
+          <Button variant="secondary" onPress={() => void refresh()} loading={loading}>Vérifier maintenant</Button>
+        </>
+      ) : (
+        <>
+          <View className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+            <Text className="text-xs text-amber-800 dark:text-amber-300">Le test est prêt pour {status.address}, mais aucun envoi réussi n'a encore été enregistré.</Text>
+          </View>
+          <Button onPress={() => void retry()} loading={loading}>Réessayer l'envoi</Button>
+        </>
+      )}
+      {error ? <Text className="text-xs text-red-600">{error}</Text> : null}
     </View>
   );
 }
@@ -432,6 +544,8 @@ export function ResendConnectSheet({ open, onClose, onConnected }: { open: boole
         <WebhookTestStep onVerified={refetchOrg} />
       ) : step === 'address' ? (
         <FirstAddressStep org={org} userId={user?.id ?? null} username={user?.username ?? ''} onDone={refetchOrg} />
+      ) : step === 'round-trip' ? (
+        <RoundTripTestStep onVerified={refetchOrg} />
       ) : (
         <View className="items-center gap-3 py-6">
           <CheckCircle2 size={40} color="#059669" />

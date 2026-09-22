@@ -205,14 +205,15 @@ Validation :
 
 ## Lot 7 — Finition des clients
 
-Statut : **À faire**
+Statut : **En cours — première passe accessibilité web terminée**
 
 - [ ] Installer et configurer les tests end-to-end web.
 - [ ] Couvrir création, connexion, activation et changement de compte.
 - [ ] Couvrir envoi, réception, réponse, transfert et pièces jointes.
-- [ ] Effectuer l’audit clavier et focus.
-- [ ] Compléter les labels accessibles.
-- [ ] Remplacer les alertes natives restantes.
+- [ ] Effectuer l’audit clavier et focus — modales, sélecteurs de compte et carte de conversation corrigés ; validation navigateur et parcours restants à exécuter.
+- [ ] Compléter les labels accessibles — actions à icône, navigation compacte, recherche et notifications couvertes sur web/webmail ; audit automatisé à ajouter.
+- [x] Remplacer les alertes natives restantes — le rejet des pièces jointes du webmail utilise désormais un message intégré annoncé aux technologies d’assistance.
+- [ ] Ajouter une page de diagnostic compréhensible pour les connexions mail.
 - [ ] Ajouter le statut hors ligne mobile.
 - [ ] Définir la persistance du cache mobile.
 - [ ] Afficher le statut des notifications push.
@@ -310,6 +311,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-18 | 6 | Test aller-retour autonome de la première adresse, preuve persistée et reprise du polling sur webmail/mobile ; correction des routes sans transfert qui tentaient encore un envoi vide | 17/17 migrations locales, typecheck/build backend, builds web/webmail, typecheck mobile, 271/271 tests | Ajouter l’écran final opérationnel | Codex |
 | 2026-09-18 | 6 | Écran final opérationnel sur webmail et mobile avec synthèse du domaine, du webhook, de l’adresse et du test aller-retour | Build webmail et typecheck mobile valides ; backend inchangé, baseline 271/271 conservée | Reprendre les parcours IMAP/SMTP par fournisseur | Codex |
 | 2026-09-22 | 6 | Réparation des connexions IMAP en erreur avec ressaisie sécurisée, double sonde avant réactivation et guides Outlook/Yahoo/Exchange/autre alignés sur les prérequis fournisseurs | Typecheck/build backend, build webmail, typecheck mobile, 273/273 tests | Valider manuellement Yahoo puis décider/intégrer OAuth Microsoft | Codex |
+| 2026-09-22 | 7 | Première passe accessibilité web : focus initial/restauré des modales, navigation clavier des sélecteurs, interactions de conversation séparées, labels contextuels, annonces de notifications et rejet de pièces jointes sans `alert()` | Builds de production web et webmail valides ; baseline backend 273/273 inchangée | Installer les tests end-to-end web et automatiser les contrôles d’accessibilité | Codex |
 
 ## Journal des validations
 
@@ -348,6 +350,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-18 | Lot 6 — test aller-retour | 271/271, dont 22/22 scénarios configuration/webhook ciblés | Backend typecheck/build, web et webmail en build de production, mobile en typecheck | 17/17 appliquées sur Docker local | Challenge unique envoyé à la même adresse, sortie puis entrée exactes exigées ; route sans transfert couverte | L’état opérationnel reste faux si l’adresse testée est supprimée ou si le retour entrant n’est pas observé |
 | 2026-09-18 | Lot 6 — sortie opérationnelle | 271/271 (backend inchangé) | Webmail en build de production et mobile en typecheck | Sans migration | État final uniquement accessible après toutes les preuves du parcours Resend | La validation manuelle sur un compte Resend réel reste à exécuter avant livraison |
 | 2026-09-22 | Lot 6 — réparation IMAP/SMTP | 273/273, dont 33/33 scénarios boîtes/isolation ciblés | Backend typecheck/build, webmail build et mobile typecheck valides | Sans migration | Reconnexion avec ancien ou nouveau secret, échecs IMAP/SMTP, conservation atomique des anciens réglages et isolation tenant couverts | Outlook/Microsoft 365 exige OAuth2 ; le formulaire le signale mais l’intégration OAuth Microsoft reste à décider |
+| 2026-09-22 | Lot 7 — accessibilité web 1 | 273/273 (backend inchangé) | Web et webmail en build de production | Sans migration | Audit statique des modales, menus, cartes de conversation, actions à icône, toasts et pièces jointes | Une validation navigateur automatisée et lecteur d’écran reste nécessaire avant de clore l’audit |
 
 ## Journal des incidents et régressions
 

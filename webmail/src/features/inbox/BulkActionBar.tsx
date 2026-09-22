@@ -31,7 +31,7 @@ export function BulkActionBar({
   return (
     <div className="flex flex-col gap-2 p-2 rounded-lg border border-border bg-card">
       <div className="flex items-center gap-2">
-        <button type="button" onClick={onClear} title="Désélectionner" className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-accent transition-colors">
+        <button type="button" onClick={onClear} title="Désélectionner" aria-label="Désélectionner toutes les conversations" className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-accent transition-colors">
           <X size={15} />
         </button>
         <span className="text-sm font-medium text-foreground">{count} sélectionné{count > 1 ? 's' : ''}</span>
@@ -57,6 +57,7 @@ export function BulkActionBar({
               type="button"
               onClick={() => onAction({ deletedAt: false })}
               title="Restaurer"
+              aria-label="Restaurer les conversations sélectionnées"
               className="p-1.5 rounded-md border border-input bg-background hover:bg-accent transition-colors"
             >
               <Undo2 size={14} />
@@ -67,6 +68,7 @@ export function BulkActionBar({
                 type="button"
                 onClick={() => onAction({ archivedAt: folder !== 'archive' })}
                 title={folder === 'archive' ? 'Désarchiver' : 'Archiver'}
+                aria-label={`${folder === 'archive' ? 'Désarchiver' : 'Archiver'} les conversations sélectionnées`}
                 className="p-1.5 rounded-md border border-input bg-background hover:bg-accent transition-colors"
               >
                 {folder === 'archive' ? <ArchiveRestore size={14} /> : <Archive size={14} />}
@@ -75,6 +77,7 @@ export function BulkActionBar({
                 type="button"
                 onClick={() => onAction({ deletedAt: true })}
                 title="Mettre à la corbeille"
+                aria-label="Mettre les conversations sélectionnées à la corbeille"
                 className="p-1.5 rounded-md border border-input bg-background hover:bg-accent transition-colors text-destructive"
               >
                 <Trash2 size={14} />

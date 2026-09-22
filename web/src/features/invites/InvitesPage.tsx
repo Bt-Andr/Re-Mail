@@ -102,13 +102,13 @@ export function InvitesPage() {
             </div>
             {invite.status === 'PENDING' && (
               <div className="flex items-center gap-2 flex-shrink-0">
-                <button type="button" title="Télécharger le fichier" onClick={() => download(invite)} className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors">
+                <button type="button" title="Télécharger le fichier" aria-label={`Télécharger le fichier d'activation de ${invite.nom}`} onClick={() => download(invite)} className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors">
                   <Download size={16} />
                 </button>
-                <button type="button" title="Générer un code" onClick={() => setCodeFor(invite)} className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors">
+                <button type="button" title="Générer un code" aria-label={`Générer un code d'activation pour ${invite.nom}`} onClick={() => setCodeFor(invite)} className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors">
                   <KeyRound size={16} />
                 </button>
-                <button type="button" title="Révoquer" onClick={() => setRevokeTarget(invite)} className="text-muted-foreground hover:text-destructive p-1.5 rounded-md hover:bg-destructive/10 transition-colors">
+                <button type="button" title="Révoquer" aria-label={`Révoquer l'invitation de ${invite.nom}`} onClick={() => setRevokeTarget(invite)} className="text-muted-foreground hover:text-destructive p-1.5 rounded-md hover:bg-destructive/10 transition-colors">
                   <Ban size={16} />
                 </button>
               </div>

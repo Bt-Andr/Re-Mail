@@ -19,6 +19,7 @@ export function CopyField({ value, large }: { value: string; large?: boolean }) 
         type="button"
         onClick={copy}
         title="Copier"
+        aria-label={copied ? 'Valeur copiée' : 'Copier la valeur'}
         className="flex-shrink-0 p-2 text-muted-foreground hover:text-foreground border border-border rounded-md hover:bg-accent transition-colors"
       >
         {copied ? <Check size={15} className="text-emerald-600 dark:text-emerald-400" /> : <Copy size={15} />}

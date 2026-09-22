@@ -272,6 +272,7 @@ export function ExternalMailboxesPage() {
                 <button
                   type="button"
                   title="Réparer la connexion"
+                  aria-label={`Réparer la connexion de ${connection.email}`}
                   onClick={() => repair(connection)}
                   className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors"
                 >
@@ -282,6 +283,7 @@ export function ExternalMailboxesPage() {
                 <button
                   type="button"
                   title="Importer l'historique (30 derniers jours)"
+                  aria-label={`Importer l'historique de ${connection.email}`}
                   onClick={() => setToImport(connection)}
                   disabled={importingId === connection.id}
                   className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
@@ -292,6 +294,7 @@ export function ExternalMailboxesPage() {
               <button
                 type="button"
                 title="Supprimer"
+                aria-label={`Déconnecter ${connection.email}`}
                 onClick={() => setToDelete(connection)}
                 className="text-muted-foreground hover:text-destructive p-1.5 rounded-md hover:bg-destructive/10 transition-colors"
               >

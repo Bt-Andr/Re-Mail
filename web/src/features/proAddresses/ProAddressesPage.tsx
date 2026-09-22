@@ -131,10 +131,10 @@ export function ProAddressesPage() {
                   {!rule.active && <span className="text-xs text-muted-foreground">· Inactive</span>}
                 </div>
               </div>
-              <button type="button" title="Réattribuer" onClick={() => setModal({ open: true, editing: rule })} className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors">
+              <button type="button" title="Réattribuer" aria-label={`Réattribuer ${rule.canal}@${domain}`} onClick={() => setModal({ open: true, editing: rule })} className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors">
                 <Pencil size={15} />
               </button>
-              <button type="button" title="Supprimer" onClick={() => setToDelete(rule)} className="text-muted-foreground hover:text-destructive p-1.5 rounded-md hover:bg-destructive/10 transition-colors">
+              <button type="button" title="Supprimer" aria-label={`Supprimer ${rule.canal}@${domain}`} onClick={() => setToDelete(rule)} className="text-muted-foreground hover:text-destructive p-1.5 rounded-md hover:bg-destructive/10 transition-colors">
                 <Trash2 size={15} />
               </button>
             </div>

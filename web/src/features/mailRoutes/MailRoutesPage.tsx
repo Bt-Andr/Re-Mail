@@ -125,14 +125,14 @@ export function MailRoutesPage() {
                 )}
                 {route.displayName && <span className="text-xs text-muted-foreground/80">({route.displayName})</span>}
               </div>
-              <button type="button" onClick={() => toggleActive(route)} className="mt-1 block">
+              <button type="button" aria-label={`${route.active ? 'Désactiver' : 'Activer'} ${route.alias}`} onClick={() => toggleActive(route)} className="mt-1 block">
                 <Badge color={route.active ? 'green' : 'gray'}>{route.active ? 'Active' : 'Inactive'}</Badge>
               </button>
             </div>
-            <button type="button" title="Modifier" onClick={() => setModal({ open: true, editing: route })} className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors">
+            <button type="button" title="Modifier" aria-label={`Modifier ${route.alias}`} onClick={() => setModal({ open: true, editing: route })} className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors">
               <Pencil size={15} />
             </button>
-            <button type="button" title="Supprimer" onClick={() => setToDelete(route)} className="text-muted-foreground hover:text-destructive p-1.5 rounded-md hover:bg-destructive/10 transition-colors">
+            <button type="button" title="Supprimer" aria-label={`Supprimer ${route.alias}`} onClick={() => setToDelete(route)} className="text-muted-foreground hover:text-destructive p-1.5 rounded-md hover:bg-destructive/10 transition-colors">
               <Trash2 size={15} />
             </button>
           </div>

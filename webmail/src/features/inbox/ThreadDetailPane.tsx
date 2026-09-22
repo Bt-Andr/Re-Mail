@@ -155,6 +155,7 @@ export function ThreadDetailPane() {
         <div className="flex items-start gap-3">
           <Link
             to={`/${folder}`}
+            aria-label="Retour à la liste des conversations"
             className="lg:hidden flex-shrink-0 text-muted-foreground hover:text-foreground p-1 -ml-1 rounded-md hover:bg-accent transition-colors"
           >
             <ArrowLeft size={18} />
@@ -170,6 +171,7 @@ export function ThreadDetailPane() {
             type="button"
             onClick={toggleStar}
             title={thread.starred ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+            aria-label={thread.starred ? 'Retirer la conversation des favoris' : 'Ajouter la conversation aux favoris'}
             className="flex-shrink-0 text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors"
           >
             <Star size={16} className={thread.starred ? 'fill-amber-400 text-amber-400' : ''} />
@@ -178,6 +180,7 @@ export function ThreadDetailPane() {
             type="button"
             onClick={markUnread}
             title="Marquer comme non lu"
+            aria-label="Marquer la conversation comme non lue"
             className="flex-shrink-0 text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors"
           >
             <Mail size={16} />

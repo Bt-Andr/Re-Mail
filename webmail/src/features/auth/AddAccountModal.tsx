@@ -109,7 +109,7 @@ export function AddAccountModal({ open, onClose }: { open: boolean; onClose: () 
             onChange={e => setForm(prev => ({ ...prev, password: e.target.value }))}
             required
           />
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
           <Button type="submit" loading={loading} className="w-full">Se connecter</Button>
         </form>
       )}

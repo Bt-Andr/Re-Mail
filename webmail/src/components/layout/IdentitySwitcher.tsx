@@ -14,15 +14,45 @@ export function IdentitySwitcher() {
   const [open, setOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
     const onClickOutside = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setOpen(false)
+      triggerRef.current?.focus()
+    }
     document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
+    document.addEventListener('keydown', onEscape)
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside)
+      document.removeEventListener('keydown', onEscape)
+    }
   }, [open])
+
+  const focusMenuItem = (position: 'first' | 'last') => {
+    requestAnimationFrame(() => {
+      const items = menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"], [role="menuitem"]')
+      items?.[position === 'first' ? 0 : items.length - 1]?.focus()
+    })
+  }
+
+  const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return
+    e.preventDefault()
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"], [role="menuitem"]') ?? [])
+    if (!items.length) return
+    const current = items.indexOf(document.activeElement as HTMLElement)
+    if (e.key === 'Home') return items[0].focus()
+    if (e.key === 'End') return items[items.length - 1].focus()
+    const delta = e.key === 'ArrowDown' ? 1 : -1
+    items[(current + delta + items.length) % items.length].focus()
+  }
 
   const active = accounts.find(a => a.id === activeAccountId)
 
@@ -36,8 +66,18 @@ export function IdentitySwitcher() {
   return (
     <div ref={ref} className="relative border-b border-border">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(prev => !prev)}
+        onKeyDown={e => {
+          if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+          e.preventDefault()
+          setOpen(true)
+          focusMenuItem(e.key === 'ArrowDown' ? 'first' : 'last')
+        }}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={`Changer de compte. Compte actif : ${active?.organization.name ?? 'chargement'}`}
         className="w-full flex items-center justify-between gap-2 px-5 py-3 text-left hover:bg-accent transition-colors"
       >
         <div className="min-w-0 flex items-center gap-2">
@@ -50,11 +90,13 @@ export function IdentitySwitcher() {
         {accounts.length > 1 && <ChevronDown size={16} className="text-muted-foreground flex-shrink-0" />}
       </button>
       {open && (
-        <div className="absolute left-2 right-2 top-full mt-1 z-20 bg-card border border-border rounded-md shadow-lg py-1">
+        <div ref={menuRef} role="menu" onKeyDown={onMenuKeyDown} className="absolute left-2 right-2 top-full mt-1 z-20 bg-card border border-border rounded-md shadow-lg py-1">
           {accounts.map(account => (
-            <div key={account.id} className="flex items-center group">
+            <div key={account.id} role="none" className="flex items-center group">
               <button
                 type="button"
+                role="menuitemradio"
+                aria-checked={account.id === activeAccountId}
                 onClick={() => {
                   setOpen(false)
                   if (account.id !== activeAccountId) switchAccount(account.id)
@@ -69,6 +111,7 @@ export function IdentitySwitcher() {
                 type="button"
                 onClick={() => removeAccount(account.id)}
                 title="Déconnecter ce compte"
+                aria-label={`Déconnecter le compte ${account.organization.name}`}
                 className="px-2 py-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
               >
                 <X size={14} />
@@ -77,6 +120,7 @@ export function IdentitySwitcher() {
           ))}
           <button
             type="button"
+            role="menuitem"
             onClick={() => {
               setOpen(false)
               setAddOpen(true)

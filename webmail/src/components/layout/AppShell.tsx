@@ -50,6 +50,7 @@ export function AppShell() {
               key={item.to}
               to={item.to}
               title={item.label}
+              aria-label={item.label}
               className={({ isActive }) =>
                 `flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-base rounded-md transition-colors ${
                   isActive ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground hover:bg-accent hover:text-foreground font-medium'
@@ -65,6 +66,7 @@ export function AppShell() {
           <NavLink
             to="/mailboxes"
             title="Boîtes externes"
+            aria-label="Boîtes externes"
             className={({ isActive }) =>
               `flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-base rounded-md transition-colors ${
                 isActive ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground hover:bg-accent hover:text-foreground font-medium'
@@ -77,6 +79,7 @@ export function AppShell() {
           <NavLink
             to="/settings/security"
             title="Sécurité du compte"
+            aria-label="Sécurité du compte"
             className={({ isActive }) =>
               `flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-base rounded-md transition-colors ${
                 isActive ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground hover:bg-accent hover:text-foreground font-medium'
@@ -90,6 +93,7 @@ export function AppShell() {
             <a
               href={`${import.meta.env.VITE_ADMIN_URL}/settings/organization`}
               title="Paramètres"
+              aria-label="Paramètres de l'organisation"
               className="flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-base rounded-md transition-colors text-muted-foreground hover:bg-accent hover:text-foreground font-medium"
             >
               <Settings size={20} />
@@ -100,6 +104,7 @@ export function AppShell() {
             type="button"
             onClick={handleLogout}
             title="Déconnexion"
+            aria-label="Se déconnecter"
             className="flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-base font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors w-full"
           >
             <LogOut size={20} />

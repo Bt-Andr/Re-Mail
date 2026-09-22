@@ -74,6 +74,7 @@ export function ImportConfigModal({ open, onClose }: { open: boolean; onClose: (
             type="file"
             accept=".csv,text/csv"
             className="hidden"
+            aria-label="Choisir le fichier CSV à importer"
             onChange={e => setFile(e.target.files?.[0] ?? null)}
           />
           <button
@@ -84,7 +85,7 @@ export function ImportConfigModal({ open, onClose }: { open: boolean; onClose: (
             <Upload size={15} />
             {file ? file.name : 'Choisir un fichier CSV…'}
           </button>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
         </>
       )}
       {result && (

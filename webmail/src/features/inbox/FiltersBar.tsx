@@ -17,11 +17,12 @@ export function FiltersBar({ search, onSearch, status, onStatus }: FiltersBarPro
           type="text"
           value={search}
           onChange={e => onSearch(e.target.value)}
+          aria-label="Rechercher dans les conversations"
           placeholder="Rechercher…"
           className="w-full pl-8 pr-8 py-1.5 text-sm border border-input rounded-md focus:ring-2 focus:ring-ring/30 focus:border-ring outline-none bg-card transition-colors"
         />
         {search && (
-          <button type="button" title="Effacer" onClick={() => onSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+          <button type="button" title="Effacer" aria-label="Effacer la recherche" onClick={() => onSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
             <X size={13} />
           </button>
         )}

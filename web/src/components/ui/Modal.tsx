@@ -22,8 +22,11 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
     if (!open) return
     const dialog = dialogRef.current
     const previouslyFocused = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
     const focusables = () => Array.from(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])
-    focusables()[0]?.focus()
+    const initialFocus = dialog?.querySelector<HTMLElement>('[autofocus], [data-autofocus="true"]') ?? focusables()[0] ?? dialog
+    initialFocus?.focus()
+    document.body.style.overflow = 'hidden'
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -46,6 +49,7 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = previousOverflow
       previouslyFocused?.focus()
     }
   }, [open, onClose])
@@ -55,6 +59,7 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
     <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
       <div
         ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

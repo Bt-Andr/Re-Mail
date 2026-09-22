@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Paperclip, X } from 'lucide-react'
 import { formatFileSize } from '../../lib/format'
 
@@ -7,14 +7,21 @@ const MAX_SIZE = 10 * 1024 * 1024
 
 export function AttachmentPicker({ files, onChange }: { files: File[]; onChange: (files: File[]) => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [error, setError] = useState('')
 
   const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files ?? [])
     const tooBig = picked.filter(f => f.size > MAX_SIZE)
     const valid = picked.filter(f => f.size <= MAX_SIZE)
-    onChange([...files, ...valid].slice(0, MAX_FILES))
+    const remainingSlots = Math.max(0, MAX_FILES - files.length)
+    const accepted = valid.slice(0, remainingSlots)
+    const ignoredForLimit = valid.length - accepted.length
+    onChange([...files, ...accepted])
     e.target.value = ''
-    if (tooBig.length) alert(`Fichier(s) trop volumineux (max 10 Mo) : ${tooBig.map(f => f.name).join(', ')}`)
+    const messages = []
+    if (tooBig.length) messages.push(`Fichier(s) trop volumineux (max 10 Mo) : ${tooBig.map(f => f.name).join(', ')}`)
+    if (ignoredForLimit > 0) messages.push(`${ignoredForLimit} fichier${ignoredForLimit > 1 ? 's' : ''} ignoré${ignoredForLimit > 1 ? 's' : ''} : maximum ${MAX_FILES}.`)
+    setError(messages.join(' '))
   }
 
   return (
@@ -29,6 +36,7 @@ export function AttachmentPicker({ files, onChange }: { files: File[]; onChange:
         <Paperclip size={14} />
         Joindre (max {MAX_FILES}, 10 Mo chacun)
       </button>
+      {error && <p role="alert" className="mt-2 text-xs text-destructive">{error}</p>}
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-2">
           {files.map((f, i) => (

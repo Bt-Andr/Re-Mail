@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ChevronRight, Building2, Users } from 'lucide-react'
 import { apiFetch, parseError, networkErrorMessage } from '../../lib/apiClient'
 import { useSession } from '../../context/SessionContext'
-import { MailboxConnectionFormModal, MAILBOX_PRESETS } from '../mailboxes/MailboxConnectionFormModal'
+import { MailboxConnectionFormModal, MAILBOX_PRESETS, type ManualMailboxProvider } from '../mailboxes/MailboxConnectionFormModal'
 import { BASE_PROVIDERS, type BaseMailboxProvider } from '../mailboxes/providerList'
 import { CreateEnterpriseFlow } from './CreateEnterpriseFlow'
 
@@ -28,6 +28,7 @@ export function WelcomePage() {
   const [error, setError] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [formPreset, setFormPreset] = useState<Partial<(typeof MAILBOX_PRESETS)[string]> | undefined>(undefined)
+  const [formProvider, setFormProvider] = useState<ManualMailboxProvider>('other')
   const [createOpen, setCreateOpen] = useState(false)
 
   // Reprend l'intention en attente dès qu'une identité personnelle vient d'être
@@ -93,6 +94,7 @@ export function WelcomePage() {
       else navigate('/activate')
       return
     }
+    setFormProvider(id)
     setFormPreset(id === 'other' ? undefined : MAILBOX_PRESETS[id])
     setFormOpen(true)
   }
@@ -146,6 +148,7 @@ export function WelcomePage() {
         open={formOpen}
         mode="signin"
         preset={formPreset}
+        provider={formProvider}
         onClose={() => setFormOpen(false)}
         onSaved={() => setFormOpen(false)}
       />

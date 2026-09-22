@@ -229,6 +229,19 @@ describe('Tenant isolation', () => {
 
     expect((await request(app).delete(`/api/mailbox-connections/${mailbox.id}`).set(auth)).status).toBe(404)
     expect((await request(app).patch(`/api/mailbox-connections/${mailbox.id}/retry`).set(auth)).status).toBe(404)
+    expect((await request(app)
+      .patch(`/api/mailbox-connections/${mailbox.id}/reconnect`)
+      .set(auth)
+      .send({
+        email: mailbox.email,
+        imapHost: mailbox.imapHost,
+        imapPort: mailbox.imapPort,
+        imapSecure: mailbox.imapSecure,
+        smtpHost: mailbox.smtpHost,
+        smtpPort: mailbox.smtpPort,
+        smtpSecure: mailbox.smtpSecure,
+        password: 'not-used',
+      })).status).toBe(404)
     expect((await request(app).post(`/api/mailbox-connections/${mailbox.id}/import-history`).set(auth).send({ days: 1 })).status).toBe(404)
 
     expect((await request(app).post(`/api/pro-addresses/${proAddress.id}/claim`).set(auth)).status).toBe(404)

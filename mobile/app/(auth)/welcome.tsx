@@ -8,7 +8,7 @@ import { exchangeGoogleHandoff } from '../../src/api/auth';
 import { apiFetch, describeError } from '../../src/api/client';
 import { describeGoogleSigninError } from '../../src/lib/googleSigninErrors';
 import { useSession } from '../../src/context/SessionContext';
-import { MailboxConnectionFormModal, MAILBOX_PRESETS } from '../../src/components/mailboxes/MailboxConnectionFormModal';
+import { MailboxConnectionFormModal, MAILBOX_PRESETS, type ManualMailboxProvider } from '../../src/components/mailboxes/MailboxConnectionFormModal';
 import { CreateEnterpriseFlow } from '../../src/components/mailboxes/CreateEnterpriseFlow';
 import { BASE_PROVIDERS, type BaseMailboxProvider } from '../../src/components/mailboxes/providerList';
 
@@ -47,6 +47,7 @@ export default function WelcomeScreen() {
   const [error, setError] = useState(params.error ? describeGoogleSigninError(params.error) : '');
   const [formOpen, setFormOpen] = useState(false);
   const [formPreset, setFormPreset] = useState<Partial<(typeof MAILBOX_PRESETS)[string]> | undefined>(undefined);
+  const [formProvider, setFormProvider] = useState<ManualMailboxProvider>('other');
   const [createOpen, setCreateOpen] = useState(false);
   // Créer/rejoindre une entreprise exige une identité personnelle préalable (décision
   // produit — plan "Découpler l'identité personnelle de l'accès organisation", Phase
@@ -130,6 +131,7 @@ export default function WelcomeScreen() {
       else router.push('/(auth)/activate');
       return;
     }
+    setFormProvider(id);
     setFormPreset(id === 'other' ? undefined : MAILBOX_PRESETS[id]);
     setFormOpen(true);
   };
@@ -182,6 +184,7 @@ export default function WelcomeScreen() {
         open={formOpen}
         mode="signin"
         preset={formPreset}
+        provider={formProvider}
         onClose={() => setFormOpen(false)}
         onSaved={() => {
           setFormOpen(false);

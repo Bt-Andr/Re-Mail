@@ -5,7 +5,7 @@ import nodemailer from 'nodemailer'
 import { authenticateToken } from '../middleware/auth'
 import { forOrg } from '../middleware/scopedPrisma'
 import prisma from '../lib/prisma'
-import { encryptMailboxCredential } from '../lib/mailboxCredentialCrypto'
+import { decryptMailboxCredential, encryptMailboxCredential } from '../lib/mailboxCredentialCrypto'
 import { MailboxProviderError } from '../lib/mailboxErrors'
 import { hasPrismaErrorCode } from '../lib/prismaErrors'
 import { signToken } from '../lib/jwt'
@@ -45,6 +45,7 @@ async function probeImapMailbox(creds: ImapCredentials): Promise<{ uidValidity: 
     host: creds.imapHost,
     port: creds.imapPort,
     secure: creds.imapSecure,
+    doSTARTTLS: !creds.imapSecure,
     auth: { user: creds.email, pass: creds.password },
     logger: false,
   })
@@ -65,6 +66,7 @@ async function probeSmtp(creds: SmtpCredentials): Promise<void> {
       host: creds.smtpHost,
       port: creds.smtpPort,
       secure: creds.smtpSecure,
+      requireTLS: !creds.smtpSecure,
       auth: { user: creds.email, pass: creds.password },
     })
     await transporter.verify()
@@ -272,18 +274,101 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   res.status(204).end()
 })
 
+// Réparation explicite : les nouveaux paramètres et le nouveau secret ne remplacent
+// jamais ceux qui fonctionnaient avant que les deux sondes aient réussi. L'adresse est
+// volontairement immuable pour ne pas rattacher silencieusement les fils existants à
+// une autre boîte.
+router.patch('/:id/reconnect', authenticateToken, async (req, res) => {
+  const params = parseRequest(mailboxConnectionIdParamSchema, req.params, res)
+  if (!params) return
+  const input = parseRequest(mailboxCredentialsSchema, req.body, res)
+  if (!input) return
+  const db = forOrg(req.user!.organizationId)
+  const existing = await db.externalMailboxConnection.findFirst({ where: { id: params.id, userId: req.user!.id } })
+  if (!existing) return res.status(404).json({ error: 'Connexion introuvable.' })
+  if (existing.provider !== 'imap') {
+    return res.status(400).json({ error: 'Reconnectez cette boîte avec le fournisseur OAuth correspondant.' })
+  }
+  if (input.email !== existing.email.toLowerCase()) {
+    return res.status(400).json({ error: "L'adresse d'une boîte existante ne peut pas être modifiée." })
+  }
+
+  let probe: Awaited<ReturnType<typeof probeImapMailbox>>
+  try {
+    probe = await probeImapMailbox(input)
+    await probeSmtp(input)
+  } catch (e) {
+    if (e instanceof MailboxProviderError) return res.status(400).json({ error: e.message })
+    throw e
+  }
+
+  const uidValidityChanged = existing.uidValidity !== null && existing.uidValidity !== probe.uidValidity
+  const updated = await db.externalMailboxConnection.update({
+    where: { id: existing.id },
+    data: {
+      imapHost: input.imapHost,
+      imapPort: input.imapPort,
+      imapSecure: input.imapSecure,
+      smtpHost: input.smtpHost,
+      smtpPort: input.smtpPort,
+      smtpSecure: input.smtpSecure,
+      credentialEnc: encryptMailboxCredential(input.password),
+      status: 'connected',
+      lastError: null,
+      uidValidity: probe.uidValidity,
+      lastSeenUid: uidValidityChanged ? 0 : existing.lastSeenUid,
+    },
+    select: LIST_SELECT,
+  })
+  res.json(updated)
+})
+
 // PATCH /api/mailbox-connections/:id/retry — le poller passe une connexion en erreur
-// en `status: 'error'` et ne la retente plus jamais tout seul (coupe-circuit, voir
-// src/jobs/mailboxPoller.ts) ; ce endpoint est le seul moyen de la relancer.
+// en `status: 'error'` et ne la retente plus jamais tout seul. Une tentative avec les
+// identifiants déjà stockés doit elle aussi réussir en IMAP ET SMTP avant de réarmer le
+// poller ; l'ancien comportement mettait aveuglément la connexion au vert.
 router.patch('/:id/retry', authenticateToken, async (req, res) => {
   const input = parseRequest(mailboxConnectionIdParamSchema, req.params, res)
   if (!input) return
   const db = forOrg(req.user!.organizationId)
-  const updated = await db.externalMailboxConnection.updateMany({
-    where: { id: input.id, userId: req.user!.id },
-    data: { status: 'connected', lastError: null },
+  const existing = await db.externalMailboxConnection.findFirst({ where: { id: input.id, userId: req.user!.id } })
+  if (!existing) return res.status(404).json({ error: 'Connexion introuvable.' })
+  if (existing.provider !== 'imap') {
+    return res.status(400).json({ error: 'Reconnectez cette boîte avec le fournisseur OAuth correspondant.' })
+  }
+
+  let probe: Awaited<ReturnType<typeof probeImapMailbox>>
+  try {
+    const password = decryptMailboxCredential(existing.credentialEnc)
+    probe = await probeImapMailbox({
+      email: existing.email,
+      imapHost: existing.imapHost,
+      imapPort: existing.imapPort,
+      imapSecure: existing.imapSecure,
+      password,
+    })
+    await probeSmtp({
+      email: existing.email,
+      smtpHost: existing.smtpHost,
+      smtpPort: existing.smtpPort,
+      smtpSecure: existing.smtpSecure,
+      password,
+    })
+  } catch (e) {
+    if (e instanceof MailboxProviderError) return res.status(400).json({ error: e.message })
+    throw e
+  }
+
+  const uidValidityChanged = existing.uidValidity !== null && existing.uidValidity !== probe.uidValidity
+  await db.externalMailboxConnection.update({
+    where: { id: existing.id },
+    data: {
+      status: 'connected',
+      lastError: null,
+      uidValidity: probe.uidValidity,
+      lastSeenUid: uidValidityChanged ? 0 : existing.lastSeenUid,
+    },
   })
-  if (updated.count === 0) return res.status(404).json({ error: 'Connexion introuvable.' })
   res.json({ success: true })
 })
 

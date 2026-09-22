@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { apiFetch, parseError } from '../../lib/apiClient'
+import { apiFetch, networkErrorMessage, parseError } from '../../lib/apiClient'
 import { useSession } from '../../context/SessionContext'
 import { Modal } from '../../components/ui/Modal'
 import { Input } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
+import type { ExternalMailboxConnection } from '../../types/api'
 
 const EMPTY = {
   email: '',
@@ -22,9 +23,31 @@ const EMPTY = {
 // (seul Google en a un, voir connectGmail) : ça reste le connecteur IMAP générique,
 // juste avec les champs serveur déjà remplis.
 export const MAILBOX_PRESETS: Record<string, Partial<typeof EMPTY>> = {
-  outlook: { imapHost: 'outlook.office365.com', imapPort: '993', smtpHost: 'smtp.office365.com', smtpPort: '587' },
-  yahoo: { imapHost: 'imap.mail.yahoo.com', imapPort: '993', smtpHost: 'smtp.mail.yahoo.com', smtpPort: '465' },
-  exchange: { imapHost: 'outlook.office365.com', imapPort: '993', smtpHost: 'smtp.office365.com', smtpPort: '587' },
+  outlook: { imapHost: 'outlook.office365.com', imapPort: '993', smtpHost: 'smtp-mail.outlook.com', smtpPort: '587', smtpSecure: false },
+  yahoo: { imapHost: 'export.imap.mail.yahoo.com', imapPort: '993', smtpHost: 'smtp.mail.yahoo.com', smtpPort: '465', smtpSecure: true },
+  exchange: { imapPort: '993', smtpPort: '587', smtpSecure: false },
+}
+
+export type ManualMailboxProvider = 'outlook' | 'yahoo' | 'exchange' | 'other'
+
+const PROVIDER_GUIDANCE: Record<ManualMailboxProvider, string> = {
+  outlook: "Microsoft exige l'authentification moderne OAuth2. Cette connexion manuelle ne peut fonctionner que si votre compte ou votre administrateur autorise un mot de passe d'application ; sinon utilisez votre fournisseur officiel en attendant l'intégration OAuth Microsoft.",
+  yahoo: "Créez un mot de passe d'application dans Sécurité du compte Yahoo, puis collez ce code ici. Votre mot de passe Yahoo habituel est généralement refusé par les applications tierces.",
+  exchange: "Les serveurs Exchange dépendent de votre organisation. Demandez les hôtes IMAP/SMTP et la méthode d'authentification à votre administrateur ; Microsoft 365 impose généralement OAuth2.",
+  other: "Utilisez les paramètres IMAP et SMTP fournis par votre hébergeur. Le serveur teste la réception puis l'envoi avant d'enregistrer la connexion.",
+}
+
+const PROVIDER_HELP: Partial<Record<ManualMailboxProvider, { label: string; url: string }>> = {
+  outlook: { label: 'Voir les prérequis Microsoft', url: 'https://support.microsoft.com/en-us/outlook/pop-imap-and-smtp-settings-for-outlook-com' },
+  yahoo: { label: "Créer un mot de passe d'application Yahoo", url: 'https://help.yahoo.com/kb/SLN15241.html' },
+  exchange: { label: 'Voir les prérequis Microsoft', url: 'https://support.microsoft.com/en-us/outlook/pop-imap-and-smtp-settings-for-outlook-com' },
+}
+
+export function inferManualMailboxProvider(connection: Pick<ExternalMailboxConnection, 'imapHost' | 'smtpHost'>): ManualMailboxProvider {
+  const hosts = `${connection.imapHost} ${connection.smtpHost}`.toLowerCase()
+  if (hosts.includes('yahoo')) return 'yahoo'
+  if (hosts.includes('office365') || hosts.includes('outlook')) return 'outlook'
+  return 'other'
 }
 
 interface MailboxConnectionFormModalProps {
@@ -32,6 +55,8 @@ interface MailboxConnectionFormModalProps {
   onClose: () => void
   onSaved: () => void
   preset?: Partial<typeof EMPTY>
+  provider?: ManualMailboxProvider
+  connection?: ExternalMailboxConnection | null
   // 'connect' (défaut) : ajoute une boîte à la session existante, comportement
   // inchangé. 'signin' : aucune session requise — POST vers /imap/signin (voir
   // src/routes/mailboxConnections.ts), qui crée un compte perso à la volée si l'email
@@ -39,21 +64,34 @@ interface MailboxConnectionFormModalProps {
   mode?: 'connect' | 'signin'
 }
 
-// Pas d'edit ici (contrairement à MailRouteFormModal) : changer les identifiants d'une
-// boîte externe, c'est en reconnecter une — plus simple de supprimer et recréer.
-export function MailboxConnectionFormModal({ open, onClose, onSaved, preset, mode = 'connect' }: MailboxConnectionFormModalProps) {
+// En réparation, l'adresse reste immuable mais les serveurs et le secret peuvent être
+// ressaisis ; le backend ne les remplace qu'après validation IMAP puis SMTP.
+export function MailboxConnectionFormModal({ open, onClose, onSaved, preset, provider = 'other', connection, mode = 'connect' }: MailboxConnectionFormModalProps) {
   const { login } = useSession()
   const navigate = useNavigate()
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const activeProvider = connection ? inferManualMailboxProvider(connection) : provider
+  const providerHelp = PROVIDER_HELP[activeProvider]
 
   useEffect(() => {
     if (open) {
-      setForm({ ...EMPTY, ...preset })
+      setForm(connection
+        ? {
+            email: connection.email,
+            imapHost: connection.imapHost,
+            imapPort: String(connection.imapPort),
+            imapSecure: connection.imapSecure,
+            smtpHost: connection.smtpHost,
+            smtpPort: String(connection.smtpPort),
+            smtpSecure: connection.smtpSecure,
+            password: '',
+          }
+        : { ...EMPTY, ...preset })
       setError('')
     }
-  }, [open, preset])
+  }, [connection, open, preset])
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(prev => ({ ...prev, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
@@ -65,8 +103,13 @@ export function MailboxConnectionFormModal({ open, onClose, onSaved, preset, mod
     setError('')
     setLoading(true)
     try {
-      const res = await apiFetch(mode === 'signin' ? '/mailbox-connections/imap/signin' : '/mailbox-connections', {
-        method: 'POST',
+      const path = mode === 'signin'
+        ? '/mailbox-connections/imap/signin'
+        : connection
+          ? `/mailbox-connections/${connection.id}/reconnect`
+          : '/mailbox-connections'
+      const res = await apiFetch(path, {
+        method: connection ? 'PATCH' : 'POST',
         body: JSON.stringify({ ...form, imapPort: Number(form.imapPort), smtpPort: Number(form.smtpPort) }),
       })
       if (!res.ok) {
@@ -85,6 +128,8 @@ export function MailboxConnectionFormModal({ open, onClose, onSaved, preset, mod
         return
       }
       onSaved()
+    } catch (err) {
+      setError(networkErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -93,20 +138,24 @@ export function MailboxConnectionFormModal({ open, onClose, onSaved, preset, mod
   return (
     <Modal
       open={open}
-      title="Connecter une boîte mail"
+      title={connection ? 'Réparer la connexion' : 'Connecter une boîte mail'}
       onClose={onClose}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
-          <Button onClick={submit} loading={loading} disabled={!canSubmit}>Connecter</Button>
+          <Button onClick={submit} loading={loading} disabled={!canSubmit}>{connection ? 'Tester et reconnecter' : 'Connecter'}</Button>
         </>
       }
     >
-      <p className="text-xs text-muted-foreground">
-        Fonctionne avec Gmail, Outlook et la plupart des fournisseurs (identifiants IMAP/SMTP classiques).
-        Pour Gmail, utilisez un <span className="font-medium">mot de passe d'application</span> plutôt que votre mot de passe habituel.
-      </p>
-      <Input label="Adresse email" type="email" placeholder="vous@exemple.com" value={form.email} onChange={set('email')} autoFocus />
+      <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+        <p>{PROVIDER_GUIDANCE[activeProvider]}</p>
+        {providerHelp && (
+          <a href={providerHelp.url} target="_blank" rel="noreferrer" className="mt-2 inline-block font-medium text-foreground underline underline-offset-2">
+            {providerHelp.label}
+          </a>
+        )}
+      </div>
+      <Input label="Adresse email" type="email" placeholder="vous@exemple.com" value={form.email} onChange={set('email')} autoFocus disabled={!!connection} />
       <div className="grid grid-cols-3 gap-3">
         <div className="col-span-2">
           <Input label="Serveur IMAP (réception)" placeholder="imap.exemple.com" value={form.imapHost} onChange={set('imapHost')} />
@@ -115,7 +164,7 @@ export function MailboxConnectionFormModal({ open, onClose, onSaved, preset, mod
       </div>
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <input type="checkbox" checked={form.imapSecure} onChange={set('imapSecure')} />
-        Connexion IMAP sécurisée (TLS)
+        TLS direct IMAP (généralement port 993) — décochez pour STARTTLS
       </label>
       <div className="grid grid-cols-3 gap-3">
         <div className="col-span-2">
@@ -125,9 +174,9 @@ export function MailboxConnectionFormModal({ open, onClose, onSaved, preset, mod
       </div>
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <input type="checkbox" checked={form.smtpSecure} onChange={set('smtpSecure')} />
-        Connexion SMTP sécurisée (TLS)
+        TLS direct SMTP (port 465) — décochez pour STARTTLS, généralement port 587
       </label>
-      <Input label="Mot de passe" type="password" value={form.password} onChange={set('password')} />
+      <Input label={connection ? "Nouveau mot de passe ou mot de passe d'application" : "Mot de passe ou mot de passe d'application"} type="password" value={form.password} onChange={set('password')} />
       {error && <p className="text-xs text-destructive">{error}</p>}
     </Modal>
   )

@@ -11,10 +11,14 @@ import {
   importMailboxHistory,
   listMailboxConnections,
   listProAddresses,
-  retryMailboxConnection,
 } from '../../src/api/mailboxConnections';
 import { apiFetch, describeError } from '../../src/api/client';
-import { MailboxConnectionFormModal, MAILBOX_PRESETS } from '../../src/components/mailboxes/MailboxConnectionFormModal';
+import {
+  inferManualMailboxProvider,
+  MailboxConnectionFormModal,
+  MAILBOX_PRESETS,
+  type ManualMailboxProvider,
+} from '../../src/components/mailboxes/MailboxConnectionFormModal';
 import { ProviderPickerSheet, type MailboxProvider } from '../../src/components/mailboxes/ProviderPickerSheet';
 import { ResendConnectSheet } from '../../src/components/mailboxes/ResendConnectSheet';
 import { useAccountSwitcher } from '../../src/context/AccountSwitcherContext';
@@ -38,6 +42,8 @@ export default function MailboxesScreen() {
   const [resendOpen, setResendOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [formPreset, setFormPreset] = useState<Partial<(typeof MAILBOX_PRESETS)[string]> | undefined>(undefined);
+  const [formProvider, setFormProvider] = useState<ManualMailboxProvider>('other');
+  const [formConnection, setFormConnection] = useState<ExternalMailboxConnection | null>(null);
   const [connectingGmail, setConnectingGmail] = useState(false);
 
   const invalidate = () => {
@@ -45,7 +51,6 @@ export default function MailboxesScreen() {
     refetchAccounts();
   };
 
-  const retryMutation = useMutation({ mutationFn: (id: string) => retryMailboxConnection(id), onSuccess: invalidate });
   const deleteMutation = useMutation({ mutationFn: (id: string) => deleteMailboxConnection(id), onSuccess: invalidate });
   const importMutation = useMutation({
     mutationFn: (id: string) => importMailboxHistory(id),
@@ -97,7 +102,20 @@ export default function MailboxesScreen() {
       setResendOpen(true);
       return;
     }
+    setFormConnection(null);
+    setFormProvider(provider);
     setFormPreset(provider === 'other' ? undefined : MAILBOX_PRESETS[provider]);
+    setFormOpen(true);
+  };
+
+  const repair = (connection: ExternalMailboxConnection) => {
+    if (connection.provider === 'gmail') {
+      void connectGmail();
+      return;
+    }
+    setFormConnection(connection);
+    setFormProvider(inferManualMailboxProvider(connection));
+    setFormPreset(undefined);
     setFormOpen(true);
   };
 
@@ -210,7 +228,7 @@ export default function MailboxesScreen() {
                 )}
               </View>
               {item.status === 'error' && (
-                <Pressable onPress={() => retryMutation.mutate(item.id)} hitSlop={8} className="p-1.5">
+                <Pressable onPress={() => repair(item)} hitSlop={8} className="p-1.5">
                   <RefreshCw size={16} color="#9ca3af" />
                 </Pressable>
               )}
@@ -248,9 +266,15 @@ export default function MailboxesScreen() {
       <MailboxConnectionFormModal
         open={formOpen}
         preset={formPreset}
-        onClose={() => setFormOpen(false)}
+        provider={formProvider}
+        connection={formConnection}
+        onClose={() => {
+          setFormOpen(false);
+          setFormConnection(null);
+        }}
         onSaved={() => {
           setFormOpen(false);
+          setFormConnection(null);
           invalidate();
         }}
       />

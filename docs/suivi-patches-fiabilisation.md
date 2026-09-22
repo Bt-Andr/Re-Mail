@@ -10,7 +10,7 @@ Document de pilotage associé à [patch-plan-fiabilisation.md](./patch-plan-fiab
 | Statut | En cours — lots 0 à 5 terminés, lot 6 actif |
 | Dernière mise à jour | 2026-09-16 |
 | Branche de référence | `main` |
-| Baseline fonctionnelle | 40 fichiers de tests, 271 tests réussis |
+| Baseline fonctionnelle | 40 fichiers de tests, 273 tests réussis |
 | Responsable | À renseigner |
 | Version cible | À renseigner |
 
@@ -182,7 +182,7 @@ Validation :
 
 ## Lot 6 — Onboarding vérifié
 
-Statut : **En cours — parcours Resend principal terminé, fournisseurs IMAP/SMTP à reprendre**
+Statut : **En cours — implémentation principale terminée, validation réelle des fournisseurs à exécuter**
 
 - [x] Concevoir l’état détaillé de configuration — preuves persistées pour clé, domaine, webhook, première adresse, premier envoi et première réception.
 - [x] Afficher uniquement les domaines vérifiés — relecture Resend disponible après rechargement sur web et mobile, sans saisie libre.
@@ -192,9 +192,9 @@ Statut : **En cours — parcours Resend principal terminé, fournisseurs IMAP/SM
 - [x] Ajouter l’envoi d’un email test — l’adresse créée s’envoie un challenge unique via le chemin normal du composeur.
 - [x] Ajouter la confirmation de réception — polling sur le message entrant correspondant exactement au challenge, avec preuve rattachée à l’adresse encore configurée.
 - [x] Ajouter un écran final opérationnel — synthèse des quatre preuves et action explicite vers la boîte de réception sur webmail et mobile.
-- [ ] Améliorer les instructions IMAP/SMTP par fournisseur.
-- [ ] Permettre de ressaisir les identifiants d’une connexion en erreur.
-- [ ] Ne déclarer une reconnexion réussie qu’après test IMAP et SMTP.
+- [x] Améliorer les instructions IMAP/SMTP par fournisseur — paramètres Outlook/Yahoo corrigés, limites OAuth Microsoft explicites et liens vers les aides officielles sur webmail/mobile.
+- [x] Permettre de ressaisir les identifiants d’une connexion en erreur — formulaire prérempli, adresse immuable et secret jamais relu côté client.
+- [x] Ne déclarer une reconnexion réussie qu’après test IMAP et SMTP — anciens paramètres conservés si une sonde échoue ; Gmail repasse par OAuth.
 
 Validation :
 
@@ -309,6 +309,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-18 | 6 | Création guidée de la première adresse sur webmail et mobile : `User.proEmail` pour le personnel, `MailRoute` sans transfert obligatoire pour une équipe | Build webmail et typecheck mobile valides ; backend inchangé, baseline 269/269 conservée | Ajouter l’envoi d’un email test | Codex |
 | 2026-09-18 | 6 | Test aller-retour autonome de la première adresse, preuve persistée et reprise du polling sur webmail/mobile ; correction des routes sans transfert qui tentaient encore un envoi vide | 17/17 migrations locales, typecheck/build backend, builds web/webmail, typecheck mobile, 271/271 tests | Ajouter l’écran final opérationnel | Codex |
 | 2026-09-18 | 6 | Écran final opérationnel sur webmail et mobile avec synthèse du domaine, du webhook, de l’adresse et du test aller-retour | Build webmail et typecheck mobile valides ; backend inchangé, baseline 271/271 conservée | Reprendre les parcours IMAP/SMTP par fournisseur | Codex |
+| 2026-09-22 | 6 | Réparation des connexions IMAP en erreur avec ressaisie sécurisée, double sonde avant réactivation et guides Outlook/Yahoo/Exchange/autre alignés sur les prérequis fournisseurs | Typecheck/build backend, build webmail, typecheck mobile, 273/273 tests | Valider manuellement Yahoo puis décider/intégrer OAuth Microsoft | Codex |
 
 ## Journal des validations
 
@@ -346,6 +347,7 @@ Ajouter une entrée à chaque session de travail significative.
 | 2026-09-18 | Lot 6 — première adresse | 269/269 (backend inchangé) | Webmail en build de production et mobile en typecheck | Sans migration | Le flux crée une adresse d'envoi/réception selon le type d'organisation et reprend sur l'étape suivante après relecture du statut | Les contrôles de domaine et d'unicité restent assurés par les routes backend existantes |
 | 2026-09-18 | Lot 6 — test aller-retour | 271/271, dont 22/22 scénarios configuration/webhook ciblés | Backend typecheck/build, web et webmail en build de production, mobile en typecheck | 17/17 appliquées sur Docker local | Challenge unique envoyé à la même adresse, sortie puis entrée exactes exigées ; route sans transfert couverte | L’état opérationnel reste faux si l’adresse testée est supprimée ou si le retour entrant n’est pas observé |
 | 2026-09-18 | Lot 6 — sortie opérationnelle | 271/271 (backend inchangé) | Webmail en build de production et mobile en typecheck | Sans migration | État final uniquement accessible après toutes les preuves du parcours Resend | La validation manuelle sur un compte Resend réel reste à exécuter avant livraison |
+| 2026-09-22 | Lot 6 — réparation IMAP/SMTP | 273/273, dont 33/33 scénarios boîtes/isolation ciblés | Backend typecheck/build, webmail build et mobile typecheck valides | Sans migration | Reconnexion avec ancien ou nouveau secret, échecs IMAP/SMTP, conservation atomique des anciens réglages et isolation tenant couverts | Outlook/Microsoft 365 exige OAuth2 ; le formulaire le signale mais l’intégration OAuth Microsoft reste à décider |
 
 ## Journal des incidents et régressions
 

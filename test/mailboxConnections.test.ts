@@ -165,7 +165,7 @@ describe('POST /api/mailbox-connections', () => {
     expect(row).toBeNull()
   })
 
-  it('lists only the caller\'s own connections, deletes by ownership, and retry resets an errored connection', async () => {
+  it('lists only the caller\'s own connections, deletes by ownership, and retries both protocols before resetting an error', async () => {
     const create = await request(app)
       .post('/api/mailbox-connections')
       .set('Authorization', `Bearer ${org.token}`)
@@ -179,6 +179,8 @@ describe('POST /api/mailbox-connections', () => {
     await prisma.externalMailboxConnection.update({ where: { id: create.body.id }, data: { status: 'error', lastError: 'oops' } })
     const retry = await request(app).patch(`/api/mailbox-connections/${create.body.id}/retry`).set('Authorization', `Bearer ${org.token}`)
     expect(retry.status).toBe(200)
+    expect(mockConnect).toHaveBeenCalledTimes(2)
+    expect(mockVerify).toHaveBeenCalledTimes(2)
     const afterRetry = await prisma.externalMailboxConnection.findUnique({ where: { id: create.body.id } })
     expect(afterRetry?.status).toBe('connected')
     expect(afterRetry?.lastError).toBeNull()
@@ -186,6 +188,74 @@ describe('POST /api/mailbox-connections', () => {
     const del = await request(app).delete(`/api/mailbox-connections/${create.body.id}`).set('Authorization', `Bearer ${org.token}`)
     expect(del.status).toBe(204)
     expect(await prisma.externalMailboxConnection.findUnique({ where: { id: create.body.id } })).toBeNull()
+  })
+
+  it('keeps an errored connection disabled when retrying the stored credential fails', async () => {
+    const create = await request(app)
+      .post('/api/mailbox-connections')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ email: 'retry-fails@example.com', imapHost: 'imap.example.com', imapPort: 993, smtpHost: 'smtp.example.com', smtpPort: 465, password: 'old-secret' })
+    await prisma.externalMailboxConnection.update({ where: { id: create.body.id }, data: { status: 'error', lastError: 'auth expired' } })
+    mockVerify.mockRejectedValueOnce(new Error('still rejected'))
+
+    const retry = await request(app)
+      .patch(`/api/mailbox-connections/${create.body.id}/retry`)
+      .set('Authorization', `Bearer ${org.token}`)
+
+    expect(retry.status).toBe(400)
+    expect(retry.body.error).toBe('Connexion SMTP impossible.')
+    const stored = await prisma.externalMailboxConnection.findUniqueOrThrow({ where: { id: create.body.id } })
+    expect(stored.status).toBe('error')
+    expect(stored.lastError).toBe('auth expired')
+  })
+
+  it('replaces credentials only after successful IMAP and SMTP probes', async () => {
+    const create = await request(app)
+      .post('/api/mailbox-connections')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ email: 'repair@example.com', imapHost: 'imap.old.example.com', imapPort: 993, smtpHost: 'smtp.old.example.com', smtpPort: 465, password: 'old-secret' })
+    await prisma.externalMailboxConnection.update({ where: { id: create.body.id }, data: { status: 'error', lastError: 'expired' } })
+    const before = await prisma.externalMailboxConnection.findUniqueOrThrow({ where: { id: create.body.id } })
+
+    mockVerify.mockRejectedValueOnce(new Error('bad new credential'))
+    const failed = await request(app)
+      .patch(`/api/mailbox-connections/${create.body.id}/reconnect`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({
+        email: 'repair@example.com',
+        imapHost: 'imap.new.example.com',
+        imapPort: 993,
+        smtpHost: 'smtp.new.example.com',
+        smtpPort: 587,
+        smtpSecure: false,
+        password: 'bad-secret',
+      })
+    expect(failed.status).toBe(400)
+    const afterFailure = await prisma.externalMailboxConnection.findUniqueOrThrow({ where: { id: create.body.id } })
+    expect(afterFailure).toMatchObject({ imapHost: before.imapHost, smtpHost: before.smtpHost, credentialEnc: before.credentialEnc, status: 'error' })
+
+    mockMailboxOpen.mockResolvedValueOnce({ uidValidity: 2000n, uidNext: 80 })
+    const repaired = await request(app)
+      .patch(`/api/mailbox-connections/${create.body.id}/reconnect`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({
+        email: 'repair@example.com',
+        imapHost: 'imap.new.example.com',
+        imapPort: 993,
+        smtpHost: 'smtp.new.example.com',
+        smtpPort: 587,
+        smtpSecure: false,
+        password: 'new-secret',
+      })
+    expect(repaired.status).toBe(200)
+    expect(repaired.body).toMatchObject({ status: 'connected', imapHost: 'imap.new.example.com', smtpHost: 'smtp.new.example.com', smtpSecure: false })
+    expect(repaired.body.credentialEnc).toBeUndefined()
+
+    const stored = await prisma.externalMailboxConnection.findUniqueOrThrow({ where: { id: create.body.id } })
+    expect(stored.credentialEnc).not.toBe(before.credentialEnc)
+    expect(stored.uidValidity).toBe(2000n)
+    expect(stored.lastSeenUid).toBe(0)
+    expect(stored.lastError).toBeNull()
   })
 })
 

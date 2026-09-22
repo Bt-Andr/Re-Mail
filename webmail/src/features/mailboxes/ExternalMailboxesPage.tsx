@@ -11,7 +11,12 @@ import { Spinner } from '../../components/ui/Spinner'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
-import { MailboxConnectionFormModal, MAILBOX_PRESETS } from './MailboxConnectionFormModal'
+import {
+  inferManualMailboxProvider,
+  MailboxConnectionFormModal,
+  MAILBOX_PRESETS,
+  type ManualMailboxProvider,
+} from './MailboxConnectionFormModal'
 import { ProviderPickerModal, type MailboxProvider } from './ProviderPickerModal'
 import { ResendConnectModal } from './ResendConnectModal'
 import type { ExternalMailboxConnection, ProAddress } from '../../types/api'
@@ -41,8 +46,9 @@ export function ExternalMailboxesPage() {
   const [resendOpen, setResendOpen] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [formPreset, setFormPreset] = useState<Partial<(typeof MAILBOX_PRESETS)[string]> | undefined>(undefined)
+  const [formProvider, setFormProvider] = useState<ManualMailboxProvider>('other')
+  const [formConnection, setFormConnection] = useState<ExternalMailboxConnection | null>(null)
   const [toDelete, setToDelete] = useState<ExternalMailboxConnection | null>(null)
-  const [retryingId, setRetryingId] = useState<string | null>(null)
   const [connectingGmail, setConnectingGmail] = useState(false)
   const [toImport, setToImport] = useState<ExternalMailboxConnection | null>(null)
   const [importingId, setImportingId] = useState<string | null>(null)
@@ -90,6 +96,8 @@ export function ExternalMailboxesPage() {
       setResendOpen(true)
       return
     }
+    setFormConnection(null)
+    setFormProvider(provider)
     setFormPreset(provider === 'other' ? undefined : MAILBOX_PRESETS[provider])
     setFormOpen(true)
   }
@@ -136,22 +144,15 @@ export function ExternalMailboxesPage() {
     }
   }
 
-  const retry = async (connection: ExternalMailboxConnection) => {
-    setRetryingId(connection.id)
-    try {
-      const res = await apiFetch(`/mailbox-connections/${connection.id}/retry`, { method: 'PATCH' })
-      if (res.ok) {
-        showToast('success', 'Nouvelle tentative programmée.')
-        void load()
-        refetchAccounts()
-      } else {
-        showToast('error', await parseError(res))
-      }
-    } catch (err) {
-      showToast('error', networkErrorMessage(err))
-    } finally {
-      setRetryingId(null)
+  const repair = (connection: ExternalMailboxConnection) => {
+    if (connection.provider === 'gmail') {
+      void connectGmail()
+      return
     }
+    setFormConnection(connection)
+    setFormProvider(inferManualMailboxProvider(connection))
+    setFormPreset(undefined)
+    setFormOpen(true)
   }
 
   // 30 jours, borné côté serveur (HISTORY_IMPORT_MIN_DAYS/MAX_DAYS) — action ponctuelle
@@ -270,12 +271,11 @@ export function ExternalMailboxesPage() {
               {connection.status === 'error' && (
                 <button
                   type="button"
-                  title="Réessayer"
-                  onClick={() => void retry(connection)}
-                  disabled={retryingId === connection.id}
-                  className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+                  title="Réparer la connexion"
+                  onClick={() => repair(connection)}
+                  className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors"
                 >
-                  <RefreshCw size={15} className={retryingId === connection.id ? 'animate-spin' : ''} />
+                  <RefreshCw size={15} />
                 </button>
               )}
               {connection.status === 'connected' && !connection.historyImportedAt && (
@@ -318,10 +318,17 @@ export function ExternalMailboxesPage() {
         <MailboxConnectionFormModal
           open={formOpen}
           preset={formPreset}
-          onClose={() => setFormOpen(false)}
-          onSaved={() => {
+          provider={formProvider}
+          connection={formConnection}
+          onClose={() => {
             setFormOpen(false)
-            showToast('success', 'Boîte connectée.')
+            setFormConnection(null)
+          }}
+          onSaved={() => {
+            const repaired = !!formConnection
+            setFormOpen(false)
+            setFormConnection(null)
+            showToast('success', repaired ? 'Boîte reconnectée après tests IMAP et SMTP.' : 'Boîte connectée.')
             void load()
             refetchAccounts()
           }}

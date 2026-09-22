@@ -20,6 +20,10 @@ export function createMailboxConnection(values: MailboxConnectionFormValues): Pr
   return apiFetch<ExternalMailboxConnection>('/mailbox-connections', { method: 'POST', body: values });
 }
 
+export function reconnectMailboxConnection(id: string, values: MailboxConnectionFormValues): Promise<ExternalMailboxConnection> {
+  return apiFetch<ExternalMailboxConnection>(`/mailbox-connections/${id}/reconnect`, { method: 'PATCH', body: values });
+}
+
 // Pas de session requise — crée un compte perso à la volée si l'email est inconnu et
 // renvoie directement une session, comme signup()/exchangeGoogleHandoff() (voir
 // src/routes/mailboxConnections.ts POST /imap/signin côté backend).

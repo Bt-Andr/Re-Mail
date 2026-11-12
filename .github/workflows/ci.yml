@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'cloture/**']
+  pull_request:
+
+jobs:
+  backend-et-frontends:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: resend_mail_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:test@localhost:5433/resend_mail_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Installer les dépendances
+        run: npm ci
+      - name: Générer le client Prisma
+        run: npx prisma generate
+      - name: Appliquer les migrations sur la base de test
+        run: npx prisma migrate deploy
+      - name: Typecheck backend
+        run: npm run typecheck
+      - name: Tests backend
+        run: npm test
+      - name: Build backend
+        run: npm run build
+      - name: Build administration (web)
+        run: npm run build --workspace=web
+      - name: Build messagerie (webmail)
+        run: npm run build --workspace=webmail

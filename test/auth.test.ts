@@ -49,11 +49,12 @@ describe('POST /api/auth/signup', () => {
     expect(await prisma.user.findFirst({ where: { email } })).toBeNull()
   })
 
-  it('creates an invisible personal organization when accountType is perso, without requiring orgName', async () => {
+  it('creates an invisible personal organization when accountType is perso, including the empty orgName sent by clients', async () => {
     const res = await request(app)
       .post('/api/auth/signup')
       .send({
         accountType: 'perso',
+        orgName: '',
         username: `perso-${Date.now()}`,
         email: `perso-${Date.now()}@example.com`,
         password: 'a-strong-password',

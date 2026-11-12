@@ -51,7 +51,10 @@ const grantedSendersSchema = z.array(normalizedEmailSchema).max(100, 'Trop d’a
 export const signupSchema = z
   .object({
     accountType: z.enum(['perso', 'pro']).optional(),
-    orgName: z.string().trim().min(1).max(160, "Le nom de l'organisation est trop long.").optional(),
+    // Les formulaires partagés conservent `orgName: ''` lorsqu'un utilisateur choisit
+    // un compte personnel. La règle conditionnelle ci-dessous exige toujours un vrai
+    // nom pour une organisation, tout en acceptant cette valeur vide pour `perso`.
+    orgName: z.string().trim().max(160, "Le nom de l'organisation est trop long.").optional(),
     username: usernameSchema,
     email: normalizedEmailSchema,
     password: passwordSchema,

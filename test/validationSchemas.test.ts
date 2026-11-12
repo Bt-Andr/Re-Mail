@@ -78,6 +78,8 @@ describe('shared request validation schemas', () => {
     }
     expect(signupSchema.safeParse({ ...signup, password: 'short' }).success).toBe(false)
     expect(signupSchema.safeParse({ ...signup, password: 'long-enough' }).success).toBe(true)
+    expect(signupSchema.safeParse({ ...signup, accountType: 'perso', orgName: '', password: 'long-enough' }).success).toBe(true)
+    expect(signupSchema.safeParse({ ...signup, accountType: 'pro', orgName: '', password: 'long-enough' }).success).toBe(false)
     expect(loginSchema.safeParse({ username: 'legacy', password: 'x' }).success).toBe(true)
   })
 
